@@ -1,0 +1,21 @@
+
+---
+
+Org:
+  Name: root
+  OU:
+    - Name: poc
+    - Name: nonprod
+      OU:
+        - Name: peace
+          OU:
+            - Name: ashley
+              OU:
+                - Name: dominic
+                - Name: therese
+                  OU: {}
+        - Name: love
+    - Name: prod
+      OU: {}
+    - Name: blee
+      OU: {}

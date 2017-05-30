@@ -1,0 +1,15 @@
+org:
+  policies:
+    - Name: another_poc_service_policy
+      Desc: POC
+      Effect: Allow
+      Actions:
+        - iam:*
+        - s3:*
+        - lambda:*
+        - cloudformation:*
+        - cloudtrail:*
+        - sts:*
+        - sns:*
+        - cloudwatch:*
+
