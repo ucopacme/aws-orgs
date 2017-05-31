@@ -2,7 +2,7 @@ org:
   policies:
     - Name: poc_service_policy
       Ensure: present
-      Desc: POC Accounts
+      Description: POC Accounts
       Effect: Allow
       Actions:
         - iam:*
@@ -14,13 +14,12 @@ org:
         - sns:*
         - cloudwatch:*
     - Name: dev_service_policy
-      Ensure: Absent
-      Desc: Development Accounts
+      Ensure: present
+      Description: Development Accounts
       Effect: Allow
       Actions:
         - ec2:*
         - cloudfront:*
-        - route53:*
         - iam:*
         - s3:*
         - lambda:*
@@ -29,4 +28,3 @@ org:
         - sts:*
         - sns:*
         - cloudwatch:*
-
