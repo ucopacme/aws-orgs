@@ -38,6 +38,7 @@ def is_child(ou):
 def print_existing_ou (parent_name, parent_id, indent):
     # query aws for child orgs
     child_ou_list = org_client.list_organizational_units_for_parent(ParentId=parent_id)['OrganizationalUnits']
+    #print child_ou_list
 
     # print parent ou name
     tab = '  '

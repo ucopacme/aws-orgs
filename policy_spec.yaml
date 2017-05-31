@@ -1,9 +1,26 @@
 org:
   policies:
-    - Name: another_poc_service_policy
-      Desc: POC
+    - Name: poc_service_policy
+      Ensure: present
+      Desc: POC Accounts
       Effect: Allow
       Actions:
+        - iam:*
+        - s3:*
+        - lambda:*
+        - cloudformation:*
+        - cloudtrail:*
+        - sts:*
+        - sns:*
+        - cloudwatch:*
+    - Name: dev_service_policy
+      Ensure: Absent
+      Desc: Development Accounts
+      Effect: Allow
+      Actions:
+        - ec2:*
+        - cloudfront:*
+        - route53:*
         - iam:*
         - s3:*
         - lambda:*
