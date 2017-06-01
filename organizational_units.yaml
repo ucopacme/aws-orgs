@@ -3,19 +3,36 @@
 
 Org:
   Name: root
+  Policy:
   OU:
+    - Name: prod
+    - Name: blee
+      Policy: 
+        - poc_service_policy
+        - dev_service_policy
     - Name: poc
+      Policy: 
+        - poc_service_policy
     - Name: nonprod
+      Policy: 
+        - dev_service_policy
       OU:
+        - Name: love
+          Ensure: absent
         - Name: peace
+          Ensure: absent
+          Policy: 
+            - poc_service_policy
           OU:
             - Name: ashley
+              Ensure: absent
+              Policy: 
+                - poc_service_policy
               OU:
                 - Name: dominic
+                  Ensure: absent
                 - Name: therese
+                  Ensure: absent
+                  Policy: 
+                    - poc_service_policy
                   OU: {}
-        - Name: love
-    - Name: prod
-      OU: {}
-    - Name: blee
-      OU: {}
