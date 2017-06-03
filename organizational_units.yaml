@@ -1,6 +1,4 @@
-
----
-
+# AWS Organization Specification
 Org:
   Name: root
   Policy:
@@ -9,7 +7,6 @@ Org:
     - Name: blee
       Policy: 
         - poc_service_policy
-        - dev_service_policy
     - Name: poc
       Policy: 
         - poc_service_policy
@@ -18,19 +15,19 @@ Org:
         - dev_service_policy
       OU:
         - Name: love
-          Ensure: absent
+          #Ensure: absent
         - Name: peace
-          Ensure: absent
+          #Ensure: absent
           Policy: 
             - poc_service_policy
           OU:
             - Name: ashley
-              Ensure: absent
+              #Ensure: absent
               Policy: 
                 - poc_service_policy
               OU:
                 - Name: dominic
-                  Ensure: absent
+                  #Ensure: absent
                 - Name: therese
                   Ensure: absent
                   Policy: 
