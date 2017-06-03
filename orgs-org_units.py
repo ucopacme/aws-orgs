@@ -20,6 +20,19 @@ import argparse # required 'pip install argparse'
 # process command line args
 #
 parser = argparse.ArgumentParser(description='Manage AWS Organization')
+group = parser.add_mutually_exclusive_group(required=True)
+group.add_argument('--spec-file',
+    type=file,
+    help='file containing organization specification in yaml format'
+)
+group.add_argument('--report-only',
+    help='display organization status report only. do not process org spec',
+    action='store_true'
+)
+parser.add_argument('--no-report',
+    help='suppress reporting. display actions only',
+    action='store_true'
+)
 parser.add_argument('--dryrun',
     help='dryrun mode. show pending changes, but do nothing',
     action='store_true'
@@ -28,22 +41,22 @@ parser.add_argument('--silent',
     help='silent mode. overriden when --dryrun is set',
     action='store_true'
 )
-parser.add_argument('spec_file',
-    type=file,
-    help='file containing organization specification in yaml format'
-)
+
+
 args = parser.parse_args()
+
 
 
 #
 # Variables
 #
 
-# can't be silent when it's a dryrun
-if args.dryrun: args.silent = False
+# don't be silent when doing dryrun or just reporting
+if args.dryrun or args.report_only: args.silent = False
 
 # get org_spec from yaml file
-org_spec = yaml.load(args.spec_file.read())
+if not args.report_only:
+    org_spec = yaml.load(args.spec_file.read())
 
 # determine the Organization Root ID
 org_client = boto3.client('organizations')
@@ -282,17 +295,26 @@ def manage_ou (specified_ou_list, parent_id):
 #
 if args.silent:
     manage_ou (org_spec['Org']['OU'], root_id)
-else:
+
+elif args.report_only:
     print 'Existing org:'
     display_existing_organization('root', root_id, 0)
-    print
+
+else:
+    if not args.no_report:
+        print 'Existing org:'
+        display_existing_organization('root', root_id, 0)
+        print
+
     if args.dryrun:
         print "This is a dry run!"
         print "Pending Actions:"
     else:
         print "Actions taken:"
+
     manage_ou (org_spec['Org']['OU'], root_id)
-    if not args.dryrun:
+
+    if not args.no_report and not args.dryrun:
         print
         print 'Resulting org:'
         display_existing_organization('root', root_id, 0)
