@@ -7,6 +7,7 @@
 # manage accounts
 # DONE detach non-specified policies
 # validate policy spec is an array of str
+# test if new ou exists before adding policies
 
 import boto3
 import yaml
@@ -102,9 +103,15 @@ def create_ou (parent_id, ou_name):
 
 # delete ou
 def delete_ou (ou_id):
-    org_client.delete_organizational_unit(
-        OrganizationalUnitId=ou_id,
-    )
+    existing_ou_list = org_client.list_organizational_units_for_parent(
+        ParentId=ou_id,
+    )['OrganizationalUnits']
+    if len(existing_ou_list) > 0:
+        print "OU %s has children. Can not delete." % get_ou_name(ou_id)
+    else:
+        org_client.delete_organizational_unit(
+            OrganizationalUnitId=ou_id,
+        )
 
 # return ou name from an ou id
 def get_ou_name(ou_id):
@@ -116,6 +123,9 @@ def get_ou_name(ou_id):
         )['OrganizationalUnit']
         return ou['Name']
 
+# # return True is an ou exists
+# def ou_exists(ou_id):
+#     ou = org_client.describe_organizational_unit( OrganizationalUnitId=ou_id)
 
 
 
@@ -196,17 +206,39 @@ def display_existing_organization (parent_name, parent_id, indent):
 
 
 
+# attach or detach policies to an ou based on the spec for this ou
+def manage_policy_attachments(spec_ou, existing_ou_id):
+    # attach specified policies
+    policy_spec = get_policy_spec(spec_ou)
+    for policy_name in policy_spec:
+        policy_id = get_policy_id_by_name(policy_name)
+        if not policy_attached(policy_id, existing_ou_id) and not ensure_absent(spec_ou):
+            if not args.silent:
+                print "attaching policy %s to OU %s" % (policy_name, spec_ou['Name'])
+            if not args.dryrun:
+                attach_policy(policy_id, existing_ou_id)
+    # detach unspecified policies
+    existing_policy_list = get_policy_names(get_policies(existing_ou_id))
+    for policy_name in existing_policy_list:
+        if policy_name not in policy_spec and not ensure_absent(spec_ou):
+            policy_id = get_policy_id_by_name(policy_name)
+            if not args.silent:
+                print "detaching policy %s from OU %s" % (policy_name, spec_ou['Name'])
+            if not args.dryrun:
+                detach_policy(policy_id, existing_ou_id)
+
+
+
 #
 # manage_ou()
 #
 # Recursive function to reconcile state of deployed OUs with OU specification
 def manage_ou (specified_ou_list, parent_id):
-    # query for child OU
+
+    # create lookup table of existing child OUs: {name:ID}
     existing_ou_list = org_client.list_organizational_units_for_parent(
         ParentId=parent_id,
     )['OrganizationalUnits']
-
-    # create hash of existing ou names:IDs
     existing_ou_names = {}
     for ou in existing_ou_list:
         existing_ou_names[ou['Name']] = ou['Id']
@@ -219,33 +251,15 @@ def manage_ou (specified_ou_list, parent_id):
             if is_child(spec_ou):
                 # recurse
                 manage_ou(spec_ou['OU'], existing_ou_id)
-
             # test if ou should be 'absent'
             if ensure_absent(spec_ou):
                 if not args.silent:
                     print 'deleting OU', spec_ou['Name']
                 if not args.dryrun:
                     delete_ou(existing_ou_id)
-
-            # attach specified policies
-            policy_spec = get_policy_spec(spec_ou)
-            for policy_name in policy_spec:
-                policy_id = get_policy_id_by_name(policy_name)
-                if not policy_attached(policy_id, existing_ou_id) and not ensure_absent(spec_ou):
-                    if not args.silent:
-                        print "attaching policy %s to OU %s" % (policy_name, spec_ou['Name'])
-                    if not args.dryrun:
-                        attach_policy(policy_id, existing_ou_id)
-
-            # detach unspecified policies
-            existing_policy_list = get_policy_names(get_policies(existing_ou_id))
-            for policy_name in existing_policy_list:
-                if policy_name not in policy_spec and not ensure_absent(spec_ou):
-                    policy_id = get_policy_id_by_name(policy_name)
-                    if not args.silent:
-                        print "detaching policy %s from OU %s" % (policy_name, spec_ou['Name'])
-                    if not args.dryrun:
-                        detach_policy(policy_id, existing_ou_id)
+            else:
+                # manage policies
+                manage_policy_attachments(spec_ou, existing_ou_id)
 
         # ou does not exist
         elif not ensure_absent(spec_ou):
@@ -254,6 +268,7 @@ def manage_ou (specified_ou_list, parent_id):
                 print "creating new ou %s under parent %s" % (spec_ou['Name'], get_ou_name(parent_id))
             if not args.dryrun: 
                 new_ou = create_ou(parent_id, spec_ou['Name'])
+                manage_policy_attachments(spec_ou, new_ou['OrganizationalUnit']['Id'])
                 # test if new ou should have children
                 if is_child(spec_ou) and isinstance(new_ou, dict) \
                         and 'Id' in new_ou['OrganizationalUnit']:

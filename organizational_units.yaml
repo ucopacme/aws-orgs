@@ -28,8 +28,11 @@ Org:
               OU:
                 - Name: dominic
                   #Ensure: absent
-                - Name: therese
-                  Ensure: absent
                   Policy: 
                     - poc_service_policy
+                - Name: therese
+                  #Ensure: absent
+                  Policy: 
+                    - poc_service_policy
+                    - dev_service_policy
                   OU: {}
