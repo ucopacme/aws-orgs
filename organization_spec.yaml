@@ -4,9 +4,14 @@ Org:
   Policy:
   OU:
     - Name: prod
+      Account:
+        - Security
+        - Management
     - Name: blee
       Policy: 
         - poc_service_policy
+      Account:
+        - Blee
     - Name: poc
       Policy: 
         - poc_service_policy

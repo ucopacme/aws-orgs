@@ -3,6 +3,7 @@
 # Manage Organizaion OUs
 
 # TODO:
+# add execption handling
 # DONE add --dryrun flag
 # manage accounts
 # DONE detach non-specified policies
@@ -99,6 +100,10 @@ def get_policy_spec(spec_ou):
     else:
         return [default_policy]
 
+def get_account_spec(spec_ou):
+    if 'Account' in spec_ou and spec_ou['Account'] != None:
+        return spec_ou['Account']
+
 
 
 
@@ -139,6 +144,82 @@ def get_ou_name(ou_id):
 # # return True is an ou exists
 # def ou_exists(ou_id):
 #     ou = org_client.describe_organizational_unit( OrganizationalUnitId=ou_id)
+
+
+
+#
+# Account functions
+#
+
+def build_account_lookup_table():
+    account_lookup_table = {}
+    for account in org_client.list_accounts()['Accounts']:
+        account_lookup_table[account['Name']] = account['Id']
+    return account_lookup_table
+
+def get_account_id_by_name(account_name, account_table):
+    if account_name in account_table.keys():
+        return account_table[account_name]
+    else:
+        return None
+
+def get_parent_id(account_id):
+    parents = org_client.list_parents(ChildId=account_id)['Parents']
+    if len(parents) == 1:
+        return parents[0]['Id']
+    else:
+        #handle error
+        print 'account', account_id, 'has more than one parent', parents
+        return None
+
+def account_exists(account_name, account_table):
+    return account_name in account_table.keys()
+
+# returns a list of accounts attached to an OU
+def get_accounts_in_ou (ou_id):
+    account_list = org_client.list_accounts_for_parent(
+        ParentId=ou_id,
+    )['Accounts']
+    return account_list
+
+def account_in_ou(account_id, ou_id):
+    if get_parent_id(account_id) == ou_id:
+        return True
+    else:
+        return False
+
+# returns sorted list of account names from a list of accounts
+def get_account_names (account_list):
+    names = []
+    for account in account_list:
+        names.append(account['Name'])
+    return sorted(names)
+
+
+# add/remove accounts in this ou based on the ou spec
+def manage_account_attachments(spec_ou, existing_ou_id, account_table):
+    # attach specified accounts
+    account_spec = get_account_spec(spec_ou)
+    for account_name in account_spec:
+        account_id = get_account_id_by_name(account_name, account_table)
+        print account_table
+        print account_id
+        #if not account_in_ou(account_id, existing_ou_id) and not ensure_absent(spec_ou):
+        #    if not args.silent:
+        #        print "attaching account %s to OU %s" % (account_name, spec_ou['Name'])
+            #if not args.dryrun:
+            #    attach_account(account_id, existing_ou_id)
+
+    # # detach unspecified accounts
+    # existing_account_list = get_account_names(get_accounts(existing_ou_id))
+    # for account_name in existing_account_list:
+    #     if account_name not in account_spec and not ensure_absent(spec_ou):
+    #         account_id = get_account_id_by_name(account_name, account_table)
+    #         if not args.silent:
+    #             print "detaching account %s from OU %s" % (account_name, spec_ou['Name'])
+    #         #if not args.dryrun:
+    #         #    detach_account(account_id, existing_ou_id)
+
 
 
 
@@ -208,7 +289,11 @@ def display_existing_organization (parent_name, parent_id, indent):
     # look for policies
     policy_list = get_policies(parent_id)
     if len(policy_list) > 0:
-        print tab*indent + tab + 'policies: ' + ' '.join(get_policy_names(policy_list))
+        print tab*indent + tab + 'policies: ' + ', '.join(get_policy_names(policy_list))
+    # look for account
+    account_list = get_accounts_in_ou(parent_id)
+    if len(account_list) > 0:
+        print tab*indent + tab + 'accounts: ' + ', '.join(get_account_names(account_list))
     # look for child OUs
     if len(child_ou_list ) > 0:
         print tab*indent + tab + 'child_ou:'
@@ -216,7 +301,6 @@ def display_existing_organization (parent_name, parent_id, indent):
         for ou in child_ou_list:
             # recurse
             display_existing_organization(get_ou_name(ou['Id']), ou['Id'], indent)
-
 
 
 # attach or detach policies to an ou based on the spec for this ou
@@ -246,7 +330,7 @@ def manage_policy_attachments(spec_ou, existing_ou_id):
 # manage_ou()
 #
 # Recursive function to reconcile state of deployed OUs with OU specification
-def manage_ou (specified_ou_list, parent_id):
+def manage_ou (specified_ou_list, parent_id, account_table):
 
     # create lookup table of existing child OUs: {name:ID}
     existing_ou_list = org_client.list_organizational_units_for_parent(
@@ -263,7 +347,7 @@ def manage_ou (specified_ou_list, parent_id):
             # test for child ou in ou_spec
             if is_child(spec_ou):
                 # recurse
-                manage_ou(spec_ou['OU'], existing_ou_id)
+                manage_ou(spec_ou['OU'], existing_ou_id, account_table)
             # test if ou should be 'absent'
             if ensure_absent(spec_ou):
                 if not args.silent:
@@ -273,6 +357,7 @@ def manage_ou (specified_ou_list, parent_id):
             else:
                 # manage policies
                 manage_policy_attachments(spec_ou, existing_ou_id)
+                manage_account_attachments(spec_ou, existing_ou_id, account_table)
 
         # ou does not exist
         elif not ensure_absent(spec_ou):
@@ -282,11 +367,12 @@ def manage_ou (specified_ou_list, parent_id):
             if not args.dryrun: 
                 new_ou = create_ou(parent_id, spec_ou['Name'])
                 manage_policy_attachments(spec_ou, new_ou['OrganizationalUnit']['Id'])
+                manage_account_attachments(spec_ou, existing_ou_id, account_table)
                 # test if new ou should have children
                 if is_child(spec_ou) and isinstance(new_ou, dict) \
                         and 'Id' in new_ou['OrganizationalUnit']:
                     # recurse
-                    manage_ou(spec_ou['OU'], new_ou['OrganizationalUnit']['Id'])
+                    manage_ou(spec_ou['OU'], new_ou['OrganizationalUnit']['Id'], account_table)
 
 
 
@@ -294,7 +380,8 @@ def manage_ou (specified_ou_list, parent_id):
 # Main
 #
 if args.silent:
-    manage_ou (org_spec['Org']['OU'], root_id)
+    account_table = build_account_lookup_table()
+    manage_ou (org_spec['Org']['OU'], root_id, account_table)
 
 elif args.report_only:
     print 'Existing org:'
@@ -312,7 +399,8 @@ else:
     else:
         print "Actions taken:"
 
-    manage_ou (org_spec['Org']['OU'], root_id)
+    account_table = build_account_lookup_table()
+    manage_ou (org_spec['Org']['OU'], root_id, account_table)
 
     if not args.no_report and not args.dryrun:
         print
