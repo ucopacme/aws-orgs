@@ -1,43 +1,61 @@
 # AWS Organization Specification
-Org:
+
+organizational_unit_spec:
   Name: root
   Policy:
   OU:
     - Name: prod
-      Account:
-        - Security
-        - Management
     - Name: blee
       Policy: 
         - poc_service_policy
-      Account:
-        - Blee
     - Name: poc
       Policy: 
         - poc_service_policy
     - Name: nonprod
       Policy: 
-        - dev_service_policy
-      OU:
-        - Name: love
-          #Ensure: absent
-        - Name: peace
-          #Ensure: absent
-          Policy: 
-            - poc_service_policy
-          OU:
-            - Name: ashley
-              #Ensure: absent
-              Policy: 
-                - poc_service_policy
-              OU:
-                - Name: dominic
-                  #Ensure: absent
-                  Policy: 
-                    - poc_service_policy
-                - Name: therese
-                  #Ensure: absent
-                  Policy: 
-                    - poc_service_policy
-                    - dev_service_policy
-                  OU: {}
+        - dev_service_policy poc_service_policy
+
+policy_spec:
+  - Name: FullAWSAccess
+    Default: True
+  - Name: poc_service_policy
+    Ensure: present
+    Description: POC Accounts
+    Effect: Allow
+    Actions:
+      - iam:*
+      - s3:*
+      - lambda:*
+      - cloudformation:*
+      - cloudtrail:*
+      - sts:*
+      - sns:*
+      - cloudwatch:*
+  - Name: dev_service_policy
+    Ensure: present
+    Description: Development Accounts
+    Effect: Allow
+    Actions:
+      - ec2:*
+      - cloudfront:*
+      - iam:*
+      - s3:*
+      - lambda:*
+      - cloudformation:*
+      - cloudtrail:*
+      - sts:*
+      - sns:*
+      - cloudwatch:*
+
+
+account_spec:
+  - Name: Ashley Gould
+    Master: True
+    Email: ashleyg@sonic.net
+    OU: root
+  - Name: Management
+    Email: management@ucop.edu
+    OU: prod
+  - Name: Security
+    Email: ashleyg@ucop.edu
+    OU: nonprod
