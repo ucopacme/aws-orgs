@@ -1,19 +1,17 @@
 # AWS Organization Specification
 
 ou_spec:
-  Name: root
-  Policy:
-  OU:
-    - Name: prod
-    - Name: blee
-      Policy: 
-        - poc_service_policy
-    - Name: poc
-      Policy: 
-        - poc_service_policy
-    - Name: nonprod
-      Policy: 
-        - dev_service_policy poc_service_policy
+  - Name: prod
+  - Name: blee
+    Policy: 
+      - poc_service_policy
+  - Name: poc
+    Policy: 
+      - poc_service_policy
+  - Name: nonprod
+    Policy: 
+      - dev_service_policy
+      - poc_service_policy
 
 policy_spec:
   - Name: FullAWSAccess

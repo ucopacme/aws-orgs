@@ -3,11 +3,10 @@
 # Manage Organizaion OUs
 
 # TODO:
-# merge account creation into this module
+# INPROGRESS merge account creation into this module
 # DONE merge policy creation into this module
 # add execption handling
 # DONE add --dryrun flag
-# manage accounts
 # DONE detach non-specified policies
 # validate policy spec is an array of str
 # test if new ou exists before adding policies
@@ -42,26 +41,37 @@ for p_type in policy_types:
         )
 
 # build account lookup table
+deployed_accounts = org_client.list_accounts()['Accounts']
 account_table = {}
 for account in org_client.list_accounts()['Accounts']:
     account_table[account['Name']] = account['Id']
 
 # build policy lookup table
+deployed_policies = org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']
 policy_table = {}
 for policy in org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']:
     policy_table[policy['Name']] = policy['Id']
 
 # build ou lookup table (recursive)
-def build_ou_table(parent_id, ou_table):
+def build_ou_table(parent_id, ou_table, deployed_ou):
     # query aws for child orgs
     for ou in org_client.list_organizational_units_for_parent(ParentId=parent_id)['OrganizationalUnits']:
+        deployed_ou.append(ou)
         ou_table[ou['Name']] = ou['Id']
-        build_ou_table(ou['Id'], ou_table)
+        #ou_table[ou['Name']]['Id'] = ou['Id']
+        #ou_table[ou['Name']]['ParentId'] = ParentId
+        build_ou_table(ou['Id'], ou_table, deployed_ou)
     return
+
+deployed_ou = []
 ou_table = {}
-build_ou_table(root_id, ou_table)
+build_ou_table(root_id, ou_table, deployed_ou)
 
-
+#print deployed_accounts
+#print
+#print deployed_policies
+#print
+#print deployed_ou
 
 
 
@@ -73,11 +83,37 @@ build_ou_table(root_id, ou_table)
 # General functions
 #
 
-def ensure_absent(spec):
-    if 'Ensure' in spec and spec['Ensure'] == 'absent':
-        return True
+# Find a value in a list of dictionaries based on a known key:value.
+#
+# walk though a list of dictionaries, find the dictionary where
+# searchkey => searchvalue, and return the value of 'returnkey' 
+# from that dictionary.
+#
+# args:
+#     dictlist:    data structure to search -  a list of type dictionary.
+#     seachkey:    name of key to use as search criteria
+#     seachvalue:  value to use as search criteria
+#     returnkey:   name of key indexing the value to return
+#
+def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
+
+    # make sure keys exist
+    if not filter(lambda d: searchkey in d and returnkey in d, dictlist):
+        #keyerror
+        return None
+
+    # check for duplicate search values
+    values = map(lambda d: d[searchkey], dictlist)
+    if len(values) != len(set(values)):
+        #duplicate search values
+        return None
+
+    # find the matching dictionary and return the indexed  value
+    result = filter(lambda d: d[searchkey] == searchvalue, dictlist)
+    if len(result) == 1:
+        return result[0][returnkey]
     else:
-        return False
+        return None
 
 
 # process command line args
@@ -120,19 +156,27 @@ def parse_args():
     return args
 
 
+# test if Ensure key is set to  absent
+def ensure_absent(spec):
+    if 'Ensure' in spec and spec['Ensure'] == 'absent':
+        return True
+    else:
+        return False
+
+
+
+
 #
 # Account functions
 #
 
-def get_account_spec(spec_ou):
-    if 'Account' in spec_ou and spec_ou['Account'] != None:
-        return spec_ou['Account']
+## Unused
+#def get_account_spec(spec_ou):
+#    if 'Account' in spec_ou and spec_ou['Account'] != None:
+#        return spec_ou['Account']
 
 def get_account_id_by_name(account_name):
-    if account_name in account_table.keys():
-        return account_table[account_name]
-    else:
-        return None
+    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Id')
 
 def get_parent_id(account_id):
     parents = org_client.list_parents(ChildId=account_id)['Parents']
@@ -140,7 +184,7 @@ def get_parent_id(account_id):
         return parents[0]['Id']
     else:
         #handle error
-        print 'account', account_id, 'has more than one parent', parents
+        #print 'account', account_id, 'has more than one parent', parents
         return None
 
 # returns a list of accounts attached to an OU
@@ -150,17 +194,19 @@ def get_accounts_in_ou (ou_id):
     )['Accounts']
     return account_list
 
-def account_in_ou(account_id, ou_id):
-    if get_parent_id(account_id) == ou_id:
-        return True
-    else:
-        return False
+#Unused
+#def account_in_ou(account_id, ou_id):
+#    if get_parent_id(account_id) == ou_id:
+#        return True
+#    else:
+#        return False
 
 # returns sorted list of account names from a list of accounts
 def get_account_names (account_list):
-    names = []
-    for account in account_list:
-        names.append(account['Name'])
+    names = map(lambda d: d['Name'], account_list)
+    #names = []
+    #for account in account_list:
+    #    names.append(account['Name'])
     return sorted(names)
 
 def move_account(account_id, parent_id, ou_id):
@@ -181,16 +227,17 @@ def move_account(account_id, parent_id, ou_id):
 #     if response['Status'] == '
 # 
 
-def get_create_account_status(account_id):
-    response = org_client.list_create_account_status(account_id)
+#def get_create_account_status(account_id):
+#    response = org_client.list_create_account_status(account_id)
 
 
 def manage_accounts(account_spec):
     for a_spec in account_spec:
         if a_spec['Name'] != master_account:
             account_name = a_spec['Name']
+            account_id = get_account_id_by_name(account_name)
 
-            if not account_name in account_table:
+            if not account_id:
                 if not args.silent:
                     print "creating account: %s" % (account_name)
                 if not args.dryrun:
@@ -198,16 +245,18 @@ def manage_accounts(account_spec):
 
             # locate account in correct ou
             # wait for account to be ready
-            parent_id = get_parent_id(account_table[account_name])
-            parent_ou_name = get_ou_name(parent_id)
+            parent_id = get_parent_id(account_id)
+            parent_ou_name = get_ou_name_by_id(parent_id)
             if a_spec['OU'] != parent_ou_name:
                 if not args.silent:
                     print "moving account %s from ou %s to ou %s" % (account_name, parent_ou_name, a_spec['OU'] )
                 if not args.dryrun:
-                    move_account(account_table[account_name], parent_id, ou_table[a_spec['OU']])
-
-
-
+                    #move_account(account_id, parent_id, ou_table[a_spec['OU']])
+                    ou_id = get_ou_id_by_name(a_spec['OU'])
+                    if ou_id:
+                        move_account(account_id, parent_id, ou_id)
+                    else:
+                        print 'error: ou_id not found'
 
 
 
@@ -216,43 +265,46 @@ def manage_accounts(account_spec):
 # Policy functions
 #
 
+def get_policy_id_by_name(policy_name):
+    return find_in_dictlist(deployed_policies, 'Name', policy_name, 'Id')
+
+def get_policy_description(policy_id):
+    return find_in_dictlist(deployed_policies, 'Id', policy_id, 'Description')
+
+def get_policy_content(policy_id):
+    return org_client.describe_policy(PolicyId=policy_id)['Policy']['Content']
+
+
 def get_policy_spec(spec_ou):
     if 'Policy' in spec_ou and spec_ou['Policy'] != None:
         return [default_policy] + spec_ou['Policy']
     else:
         return [default_policy]
 
-def get_policy( policy_id ):
-    return org_client.describe_policy(PolicyId=policy_id)['Policy']
 
-def create_policy_content(p_spec):
+def specify_policy_content(p_spec):
     return """{ "Version": "2012-10-17", "Statement": [ { "Effect": "%s", "Action": %s, "Resource": "*" } ] }""" % (p_spec['Effect'], json.dumps(p_spec['Actions']))
+
 
 def create_policy(p_spec):
     response = org_client.create_policy(
-        Content=create_policy_content(p_spec),
+        Content=specify_policy_content(p_spec),
         Description=p_spec['Description'],
         Name=p_spec['Name'],
         Type='SERVICE_CONTROL_POLICY'
     )
 
+
 def update_policy( p_spec, policy_id ):
     response = org_client.update_policy(
         PolicyId=policy_id,
-        Content=create_policy_content(p_spec),
+        Content=specify_policy_content(p_spec),
         Description=p_spec['Description'],
     )
 
+
 def delete_policy(policy_id):
     org_client.delete_policy(PolicyId=policy_id)
-
-def display_provissioned_policies():
-    print
-    print "Provissioned Service Control Policies:"
-    print
-    for policy in org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']:
-        print "Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" % (policy['Name'], policy['Description'], policy['Id'])
-        print "Content:\t%s\n" % get_policy(policy['Id'])['Content']
 
 
 def policy_exists(policy_name):
@@ -261,34 +313,38 @@ def policy_exists(policy_name):
     else:
         return False
 
+
 # returns a list of service control policies attached to an OU
-def get_policies (ou_id):
-    response = org_client.list_policies_for_target(
+def get_policies_in_ou (ou_id):
+    policies_in_ou = org_client.list_policies_for_target(
         TargetId=ou_id,
         Filter='SERVICE_CONTROL_POLICY',
     )['Policies']
-    return response
+    print policies_in_ou
+    return policies_in_ou
+
 
 # returns sorted list of service control policy names from a list of policies
 def get_policy_names (policy_list):
-    names = []
-    for policy in policy_list:
-        names.append(policy['Name'])
-    return sorted(names)
+    return sorted(map(lambda d: d['Name'], policy_list))
+
 
 # verify if a policy is attached to an ou
 def policy_attached(policy_id, ou_id,):
-    for policy in get_policies(ou_id): 
+    for policy in get_policies_in_ou(ou_id): 
         if policy['Id'] == policy_id:
             return True
-    return False
+        else:
+            return False
+
 
 # attach a policy to an ou
 def attach_policy (policy_id, ou_id,):
-    response = org_client.attach_policy (
+    org_client.attach_policy (
         PolicyId=policy_id,
         TargetId=ou_id
     )
+
 
 # detach a policy from an ou
 def detach_policy (policy_id, ou_id,):
@@ -297,34 +353,44 @@ def detach_policy (policy_id, ou_id,):
         TargetId=ou_id
     )
 
+
+# pretty print exiting policies
+def display_provissioned_policies():
+    print
+    print "Provissioned Service Control Policies:"
+    print
+    for policy in deployed_policies:
+        print "Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" % (policy['Name'], policy['Description'], policy['Id'])
+        print "Content:\t%s\n" % get_policy_content(policy['Id'])
+
+
 # walk though policy_spec and make stuff happen
 def manage_policies(policy_spec):
     for p_spec in policy_spec:
         if p_spec['Name'] != default_policy:
             policy_name = p_spec['Name']
+            policy_id = get_policy_id_by_name(policy_name)
 
-            if ensure_absent(p_spec) and policy_exists(policy_name):
+            if policy_id and ensure_absent(p_spec):
                 if not args.silent:
-                    print "deleting policy: %s %s" % (policy_name, policy_table[policy_name])
+                    print "deleting policy: %s" % (policy_name)
                 if not args.dryrun:
-                    delete_policy(policy_table[policy_name])
+                    delete_policy(policy_id)
     
             else:
-                if not policy_exists(policy_name):
+                if not policy_id:
                     if not args.silent:
                         print "creating policy: %s" % (policy_name)
                     if not args.dryrun:
                         create_policy(p_spec)
     
                 else:
-                    policy = get_policy(policy_table[policy_name])
-                    if p_spec['Description'] != policy['PolicySummary']['Description'] or create_policy_content(p_spec) != policy['Content']:
+                    if p_spec['Description'] != get_policy_description(policy_id) \
+                            or specify_policy_content(p_spec) != get_policy_content(policy_id):
                         if not args.silent:
                             print "updating policy: %s" % (policy_name)
                         if not args.dryrun:
-                            update_policy(p_spec, policy_table[policy_name])
-
-
+                            update_policy(p_spec, policy_id)
 
 
 
@@ -338,6 +404,9 @@ def is_child(spec_ou):
         return True
     else:
         return False
+
+def get_ou_id_by_name(ou_name):
+    return find_in_dictlist(deployed_ou, 'Name', ou_name, 'Id')
 
 # create an ou under specified parent
 def create_ou (parent_id, ou_name):
@@ -353,21 +422,18 @@ def delete_ou (ou_id):
         ParentId=ou_id,
     )['OrganizationalUnits']
     if len(existing_ou_list) > 0:
-        print "OU %s has children. Can not delete." % get_ou_name(ou_id)
+        print "OU %s has children. Can not delete." % get_ou_name_by_id(ou_id)
     else:
         org_client.delete_organizational_unit(
             OrganizationalUnitId=ou_id,
         )
 
 # return ou name from an ou id
-def get_ou_name(ou_id):
+def get_ou_name_by_id(ou_id):
     if ou_id == root_id:
-        return 'Root'
+        return 'root'
     else:
-        ou = org_client.describe_organizational_unit(
-            OrganizationalUnitId=ou_id
-        )['OrganizationalUnit']
-        return ou['Name']
+        return find_in_dictlist(deployed_ou, 'Id', ou_id, 'Name')
 
 
 # recursive function to display the existing org structure 
@@ -382,7 +448,7 @@ def display_provissioned_ou (parent_name, parent_id, indent):
     #print
     print tab*indent + parent_name + ':'
     # look for policies
-    policy_list = get_policies(parent_id)
+    policy_list = get_policies_in_ou(parent_id)
     if len(policy_list) > 0:
         print tab*indent + tab + 'policies: ' + ', '.join(get_policy_names(policy_list))
     # look for account
@@ -395,29 +461,31 @@ def display_provissioned_ou (parent_name, parent_id, indent):
         indent+=2
         for ou in child_ou_list:
             # recurse
-            display_provissioned_ou(get_ou_name(ou['Id']), ou['Id'], indent)
+            display_provissioned_ou(get_ou_name_by_id(ou['Id']), ou['Id'], indent)
 
 
 # attach or detach policies to an ou based on the spec for this ou
-def manage_policy_attachments(spec_ou, existing_ou_id):
+def manage_policy_attachments(spec_ou, ou_id):
     # attach specified policies
-    policy_spec = get_policy_spec(spec_ou)
-    for policy_name in policy_spec:
-        policy_id = policy_table[policy_name]
-        if not policy_attached(policy_id, existing_ou_id) and not ensure_absent(spec_ou):
+    p_spec = get_policy_spec(spec_ou)
+    for policy_name in p_spec:
+        policy_id = get_policy_id_by_name(policy_name)
+
+        if not policy_attached(policy_id, ou_id) and not ensure_absent(spec_ou):
             if not args.silent:
                 print "attaching policy %s to OU %s" % (policy_name, spec_ou['Name'])
             if not args.dryrun:
-                attach_policy(policy_id, existing_ou_id)
+                attach_policy(policy_id, ou_id)
+
     # detach unspecified policies
-    existing_policy_list = get_policy_names(get_policies(existing_ou_id))
+    existing_policy_list = get_policy_names(get_policies_in_ou(ou_id))
     for policy_name in existing_policy_list:
-        if policy_name not in policy_spec and not ensure_absent(spec_ou):
+        if policy_name not in p_spec and not ensure_absent(spec_ou):
             policy_id = policy_table[policy_name]
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, spec_ou['Name'])
             if not args.dryrun:
-                detach_policy(policy_id, existing_ou_id)
+                detach_policy(policy_id, ou_id)
 
 
 
@@ -457,7 +525,7 @@ def manage_ou (specified_ou_list, parent_id):
         elif not ensure_absent(spec_ou):
             # create new ou
             if not args.silent:
-                print "creating new ou %s under parent %s" % (spec_ou['Name'], get_ou_name(parent_id))
+                print "creating new ou %s under parent %s" % (spec_ou['Name'], get_ou_name_by_id(parent_id))
             if not args.dryrun: 
                 new_ou = create_ou(parent_id, spec_ou['Name'])
                 manage_policy_attachments(spec_ou, new_ou['OrganizationalUnit']['Id'])
@@ -505,13 +573,14 @@ if not args.report_only:
 
 if args.build_policy:
     manage_policies(org_spec['policy_spec'])
-    display_provissioned_policies()
+    if not args.no_report and not args.silent: display_provissioned_policies()
 
 if args.build_account:
     manage_accounts(org_spec['account_spec'])
+    if not args.no_report and not args.silent: display_provissioned_accounts()
 
 #if args.silent:
-#    manage_ou (ou_spec['OU'], root_id)
+#    manage_ou (org_spec['ou_spec'], root_id)
 #
 #elif args.report_only:
 #    print 'Existing org:'
@@ -529,7 +598,7 @@ if args.build_account:
 #    else:
 #        print "Actions taken:"
 #
-#    manage_ou (ou_spec['OU'], root_id)
+#    manage_ou (org_spec['ou_spec'], root_id)
 #
 #    if not args.no_report and not args.dryrun:
 #        print

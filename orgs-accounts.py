@@ -11,6 +11,26 @@ org_client = boto3.client('organizations')
 # Account functions
 #
 
+accounts = org_client.list_accounts()['Accounts']
+
+def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
+    if not filter(lambda d: searchkey in d and returnkey in d, dictlist):
+        return None
+    values = map(lambda d: d[searchkey], dictlist)
+    if len(values) != len(set(values)):
+        return None
+    result = filter(lambda d: d[searchkey] == searchvalue, dictlist)
+    if len(result) == 1:
+        return result[0][returnkey]
+    else:
+        return None
+
+def find_in_accounts(seachkey, searchvalue, returnkey):
+    if searchvalue in map(lambda d: d[searchkey], accounts):
+        return filter(lambda d: d[searchkey] == searchvalue, accounts)[0][returnkey]
+    else:
+        return None
+
 def build_account_lookup_table():
     account_lookup_table = {}
     for account in org_client.list_accounts()['Accounts']:
@@ -55,6 +75,7 @@ def get_account_names (account_list):
         names.append(account['Name'])
     return sorted(names)
 
+def get name_by_id(account_id):
 
 account_table = build_account_lookup_table()
 print account_table
