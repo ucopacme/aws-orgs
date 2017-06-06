@@ -3,7 +3,8 @@
 # Manage Organizaion OUs
 
 # TODO:
-# merge account and policy creation into this module
+# merge account creation into this module
+# DONE merge policy creation into this module
 # add execption handling
 # DONE add --dryrun flag
 # manage accounts
@@ -17,48 +18,6 @@ import json
 import sys
 import os
 import argparse # required 'pip install argparse'
-
-
-#
-# process command line args
-#
-def parse_args():
-    parser = argparse.ArgumentParser(description='Manage AWS Organization')
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--spec-file',
-        type=file,
-        help='file containing organization specification in yaml format'
-    )
-    group.add_argument('--report-only',
-        help='display organization status report only. do not process org spec',
-        action='store_true'
-    )
-    parser.add_argument('--no-report',
-        help='suppress reporting. display actions only',
-        action='store_true'
-    )
-    parser.add_argument('--dryrun',
-        help='dryrun mode. show pending changes, but do nothing',
-        action='store_true'
-    )
-    parser.add_argument('--silent',
-        help='silent mode. overriden when --dryrun is set',
-        action='store_true'
-    )
-    parser.add_argument('--build-policy',
-        help='run policy management tasks',
-        action='store_true'
-    )
-    parser.add_argument('--build-account',
-        help='run account management tasks',
-        action='store_true'
-    )
-    parser.add_argument('--build-all',
-        help='run all management tasks',
-        action='store_true'
-    )
-    args = parser.parse_args()
-    return args
 
 
 
@@ -107,112 +66,69 @@ build_ou_table(root_id, ou_table)
 
 
 
-#
-# get command line args
-#
-args = parse_args()
-
-# don't be silent when doing dryrun or reporting
-if args.dryrun or args.report_only: args.silent = False
-
-# parse org_spec globals from from yaml file
-if not args.report_only:
-    org_spec = yaml.load(args.spec_file.read())
-    ou_spec = org_spec['ou_spec']
-    policy_spec = org_spec['policy_spec']
-    account_spec = org_spec['account_spec']
-
-    # all orgs have at least this default policy
-    for policy in policy_spec:
-        if 'Default' in policy and policy['Default'] == True:
-            default_policy = policy['Name']
-    
-    # find the Master account name
-    for account in account_spec:
-        if 'Master' in account and account['Master'] == True:
-            master_account = account['Name']
-
-
-
 
 
 
 #
-# Specification parsing functions
+# General functions
 #
-def is_child(spec_ou):
-    if 'OU' in spec_ou and spec_ou['OU'] != None and len(spec_ou['OU']) != 0:
+
+def ensure_absent(spec):
+    if 'Ensure' in spec and spec['Ensure'] == 'absent':
         return True
     else:
         return False
 
-def ensure_absent(spec_ou):
-    if 'Ensure' in spec_ou and spec_ou['Ensure'] == 'absent':
-        return True
-    else:
-        return False
 
-def get_policy_spec(spec_ou):
-    if 'Policy' in spec_ou and spec_ou['Policy'] != None:
-        return [default_policy] + spec_ou['Policy']
-    else:
-        return [default_policy]
-
-def get_account_spec(spec_ou):
-    if 'Account' in spec_ou and spec_ou['Account'] != None:
-        return spec_ou['Account']
-
-
-
-
-#
-# OrganizaionalUnit functions
-#
-
-# create an ou under specified parent
-def create_ou (parent_id, ou_name):
-    new_ou = org_client.create_organizational_unit(
-        ParentId=parent_id,
-        Name=ou_name
+# process command line args
+def parse_args():
+    parser = argparse.ArgumentParser(description='Manage AWS Organization')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--spec-file',
+        type=file,
+        help='file containing organization specification in yaml format'
     )
-    return new_ou
-
-# delete ou
-def delete_ou (ou_id):
-    existing_ou_list = org_client.list_organizational_units_for_parent(
-        ParentId=ou_id,
-    )['OrganizationalUnits']
-    if len(existing_ou_list) > 0:
-        print "OU %s has children. Can not delete." % get_ou_name(ou_id)
-    else:
-        org_client.delete_organizational_unit(
-            OrganizationalUnitId=ou_id,
-        )
-
-# return ou name from an ou id
-def get_ou_name(ou_id):
-    if ou_id == root_id:
-        return 'Root'
-    else:
-        ou = org_client.describe_organizational_unit(
-            OrganizationalUnitId=ou_id
-        )['OrganizationalUnit']
-        return ou['Name']
-
-# # return True is an ou exists
-# def ou_exists(ou_id):
-#     ou = org_client.describe_organizational_unit( OrganizationalUnitId=ou_id)
-
+    group.add_argument('--report-only',
+        help='display organization status report only. do not process org spec',
+        action='store_true'
+    )
+    parser.add_argument('--no-report',
+        help='suppress reporting. display actions only',
+        action='store_true'
+    )
+    parser.add_argument('--dryrun',
+        help='dryrun mode. show pending changes, but do nothing',
+        action='store_true'
+    )
+    parser.add_argument('--silent',
+        help='silent mode. overriden when --dryrun is set',
+        action='store_true'
+    )
+    parser.add_argument('--build-policy',
+        help='run policy management tasks',
+        action='store_true'
+    )
+    parser.add_argument('--build-account',
+        help='run account management tasks',
+        action='store_true'
+    )
+    parser.add_argument('--build-all',
+        help='run all management tasks',
+        action='store_true'
+    )
+    args = parser.parse_args()
+    return args
 
 
 #
 # Account functions
 #
 
-def account_exists(account_name, account_table):
-    return account_name in account_table.keys()
+def get_account_spec(spec_ou):
+    if 'Account' in spec_ou and spec_ou['Account'] != None:
+        return spec_ou['Account']
 
-def get_account_id_by_name(account_name, account_table):
+def get_account_id_by_name(account_name):
     if account_name in account_table.keys():
         return account_table[account_name]
     else:
@@ -247,12 +163,64 @@ def get_account_names (account_list):
         names.append(account['Name'])
     return sorted(names)
 
+def move_account(account_id, parent_id, ou_id):
+    org_client.move_account(
+        AccountId=account_id,
+        SourceParentId=parent_id,
+        DestinationParentId=ou_id
+    )
+
+
+##### in progres
+# def create_account(a_spec):
+#     print a_spec
+#     response = org_client.create_account(
+#         AccountName=a_spec['Name'],
+#         Email=a_spec['Email']
+#     )
+#     if response['Status'] == '
+# 
+
+def get_create_account_status(account_id):
+    response = org_client.list_create_account_status(account_id)
+
+
+def manage_accounts(account_spec):
+    for a_spec in account_spec:
+        if a_spec['Name'] != master_account:
+            account_name = a_spec['Name']
+
+            if not account_name in account_table:
+                if not args.silent:
+                    print "creating account: %s" % (account_name)
+                if not args.dryrun:
+                    create_account(a_spec)
+
+            # locate account in correct ou
+            # wait for account to be ready
+            parent_id = get_parent_id(account_table[account_name])
+            parent_ou_name = get_ou_name(parent_id)
+            if a_spec['OU'] != parent_ou_name:
+                if not args.silent:
+                    print "moving account %s from ou %s to ou %s" % (account_name, parent_ou_name, a_spec['OU'] )
+                if not args.dryrun:
+                    move_account(account_table[account_name], parent_id, ou_table[a_spec['OU']])
+
+
+
+
 
 
 
 #
 # Policy functions
 #
+
+def get_policy_spec(spec_ou):
+    if 'Policy' in spec_ou and spec_ou['Policy'] != None:
+        return [default_policy] + spec_ou['Policy']
+    else:
+        return [default_policy]
 
 def get_policy( policy_id ):
     return org_client.describe_policy(PolicyId=policy_id)['Policy']
@@ -286,10 +254,6 @@ def display_provissioned_policies():
         print "Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" % (policy['Name'], policy['Description'], policy['Id'])
         print "Content:\t%s\n" % get_policy(policy['Id'])['Content']
 
-
-# get policy id based on it's name
-def get_policy_id_by_name(policy_name):
-    return policy_table[policy_name]
 
 def policy_exists(policy_name):
     if policy_name in policy_table.keys():
@@ -326,7 +290,7 @@ def attach_policy (policy_id, ou_id,):
         TargetId=ou_id
     )
 
-# detach a policy to an ou
+# detach a policy from an ou
 def detach_policy (policy_id, ou_id,):
     org_client.detach_policy (
         PolicyId=policy_id,
@@ -339,7 +303,7 @@ def manage_policies(policy_spec):
         if p_spec['Name'] != default_policy:
             policy_name = p_spec['Name']
 
-            if 'Ensure' in p_spec and p_spec['Ensure'] == 'absent' and policy_exists(policy_name):
+            if ensure_absent(p_spec) and policy_exists(policy_name):
                 if not args.silent:
                     print "deleting policy: %s %s" % (policy_name, policy_table[policy_name])
                 if not args.dryrun:
@@ -354,7 +318,6 @@ def manage_policies(policy_spec):
     
                 else:
                     policy = get_policy(policy_table[policy_name])
-                    #print policy['PolicySummary']['Description']
                     if p_spec['Description'] != policy['PolicySummary']['Description'] or create_policy_content(p_spec) != policy['Content']:
                         if not args.silent:
                             print "updating policy: %s" % (policy_name)
@@ -367,10 +330,48 @@ def manage_policies(policy_spec):
 
 
 #
-# display_existing_organization()
+# OrganizaionalUnit functions
 #
+
+def is_child(spec_ou):
+    if 'OU' in spec_ou and spec_ou['OU'] != None and len(spec_ou['OU']) != 0:
+        return True
+    else:
+        return False
+
+# create an ou under specified parent
+def create_ou (parent_id, ou_name):
+    new_ou = org_client.create_organizational_unit(
+        ParentId=parent_id,
+        Name=ou_name
+    )
+    return new_ou
+
+# delete ou
+def delete_ou (ou_id):
+    existing_ou_list = org_client.list_organizational_units_for_parent(
+        ParentId=ou_id,
+    )['OrganizationalUnits']
+    if len(existing_ou_list) > 0:
+        print "OU %s has children. Can not delete." % get_ou_name(ou_id)
+    else:
+        org_client.delete_organizational_unit(
+            OrganizationalUnitId=ou_id,
+        )
+
+# return ou name from an ou id
+def get_ou_name(ou_id):
+    if ou_id == root_id:
+        return 'Root'
+    else:
+        ou = org_client.describe_organizational_unit(
+            OrganizationalUnitId=ou_id
+        )['OrganizationalUnit']
+        return ou['Name']
+
+
 # recursive function to display the existing org structure 
-def display_existing_organization (parent_name, parent_id, indent):
+def display_provissioned_ou (parent_name, parent_id, indent):
     # query aws for child orgs
     child_ou_list = org_client.list_children(
         ParentId=parent_id,
@@ -394,7 +395,7 @@ def display_existing_organization (parent_name, parent_id, indent):
         indent+=2
         for ou in child_ou_list:
             # recurse
-            display_existing_organization(get_ou_name(ou['Id']), ou['Id'], indent)
+            display_provissioned_ou(get_ou_name(ou['Id']), ou['Id'], indent)
 
 
 # attach or detach policies to an ou based on the spec for this ou
@@ -402,7 +403,7 @@ def manage_policy_attachments(spec_ou, existing_ou_id):
     # attach specified policies
     policy_spec = get_policy_spec(spec_ou)
     for policy_name in policy_spec:
-        policy_id = get_policy_id_by_name(policy_name)
+        policy_id = policy_table[policy_name]
         if not policy_attached(policy_id, existing_ou_id) and not ensure_absent(spec_ou):
             if not args.silent:
                 print "attaching policy %s to OU %s" % (policy_name, spec_ou['Name'])
@@ -412,7 +413,7 @@ def manage_policy_attachments(spec_ou, existing_ou_id):
     existing_policy_list = get_policy_names(get_policies(existing_ou_id))
     for policy_name in existing_policy_list:
         if policy_name not in policy_spec and not ensure_absent(spec_ou):
-            policy_id = get_policy_id_by_name(policy_name)
+            policy_id = policy_table[policy_name]
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, spec_ou['Name'])
             if not args.dryrun:
@@ -468,6 +469,36 @@ def manage_ou (specified_ou_list, parent_id):
 
 
 
+
+
+#
+# get command line args
+#
+args = parse_args()
+
+# don't be silent when doing dryrun or reporting
+if args.dryrun or args.report_only: args.silent = False
+
+# parse org_spec globals from from yaml file
+if not args.report_only:
+    org_spec = yaml.load(args.spec_file.read())
+    ou_spec = org_spec['ou_spec']
+    policy_spec = org_spec['policy_spec']
+    account_spec = org_spec['account_spec']
+
+    # all orgs have at least this default policy
+    for policy in policy_spec:
+        if 'Default' in policy and policy['Default'] == True:
+            default_policy = policy['Name']
+    
+    # find the Master account name
+    for account in account_spec:
+        if 'Master' in account and account['Master'] == True:
+            master_account = account['Name']
+
+
+
+
 #
 # Main
 #
@@ -475,17 +506,21 @@ def manage_ou (specified_ou_list, parent_id):
 if args.build_policy:
     manage_policies(org_spec['policy_spec'])
     display_provissioned_policies()
+
+if args.build_account:
+    manage_accounts(org_spec['account_spec'])
+
 #if args.silent:
 #    manage_ou (ou_spec['OU'], root_id)
 #
 #elif args.report_only:
 #    print 'Existing org:'
-#    display_existing_organization('root', root_id, 0)
+#    display_provissioned_ou('root', root_id, 0)
 #
 #else:
 #    if not args.no_report:
 #        print 'Existing org:'
-#        display_existing_organization('root', root_id, 0)
+#        display_provissioned_ou('root', root_id, 0)
 #        print
 #
 #    if args.dryrun:
@@ -499,7 +534,7 @@ if args.build_policy:
 #    if not args.no_report and not args.dryrun:
 #        print
 #        print 'Resulting org:'
-#        display_existing_organization('root', root_id, 0)
+#        display_provissioned_ou('root', root_id, 0)
 
 
 

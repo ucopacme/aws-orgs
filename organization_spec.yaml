@@ -53,7 +53,8 @@ account_spec:
     Master: True
     Email: ashleyg@sonic.net
     OU: root
-  - Name: Management
+  - Name: Managment
+    #this got misspelled
     Email: management@ucop.edu
     OU: prod
   - Name: Security
