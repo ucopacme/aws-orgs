@@ -1,6 +1,6 @@
 # AWS Organization Specification
 
-organizational_unit_spec:
+ou_spec:
   Name: root
   Policy:
   OU:

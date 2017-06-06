@@ -3,6 +3,7 @@
 # Manage Organizaion OUs
 
 # TODO:
+# merge account and policy creation into this module
 # add execption handling
 # DONE add --dryrun flag
 # manage accounts
@@ -12,6 +13,7 @@
 
 import boto3
 import yaml
+import json
 import sys
 import os
 import argparse # required 'pip install argparse'
@@ -20,29 +22,43 @@ import argparse # required 'pip install argparse'
 #
 # process command line args
 #
-parser = argparse.ArgumentParser(description='Manage AWS Organization')
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('--spec-file',
-    type=file,
-    help='file containing organization specification in yaml format'
-)
-group.add_argument('--report-only',
-    help='display organization status report only. do not process org spec',
-    action='store_true'
-)
-parser.add_argument('--no-report',
-    help='suppress reporting. display actions only',
-    action='store_true'
-)
-parser.add_argument('--dryrun',
-    help='dryrun mode. show pending changes, but do nothing',
-    action='store_true'
-)
-parser.add_argument('--silent',
-    help='silent mode. overriden when --dryrun is set',
-    action='store_true'
-)
-args = parser.parse_args()
+def parse_args():
+    parser = argparse.ArgumentParser(description='Manage AWS Organization')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--spec-file',
+        type=file,
+        help='file containing organization specification in yaml format'
+    )
+    group.add_argument('--report-only',
+        help='display organization status report only. do not process org spec',
+        action='store_true'
+    )
+    parser.add_argument('--no-report',
+        help='suppress reporting. display actions only',
+        action='store_true'
+    )
+    parser.add_argument('--dryrun',
+        help='dryrun mode. show pending changes, but do nothing',
+        action='store_true'
+    )
+    parser.add_argument('--silent',
+        help='silent mode. overriden when --dryrun is set',
+        action='store_true'
+    )
+    parser.add_argument('--build-policy',
+        help='run policy management tasks',
+        action='store_true'
+    )
+    parser.add_argument('--build-account',
+        help='run account management tasks',
+        action='store_true'
+    )
+    parser.add_argument('--build-all',
+        help='run all management tasks',
+        action='store_true'
+    )
+    args = parser.parse_args()
+    return args
 
 
 
@@ -50,14 +66,14 @@ args = parser.parse_args()
 # Global Variables
 #
 
-# don't be silent when doing dryrun or just reporting
-if args.dryrun or args.report_only: args.silent = False
+# set up aws client for orgs
+org_client = boto3.client('organizations')
 
 # determine the Organization Root ID
-org_client = boto3.client('organizations')
 root_id = org_client.list_roots()['Roots'][0]['Id']
 
 # enable policy type in the Organization root
+## TODO: this can be cleaner
 policy_types = org_client.describe_organization()['Organization']['AvailablePolicyTypes']
 for p_type in policy_types:
     if p_type['Type'] == 'SERVICE_CONTROL_POLICY' and p_type['Status'] != 'ENABLED':
@@ -71,10 +87,38 @@ account_table = {}
 for account in org_client.list_accounts()['Accounts']:
     account_table[account['Name']] = account['Id']
 
+# build policy lookup table
+policy_table = {}
+for policy in org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']:
+    policy_table[policy['Name']] = policy['Id']
+
+# build ou lookup table (recursive)
+def build_ou_table(parent_id, ou_table):
+    # query aws for child orgs
+    for ou in org_client.list_organizational_units_for_parent(ParentId=parent_id)['OrganizationalUnits']:
+        ou_table[ou['Name']] = ou['Id']
+        build_ou_table(ou['Id'], ou_table)
+    return
+ou_table = {}
+build_ou_table(root_id, ou_table)
+
+
+
+
+
+
+#
+# get command line args
+#
+args = parse_args()
+
+# don't be silent when doing dryrun or reporting
+if args.dryrun or args.report_only: args.silent = False
+
 # parse org_spec globals from from yaml file
 if not args.report_only:
     org_spec = yaml.load(args.spec_file.read())
-    ou_spec = org_spec['organizational_unit_spec']
+    ou_spec = org_spec['ou_spec']
     policy_spec = org_spec['policy_spec']
     account_spec = org_spec['account_spec']
 
@@ -87,6 +131,9 @@ if not args.report_only:
     for account in account_spec:
         if 'Master' in account and account['Master'] == True:
             master_account = account['Name']
+
+
+
 
 
 
@@ -201,54 +248,54 @@ def get_account_names (account_list):
     return sorted(names)
 
 
-#account_table = build_account_lookup_table()
-#print account_table
-#print account_table.keys()
-#print
-#account_name = 'Security'
-#print account_exists(account_name, account_table)
-#print
-#account_id = get_account_id_by_name(account_name, account_table)
-#print account_id
-#print
-#parent_id = get_parent_id(account_id)
-#print parent_id
-#print
-#print get_accounts_in_ou(parent_id)
-#print
-#print account_in_ou(account_id, parent_id)
-#print
-#print get_account_names(get_accounts_in_ou(parent_id))
-
-
-# # add/remove accounts in this ou based on the ou spec
-# def manage_account_attachments(spec_ou, existing_ou_id, account_table):
-#     # attach specified accounts
-#     account_spec = get_account_spec(spec_ou)
-#     for account_name in account_spec:
-#         account_id = get_account_id_by_name(account_name, account_table)
-#         print account_table
-#         print account_id
-#         #if not account_in_ou(account_id, existing_ou_id) and not ensure_absent(spec_ou):
-#         #    if not args.silent:
-#         #        print "attaching account %s to OU %s" % (account_name, spec_ou['Name'])
-#             #if not args.dryrun:
-#             #    attach_account(account_id, existing_ou_id)
-# 
-
-
 
 
 #
 # Policy functions
 #
 
+def get_policy( policy_id ):
+    return org_client.describe_policy(PolicyId=policy_id)['Policy']
+
+def create_policy_content(p_spec):
+    return """{ "Version": "2012-10-17", "Statement": [ { "Effect": "%s", "Action": %s, "Resource": "*" } ] }""" % (p_spec['Effect'], json.dumps(p_spec['Actions']))
+
+def create_policy(p_spec):
+    response = org_client.create_policy(
+        Content=create_policy_content(p_spec),
+        Description=p_spec['Description'],
+        Name=p_spec['Name'],
+        Type='SERVICE_CONTROL_POLICY'
+    )
+
+def update_policy( p_spec, policy_id ):
+    response = org_client.update_policy(
+        PolicyId=policy_id,
+        Content=create_policy_content(p_spec),
+        Description=p_spec['Description'],
+    )
+
+def delete_policy(policy_id):
+    org_client.delete_policy(PolicyId=policy_id)
+
+def display_provissioned_policies():
+    print
+    print "Provissioned Service Control Policies:"
+    print
+    for policy in org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']:
+        print "Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" % (policy['Name'], policy['Description'], policy['Id'])
+        print "Content:\t%s\n" % get_policy(policy['Id'])['Content']
+
+
 # get policy id based on it's name
 def get_policy_id_by_name(policy_name):
-    response = org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']
-    for policy in response:
-        if policy['Name'] == policy_name:
-            return policy['Id']
+    return policy_table[policy_name]
+
+def policy_exists(policy_name):
+    if policy_name in policy_table.keys():
+        return True
+    else:
+        return False
 
 # returns a list of service control policies attached to an OU
 def get_policies (ou_id):
@@ -285,6 +332,37 @@ def detach_policy (policy_id, ou_id,):
         PolicyId=policy_id,
         TargetId=ou_id
     )
+
+# walk though policy_spec and make stuff happen
+def manage_policies(policy_spec):
+    for p_spec in policy_spec:
+        if p_spec['Name'] != default_policy:
+            policy_name = p_spec['Name']
+
+            if 'Ensure' in p_spec and p_spec['Ensure'] == 'absent' and policy_exists(policy_name):
+                if not args.silent:
+                    print "deleting policy: %s %s" % (policy_name, policy_table[policy_name])
+                if not args.dryrun:
+                    delete_policy(policy_table[policy_name])
+    
+            else:
+                if not policy_exists(policy_name):
+                    if not args.silent:
+                        print "creating policy: %s" % (policy_name)
+                    if not args.dryrun:
+                        create_policy(p_spec)
+    
+                else:
+                    policy = get_policy(policy_table[policy_name])
+                    #print policy['PolicySummary']['Description']
+                    if p_spec['Description'] != policy['PolicySummary']['Description'] or create_policy_content(p_spec) != policy['Content']:
+                        if not args.silent:
+                            print "updating policy: %s" % (policy_name)
+                        if not args.dryrun:
+                            update_policy(p_spec, policy_table[policy_name])
+
+
+
 
 
 
@@ -393,31 +471,35 @@ def manage_ou (specified_ou_list, parent_id):
 #
 # Main
 #
-if args.silent:
-    manage_ou (ou_spec['OU'], root_id)
 
-elif args.report_only:
-    print 'Existing org:'
-    display_existing_organization('root', root_id, 0)
-
-else:
-    if not args.no_report:
-        print 'Existing org:'
-        display_existing_organization('root', root_id, 0)
-        print
-
-    if args.dryrun:
-        print "This is a dry run!"
-        print "Pending Actions:"
-    else:
-        print "Actions taken:"
-
-    manage_ou (ou_spec['OU'], root_id)
-
-    if not args.no_report and not args.dryrun:
-        print
-        print 'Resulting org:'
-        display_existing_organization('root', root_id, 0)
+if args.build_policy:
+    manage_policies(org_spec['policy_spec'])
+    display_provissioned_policies()
+#if args.silent:
+#    manage_ou (ou_spec['OU'], root_id)
+#
+#elif args.report_only:
+#    print 'Existing org:'
+#    display_existing_organization('root', root_id, 0)
+#
+#else:
+#    if not args.no_report:
+#        print 'Existing org:'
+#        display_existing_organization('root', root_id, 0)
+#        print
+#
+#    if args.dryrun:
+#        print "This is a dry run!"
+#        print "Pending Actions:"
+#    else:
+#        print "Actions taken:"
+#
+#    manage_ou (ou_spec['OU'], root_id)
+#
+#    if not args.no_report and not args.dryrun:
+#        print
+#        print 'Resulting org:'
+#        display_existing_organization('root', root_id, 0)
 
 
 
