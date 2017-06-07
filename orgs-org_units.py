@@ -42,15 +42,9 @@ for p_type in policy_types:
 
 # build account lookup table
 deployed_accounts = org_client.list_accounts()['Accounts']
-account_table = {}
-for account in org_client.list_accounts()['Accounts']:
-    account_table[account['Name']] = account['Id']
 
 # build policy lookup table
 deployed_policies = org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']
-policy_table = {}
-for policy in org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']:
-    policy_table[policy['Name']] = policy['Id']
 
 # build ou lookup table (recursive)
 def build_ou_table(parent_id, ou_table, deployed_ou):
@@ -84,6 +78,8 @@ build_ou_table(root_id, ou_table, deployed_ou)
 #
 
 # Find a value in a list of dictionaries based on a known key:value.
+# TODO: allow return of matching dictionary if no returnkey arg
+# TODO: add error handling
 #
 # walk though a list of dictionaries, find the dictionary where
 # searchkey => searchvalue, and return the value of 'returnkey' 
@@ -178,6 +174,9 @@ def ensure_absent(spec):
 def get_account_id_by_name(account_name):
     return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Id')
 
+def get_account_email_by_name(account_name):
+    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Email')
+
 def get_parent_id(account_id):
     parents = org_client.list_parents(ChildId=account_id)['Parents']
     if len(parents) == 1:
@@ -187,12 +186,12 @@ def get_parent_id(account_id):
         #print 'account', account_id, 'has more than one parent', parents
         return None
 
+
 # returns a list of accounts attached to an OU
-def get_accounts_in_ou (ou_id):
-    account_list = org_client.list_accounts_for_parent(
-        ParentId=ou_id,
-    )['Accounts']
-    return account_list
+def list_accounts_in_ou (ou_id):
+    account_list = org_client.list_accounts_for_parent( ParentId=ou_id,)['Accounts']
+    return sorted(map(lambda a: a['Name'], account_list))
+
 
 #Unused
 #def account_in_ou(account_id, ou_id):
@@ -201,13 +200,6 @@ def get_accounts_in_ou (ou_id):
 #    else:
 #        return False
 
-# returns sorted list of account names from a list of accounts
-def get_account_names (account_list):
-    names = map(lambda d: d['Name'], account_list)
-    #names = []
-    #for account in account_list:
-    #    names.append(account['Name'])
-    return sorted(names)
 
 def move_account(account_id, parent_id, ou_id):
     org_client.move_account(
@@ -229,6 +221,15 @@ def move_account(account_id, parent_id, ou_id):
 
 #def get_create_account_status(account_id):
 #    response = org_client.list_create_account_status(account_id)
+
+
+def display_provissioned_accounts():
+    print "Provissioned Accounts in Org:"
+    print
+    for a_name in sorted(map(lambda a: a['Name'], deployed_accounts)):
+        a_id = get_account_id_by_name(a_name)
+        a_email = get_account_email_by_name(a_name)
+        print "Name:\t\t%s\nEmail:\t\t%s\nId:\t\t%s\n" % (a_name, a_email, a_id)
 
 
 def manage_accounts(account_spec):
@@ -275,6 +276,15 @@ def get_policy_content(policy_id):
     return org_client.describe_policy(PolicyId=policy_id)['Policy']['Content']
 
 
+# returns a list of policy names attached to a given ou
+def list_policies_in_ou (ou_id):
+    policies_in_ou = org_client.list_policies_for_target(
+        TargetId=ou_id,
+        Filter='SERVICE_CONTROL_POLICY',
+    )['Policies']
+    return sorted(map(lambda ou: ou['Name'], policies_in_ou))
+
+
 def get_policy_spec(spec_ou):
     if 'Policy' in spec_ou and spec_ou['Policy'] != None:
         return [default_policy] + spec_ou['Policy']
@@ -287,7 +297,7 @@ def specify_policy_content(p_spec):
 
 
 def create_policy(p_spec):
-    response = org_client.create_policy(
+    org_client.create_policy(
         Content=specify_policy_content(p_spec),
         Description=p_spec['Description'],
         Name=p_spec['Name'],
@@ -296,7 +306,7 @@ def create_policy(p_spec):
 
 
 def update_policy( p_spec, policy_id ):
-    response = org_client.update_policy(
+    org_client.update_policy(
         PolicyId=policy_id,
         Content=specify_policy_content(p_spec),
         Description=p_spec['Description'],
@@ -307,35 +317,12 @@ def delete_policy(policy_id):
     org_client.delete_policy(PolicyId=policy_id)
 
 
-def policy_exists(policy_name):
-    if policy_name in policy_table.keys():
-        return True
-    else:
-        return False
-
-
-# returns a list of service control policies attached to an OU
-def get_policies_in_ou (ou_id):
-    policies_in_ou = org_client.list_policies_for_target(
-        TargetId=ou_id,
-        Filter='SERVICE_CONTROL_POLICY',
-    )['Policies']
-    print policies_in_ou
-    return policies_in_ou
-
-
-# returns sorted list of service control policy names from a list of policies
-def get_policy_names (policy_list):
-    return sorted(map(lambda d: d['Name'], policy_list))
-
-
 # verify if a policy is attached to an ou
 def policy_attached(policy_id, ou_id,):
-    for policy in get_policies_in_ou(ou_id): 
-        if policy['Id'] == policy_id:
-            return True
-        else:
-            return False
+    policy_targets = org_client.list_targets_for_policy(PolicyId=policy_id)['Targets']
+    if ou_id in map(lambda ou: ou['TargetId'], policy_targets):
+        return True
+    return False
 
 
 # attach a policy to an ou
@@ -448,13 +435,13 @@ def display_provissioned_ou (parent_name, parent_id, indent):
     #print
     print tab*indent + parent_name + ':'
     # look for policies
-    policy_list = get_policies_in_ou(parent_id)
-    if len(policy_list) > 0:
-        print tab*indent + tab + 'policies: ' + ', '.join(get_policy_names(policy_list))
+    policy_names = list_policies_in_ou(parent_id)
+    if len(policy_names) > 0:
+        print tab*indent + tab + 'policies: ' + ', '.join(policy_names)
     # look for account
-    account_list = get_accounts_in_ou(parent_id)
+    account_list = list_accounts_in_ou(parent_id)
     if len(account_list) > 0:
-        print tab*indent + tab + 'accounts: ' + ', '.join(get_account_names(account_list))
+        print tab*indent + tab + 'accounts: ' + ', '.join(account_list)
     # look for child OUs
     if len(child_ou_list ) > 0:
         print tab*indent + tab + 'child_ou:'
@@ -478,10 +465,10 @@ def manage_policy_attachments(spec_ou, ou_id):
                 attach_policy(policy_id, ou_id)
 
     # detach unspecified policies
-    existing_policy_list = get_policy_names(get_policies_in_ou(ou_id))
-    for policy_name in existing_policy_list:
+    policy_list = list_policies_in_ou(ou_id)
+    for policy_name in policy_list:
         if policy_name not in p_spec and not ensure_absent(spec_ou):
-            policy_id = policy_table[policy_name]
+            policy_id = get_policy_id_by_name(policy_name)
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, spec_ou['Name'])
             if not args.dryrun:
@@ -579,31 +566,31 @@ if args.build_account:
     manage_accounts(org_spec['account_spec'])
     if not args.no_report and not args.silent: display_provissioned_accounts()
 
-#if args.silent:
-#    manage_ou (org_spec['ou_spec'], root_id)
-#
-#elif args.report_only:
-#    print 'Existing org:'
-#    display_provissioned_ou('root', root_id, 0)
-#
-#else:
-#    if not args.no_report:
-#        print 'Existing org:'
-#        display_provissioned_ou('root', root_id, 0)
-#        print
-#
-#    if args.dryrun:
-#        print "This is a dry run!"
-#        print "Pending Actions:"
-#    else:
-#        print "Actions taken:"
-#
-#    manage_ou (org_spec['ou_spec'], root_id)
-#
-#    if not args.no_report and not args.dryrun:
-#        print
-#        print 'Resulting org:'
-#        display_provissioned_ou('root', root_id, 0)
+if args.silent:
+    manage_ou (org_spec['ou_spec'], root_id)
+
+elif args.report_only:
+    print 'Existing org:'
+    display_provissioned_ou('root', root_id, 0)
+
+else:
+    if not args.no_report:
+        print 'Existing org:'
+        #display_provissioned_ou('root', root_id, 0)
+        print
+
+    if args.dryrun:
+        print "This is a dry run!"
+        print "Pending Actions:"
+    else:
+        print "Actions taken:"
+
+    manage_ou (org_spec['ou_spec'], root_id)
+
+    if not args.no_report and not args.dryrun:
+        print
+        print 'Resulting org:'
+        display_provissioned_ou('root', root_id, 0)
 
 
 
