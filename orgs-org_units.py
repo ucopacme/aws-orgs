@@ -10,6 +10,9 @@
 # DONE detach non-specified policies
 # validate org_spec structures
 # test if new ou exists before adding policies
+# create documentation (pydoc)
+# setup this module in github and problem track
+# DONE rescan existing resources before displaying reports if changes get made.
 
 import boto3
 import yaml
@@ -20,47 +23,9 @@ import argparse # required 'pip install argparse'
 
 
 
-
-
 #
 # General functions
 #
-
-# Find a value in a list of dictionaries based on a known key:value.
-
-# TODO: allow return of matching dictionary if no returnkey arg
-# TODO: add error handling
-#
-# walk though a list of dictionaries, find the dictionary where
-# searchkey => searchvalue, and return the value of 'returnkey' 
-# from that dictionary.
-#
-# args:
-#     dictlist:    data structure to search -  a list of type dictionary.
-#     seachkey:    name of key to use as search criteria
-#     seachvalue:  value to use as search criteria
-#     returnkey:   name of key indexing the value to return
-#
-def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
-
-    # make sure keys exist
-    if not filter(lambda d: searchkey in d and returnkey in d, dictlist):
-        #keyerror
-        return None
-
-    # check for duplicate search values
-    values = map(lambda d: d[searchkey], dictlist)
-    if len(values) != len(set(values)):
-        #duplicate search values
-        return None
-
-    # find the matching dictionary and return the indexed  value
-    result = filter(lambda d: d[searchkey] == searchvalue, dictlist)
-    if len(result) == 1:
-        return result[0][returnkey]
-    else:
-        return None
-
 
 # process command line args
 def parse_args():
@@ -102,8 +67,55 @@ def parse_args():
         help='run all management tasks',
         action='store_true'
     )
+
     args = parser.parse_args()
+    if args.dryrun or args.report_only:
+        args.silent = False
+    if args.build_account == False and \
+            args.build_policy == False  and \
+            args.build_ou == False:
+        args.build_all = True
+    if args.build_all:
+        args.build_account = True
+        args.build_policy = True
+        args.build_ou = True
     return args
+
+
+# scan deployed org resources and build lookup tables for accounts, policies and OUs
+def scan_resources_in_org(root_id):
+    global deployed_accounts, deployed_policies, deployed_ou, ou_table
+    deployed_accounts = org_client.list_accounts()['Accounts']
+    deployed_policies = org_client.list_policies(
+        Filter='SERVICE_CONTROL_POLICY'
+    )['Policies']
+    deployed_ou = []
+    ou_table = {}
+    build_ou_table('root', root_id, ou_table, deployed_ou)
+
+
+def parse_org_specification(args):
+    global org_spec, default_policy, master_account
+    # load spec-file
+    org_spec = yaml.load(args.spec_file.read())
+    # all orgs have at least this default policy
+    for policy in org_spec['policy_spec']:
+        if 'Default' in policy and policy['Default'] == True:
+            default_policy = policy['Name']
+    # find the Master account name
+    for account in org_spec['account_spec']:
+        if 'Master' in account and account['Master'] == True:
+            master_account = account['Name']
+
+
+# make sure the service control policy type is enabled in the organization root
+def enable_policy_type_in_root(root_id):
+    p_type = org_client.describe_organization()['Organization']['AvailablePolicyTypes'][0]
+    if p_type['Type'] == 'SERVICE_CONTROL_POLICY' and p_type['Status'] != 'ENABLED':
+        org_client.enable_policy_type(
+            RootId=root_id,
+            PolicyType='SERVICE_CONTROL_POLICY'
+        )
 
 
 # test if Ensure key is set to  absent
@@ -112,6 +124,43 @@ def ensure_absent(spec):
         return True
     else:
         return False
+
+
+# Find a value in a list of dictionaries based on a known key:value.
+#
+# TODO: allow return of matching dictionary if no returnkey arg
+# TODO: add error handling
+#
+# walk though a list of dictionaries, find the dictionary where
+# searchkey => searchvalue, and return the value of 'returnkey' 
+# from that dictionary.
+#
+# args:
+#     dictlist:    data structure to search -  a list of type dictionary.
+#     seachkey:    name of key to use as search criteria
+#     seachvalue:  value to use as search criteria
+#     returnkey:   name of key indexing the value to return
+#
+def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
+
+    # make sure keys exist
+    if not filter(lambda d: searchkey in d and returnkey in d, dictlist):
+        #keyerror
+        return None
+
+    # check for duplicate search values
+    values = map(lambda d: d[searchkey], dictlist)
+    if len(values) != len(set(values)):
+        #duplicate search values
+        return None
+
+    # find the matching dictionary and return the indexed  value
+    result = filter(lambda d: d[searchkey] == searchvalue, dictlist)
+    if len(result) == 1:
+        return result[0][returnkey]
+    else:
+        return None
+
 
 
 
@@ -187,12 +236,14 @@ def display_provissioned_accounts():
 
 
 def manage_accounts(account_spec):
+    global change_counter
     for a_spec in account_spec:
         if a_spec['Name'] != master_account:
             account_name = a_spec['Name']
             account_id = get_account_id_by_name(account_name)
 
             if not account_id:
+                change_counter += 1
                 if not args.silent:
                     print "creating account: %s" % (account_name)
                 if not args.dryrun:
@@ -203,6 +254,7 @@ def manage_accounts(account_spec):
             parent_id = get_parent_id(account_id)
             parent_ou_name = get_ou_name_by_id(parent_id)
             if a_spec['OU'] != parent_ou_name:
+                change_counter += 1
                 if not args.silent:
                     print "moving account %s from ou %s to ou %s" % (account_name, parent_ou_name, a_spec['OU'] )
                 if not args.dryrun:
@@ -306,12 +358,14 @@ def display_provissioned_policies():
 
 # walk though policy_spec and make stuff happen
 def manage_policies(policy_spec):
+    global change_counter
     for p_spec in policy_spec:
         if p_spec['Name'] != default_policy:
             policy_name = p_spec['Name']
             policy_id = get_policy_id_by_name(policy_name)
 
             if policy_id and ensure_absent(p_spec):
+                change_counter += 1
                 if not args.silent:
                     print "deleting policy: %s" % (policy_name)
                 if not args.dryrun:
@@ -319,14 +373,16 @@ def manage_policies(policy_spec):
     
             else:
                 if not policy_id:
+                    change_counter += 1
                     if not args.silent:
                         print "creating policy: %s" % (policy_name)
                     if not args.dryrun:
                         create_policy(p_spec)
     
                 else:
-                    if p_spec['Description'] != get_policy_description(policy_id) \
-                            or specify_policy_content(p_spec) != get_policy_content(policy_id):
+                    if p_spec['Description'] != get_policy_description(policy_id) or \
+                            specify_policy_content(p_spec) != get_policy_content(policy_id):
+                        change_counter += 1
                         if not args.silent:
                             print "updating policy: %s" % (policy_name)
                         if not args.dryrun:
@@ -403,12 +459,14 @@ def display_provissioned_ou (parent_name, parent_id, indent):
 
 # attach or detach policies to an ou based on the spec for this ou
 def manage_policy_attachments(spec_ou, ou_id):
+    global change_counter
     # attach specified policies
     p_spec = get_policy_spec(spec_ou)
     for policy_name in p_spec:
         policy_id = get_policy_id_by_name(policy_name)
 
         if not policy_attached(policy_id, ou_id) and not ensure_absent(spec_ou):
+            change_counter += 1
             if not args.silent:
                 print "attaching policy %s to OU %s" % (policy_name, spec_ou['Name'])
             if not args.dryrun:
@@ -418,6 +476,7 @@ def manage_policy_attachments(spec_ou, ou_id):
     policy_list = list_policies_in_ou(ou_id)
     for policy_name in policy_list:
         if policy_name not in p_spec and not ensure_absent(spec_ou):
+            change_counter += 1
             policy_id = get_policy_id_by_name(policy_name)
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, spec_ou['Name'])
@@ -444,55 +503,8 @@ def build_ou_table(parent_name, parent_id, ou_table, deployed_ou):
     ou_table[parent_name]['Children'] = map(lambda ou: ou['Name'], children_ou)
 
 
-#
-# manage_ou()
-#
-# Recursive function to reconcile state of deployed OUs with OU specification
-#def manage_ou (specified_ou_list, parent_id):
-#
-#    # create lookup table of existing child OUs: {name:ID}
-#    existing_ou_list = org_client.list_organizational_units_for_parent(
-#        ParentId=parent_id,
-#    )['OrganizationalUnits']
-#    existing_ou_names = {}
-#    for ou in existing_ou_list:
-#        existing_ou_names[ou['Name']] = ou['Id']
-#
-#    # check if each specified OU exists
-#    for spec_ou in specified_ou_list:
-#        if spec_ou['Name'] in existing_ou_names.keys():
-#            existing_ou_id = existing_ou_names[spec_ou['Name']]
-#            # test for child ou in ou_spec
-#            if children_in_ou_spec(spec_ou):
-#                # recurse
-#                manage_ou(spec_ou['OU'], existing_ou_id)
-#            # test if ou should be 'absent'
-#            if ensure_absent(spec_ou):
-#                if not args.silent:
-#                    print 'deleting OU', spec_ou['Name']
-#                if not args.dryrun:
-#                    delete_ou(existing_ou_id)
-#            else:
-#                # manage policies
-#                manage_policy_attachments(spec_ou, existing_ou_id)
-#
-#        # ou does not exist
-#        elif not ensure_absent(spec_ou):
-#            # create new ou
-#            if not args.silent:
-#                print "creating new ou %s under parent %s" % (spec_ou['Name'], get_ou_name_by_id(parent_id))
-#            if not args.dryrun: 
-#                new_ou = create_ou(parent_id, spec_ou['Name'])
-#                manage_policy_attachments(spec_ou, new_ou['OrganizationalUnit']['Id'])
-#                # test if new ou should have children
-#                if children_in_ou_spec(spec_ou) and isinstance(new_ou, dict) \
-#                        and 'Id' in new_ou['OrganizationalUnit']:
-#                    # recurse
-#                    manage_ou(spec_ou['OU'], new_ou['OrganizationalUnit']['Id'])
-
-
 def manage_ou (ou_spec_list, parent_name):
-
+    global change_counter
     for ou_spec in ou_spec_list:
 
         # ou exists
@@ -501,6 +513,7 @@ def manage_ou (ou_spec_list, parent_name):
                 # recurse
                 manage_ou(ou_spec['OU'], ou_spec['Name'])
             if ensure_absent(ou_spec):
+                change_counter += 1
                 if not args.silent:
                     print 'deleting OU', ou_spec['Name']
                 if not args.dryrun:
@@ -510,6 +523,7 @@ def manage_ou (ou_spec_list, parent_name):
 
         # ou does not exist
         elif not ensure_absent(ou_spec):
+            change_counter += 1
             if not args.silent:
                 print "creating new ou %s under parent %s" % (ou_spec['Name'], parent_name)
             if not args.dryrun: 
@@ -522,100 +536,76 @@ def manage_ou (ou_spec_list, parent_name):
 
 
 
-
-
-#
-# Command line args
-#
-args = parse_args()
-
-if args.dryrun or args.report_only:
-    args.silent = False
-
-if args.build_account == False and \
-        args.build_policy == False  and \
-        args.build_ou == False:
-    args.build_all = True
-
-if args.build_all:
-    args.build_account = True
-    args.build_policy = True
-    args.build_ou = True
-
-
-
-#
-# Global Variables
-#
-
-# set up aws client for orgs
-org_client = boto3.client('organizations')
-
-# determine the Organization Root ID
-root_id = org_client.list_roots()['Roots'][0]['Id']
-
-# enable policy type in the Organization root
-## TODO: this can be cleaner
-policy_types = org_client.describe_organization()['Organization']['AvailablePolicyTypes']
-for p_type in policy_types:
-    if p_type['Type'] == 'SERVICE_CONTROL_POLICY' and p_type['Status'] != 'ENABLED':
-        response = org_client.enable_policy_type(
-            RootId=root_id,
-            PolicyType='SERVICE_CONTROL_POLICY'
-        )
-
-# build lookup data structures for accounts, policies and OUs
-deployed_accounts = org_client.list_accounts()['Accounts']
-deployed_policies = org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']
-deployed_ou = []
-ou_table = {}
-build_ou_table('root', root_id, ou_table, deployed_ou)
-
-
-# load spec-file
-org_spec = yaml.load(args.spec_file.read())
-
-# all orgs have at least this default policy
-for policy in org_spec['policy_spec']:
-    if 'Default' in policy and policy['Default'] == True:
-        default_policy = policy['Name']
-
-# find the Master account name
-for account in org_spec['account_spec']:
-    if 'Master' in account and account['Master'] == True:
-        master_account = account['Name']
-
-
-
-
-
-
 #
 # Main
 #
 
-if args.report_only:
-    display_provissioned_policies()
-    display_provissioned_accounts()
-    print
-    print 'Provissioned Organizational Units in Org:'
-    display_provissioned_ou('root', root_id, 0)
+def main():
+
+    global args, org_client, root_id, change_counter
+    # get commandline args
+    args = parse_args()
+    
+    # set up aws client for orgs
+    org_client = boto3.client('organizations')
+
+    # determine the Organization Root ID
+    root_id = org_client.list_roots()['Roots'][0]['Id']
+
+    # initialize change counter
+    change_counter = 0 
+
+    # scan deployed organization - initializes globals:
+    #   deployed_accounts
+    #   deployed_policies
+    #   deployed_ou
+    #   ou_table
+    scan_resources_in_org(root_id)
 
 
-if args.dryrun: print "This is a dry run!"
-
-if args.build_policy:
-    manage_policies(org_spec['policy_spec'])
-    if not args.silent and not args.no_report: display_provissioned_policies()
-
-if args.build_account:
-    manage_accounts(org_spec['account_spec'])
-    if not args.silent and not args.no_report: display_provissioned_accounts()
-
-if args.build_ou:
-    manage_ou (org_spec['ou_spec'], 'root')
-    if not args.silent and not args.no_report:
+    # run reporting
+    if args.report_only:
+        display_provissioned_policies()
+        display_provissioned_accounts()
         print
         print 'Provissioned Organizational Units in Org:'
         display_provissioned_ou('root', root_id, 0)
+
+
+    # process organization spec-file
+    else:
+        # read org-spec yaml file into dictionary - initializes globals:
+        #   org_spec
+        #   default_policy
+        #   master_account
+        parse_org_specification(args)
+
+        if args.dryrun: print "\nThis is a dry run!"
+
+        if args.build_policy:
+            manage_policies(org_spec['policy_spec'])
+        if args.build_account:
+            manage_accounts(org_spec['account_spec'])
+        if args.build_ou:
+            enable_policy_type_in_root(root_id)
+            manage_ou(org_spec['ou_spec'], 'root')
+
+        # run follow-up report
+        if not args.silent and not args.no_report:
+            if change_counter > 0:
+                scan_resources_in_org(root_id)
+            if args.build_policy: display_provissioned_policies()
+            if args.build_account: display_provissioned_accounts()
+            if args.build_ou:
+                print
+                print '_________________________________________'
+                print 'Provissioned Organizational Units in Org:'
+                display_provissioned_ou('root', root_id, 0)
+
+
+
+
+# run it!
+main()
+
 

@@ -8,10 +8,10 @@ ou_spec:
   - Name: poc
     Policy: 
       - poc_service_policy
+      - poc_service_policy
   - Name: nonprod
     Policy: 
       - dev_service_policy
-      - poc_service_policy
 
 policy_spec:
   - Name: FullAWSAccess
@@ -27,8 +27,8 @@ policy_spec:
       - cloudformation:*
       - cloudtrail:*
       - sts:*
-      - sns:*
-      - cloudwatch:*
+#      - sns:*
+#      - cloudwatch:*
   - Name: dev_service_policy
     Ensure: present
     Description: Development Accounts
@@ -57,4 +57,4 @@ account_spec:
     OU: prod
   - Name: Security
     Email: ashleyg@ucop.edu
-    OU: nonprod
+    OU: prod
