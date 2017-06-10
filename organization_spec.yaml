@@ -1,6 +1,6 @@
 # AWS Organization Specification
 
-ou_spec:
+organizational_unit_spec:
   - Name: prod
   - Name: blee
     Policy: 

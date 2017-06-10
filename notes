@@ -1,0 +1,36 @@
+
+
+TODO:
+account creation in separate module
+  parse account names for compliance
+  account-spec details allowed values for name components
+  
+pull out assume_role.py into separate project
+create documentation (pydoc)
+add README file
+add unit testing
+add execption handling
+  validate org_spec structures
+  test if new ou exists before adding policies
+
+in aws-orgs.find_in_dictlist:
+  allow return of matching dictionary if no returnkey arg
+  add error handling
+in aws-orgs.manage_accounts:
+  test account creation status running move_account()
+in get_policy_spec_for_ou:
+  test for default_policy before adding it to list
+in  specify_policy_content:
+  test keys exist
+  reformate json string with linebreaks
+    
+
+CONSIDER:
+divide into sub modules
+should account spec be separate file?
+
+
+
+
+references:
+http://www.python-course.eu/python3_tests.php
