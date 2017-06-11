@@ -231,7 +231,7 @@ def move_account(account_id, parent_id, target_id):
     org_client.move_account(
         AccountId=account_id,
         SourceParentId=parent_id,
-        DestinationParentId=ou_id
+        DestinationParentId=target_id
     )
     # handle exception
 
@@ -348,7 +348,11 @@ def specify_policy_content(p_spec):
 
 
 def create_policy(p_spec):
-    org_client.create_policy(
+    """
+    Create a new Service Control Policy in the AWS Organization based on
+    a policy specification ('p_spec').
+    """
+    org_client.create_policy (
         Content=specify_policy_content(p_spec),
         Description=p_spec['Description'],
         Name=p_spec['Name'],
@@ -357,6 +361,10 @@ def create_policy(p_spec):
 
 
 def update_policy( p_spec, policy_id ):
+    """
+    Update a deployed Service Control Policy ('policy_id') in the 
+    AWS Organization based on a policy specification ('p_spec').
+    """
     org_client.update_policy(
         PolicyId=policy_id,
         Content=specify_policy_content(p_spec),
@@ -365,36 +373,54 @@ def update_policy( p_spec, policy_id ):
 
 
 def delete_policy(policy_id):
+    """
+    Delete a deployed Service Control Policy ('policy_id') in the 
+    AWS Organization.
+    """
     org_client.delete_policy(PolicyId=policy_id)
 
 
-# verify if a policy is attached to an ou
 def policy_attached(policy_id, ou_id,):
-    policy_targets = org_client.list_targets_for_policy(PolicyId=policy_id)['Targets']
+    """
+    Test if a deployed Service Control Policy ('policy_id') is attached to a
+    given OrganizationalUnit ('ou_id').  Returns a boolean.
+    """
+    policy_targets = org_client.list_targets_for_policy (
+        PolicyId=policy_id
+    )['Targets']
     if ou_id in map(lambda ou: ou['TargetId'], policy_targets):
         return True
     return False
 
 
-# attach a policy to an ou
 def attach_policy (policy_id, ou_id,):
+    """
+    Attach a deployed Service Control Policy ('policy_id') to a given 
+    OrganizationalUnit ('ou_id').
+    """
     org_client.attach_policy (
         PolicyId=policy_id,
         TargetId=ou_id
     )
 
 
-# detach a policy from an ou
 def detach_policy (policy_id, ou_id,):
+    """
+    Detach a deployed Service Control Policy ('policy_id') from a given 
+    OrganizationalUnit ('ou_id').
+    """
     org_client.detach_policy (
         PolicyId=policy_id,
         TargetId=ou_id
     )
 
 
-# pretty print exiting policies
 def display_provissioned_policies():
+    """
+    Print report of currently deployed Service Control Policies in AWS Organization.
+    """
     print
+    print "______________________________________"
     print "Provissioned Service Control Policies:"
     for policy in deployed_policies:
         print "Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" % (policy['Name'], policy['Description'], policy['Id'])
@@ -403,6 +429,10 @@ def display_provissioned_policies():
 
 # walk though policy_spec and make stuff happen
 def manage_policies(policy_spec):
+    """
+    Manage Service Control Policies in the AWS Organization.  Make updates
+    according to the policy specification ('policy_spec').
+    """
     global change_counter
     for p_spec in policy_spec:
         if p_spec['Name'] != default_policy:
@@ -425,8 +455,8 @@ def manage_policies(policy_spec):
                         create_policy(p_spec)
     
                 else:
-                    if p_spec['Description'] != get_policy_description(policy_id) or \
-                            specify_policy_content(p_spec) != get_policy_content(policy_id):
+                    if p_spec['Description'] != get_policy_description(policy_id) \
+                            or specify_policy_content(p_spec) != get_policy_content(policy_id):
                         change_counter += 1
                         if not args.silent:
                             print "updating policy: %s" % (policy_name)
@@ -613,6 +643,7 @@ def main():
         display_provissioned_policies()
         display_provissioned_accounts()
         print
+        print '_________________________________________'
         print 'Provissioned Organizational Units in Org:'
         display_provissioned_ou('root', root_id, 0)
 

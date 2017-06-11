@@ -27,8 +27,8 @@ policy_spec:
       - cloudformation:*
       - cloudtrail:*
       - sts:*
-#      - sns:*
-#      - cloudwatch:*
+      - sns:*
+      - cloudwatch:*
   - Name: dev_service_policy
     Ensure: present
     Description: Development Accounts

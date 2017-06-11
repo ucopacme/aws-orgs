@@ -5,14 +5,14 @@ account creation in separate module
   parse account names for compliance
   account-spec details allowed values for name components
   
-pull out assume_role.py into separate project
-create documentation (pydoc)
+IN PROGRESS create documentation (pydoc)
 add README file
 add unit testing
+validate/sanitize org_spec input
 add execption handling
-  validate org_spec structures
-  test if new ou exists before adding policies
 
+in aws-orgs.attach_policy
+  test if new ou exists before adding policies
 in aws-orgs.find_in_dictlist:
   allow return of matching dictionary if no returnkey arg
   add error handling
