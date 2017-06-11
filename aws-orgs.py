@@ -427,7 +427,6 @@ def display_provissioned_policies():
         print "Content:\t%s\n" % get_policy_content(policy['Id'])
 
 
-# walk though policy_spec and make stuff happen
 def manage_policies(policy_spec):
     """
     Manage Service Control Policies in the AWS Organization.  Make updates
@@ -471,37 +470,57 @@ def manage_policies(policy_spec):
 #
 
 def children_in_ou_spec(ou_spec):
+    """
+    Check if if 'ou_spec' has any child OU.  Returns boolean.
+    """
     if 'OU' in ou_spec and ou_spec['OU'] != None and len(ou_spec['OU']) != 0:
         return True
     return False
 
+
 def get_ou_id_by_name(ou_name):
+    """
+    search 'deployed_ou' dictlist for 'ou_name'. return the
+    OrganizationalUnit Id or 'None'.
+    """
     return find_in_dictlist(deployed_ou, 'Name', ou_name, 'Id')
 
 
-# create an ou under specified parent
+# return ou name from an ou id
+def get_ou_name_by_id(ou_id):
+    """
+    Search 'deployed_ou' dictlist for 'ou_id'. Return the OrganizationalUnit
+    Name or 'None'.  If ou_id is the root_id, return 'root'.
+    """
+    if ou_id == root_id:
+        return 'root'
+    else:
+        return find_in_dictlist(deployed_ou, 'Id', ou_id, 'Name')
+
+
 def create_ou (parent_id, ou_name):
+    """
+    Create new OrganizationalUnit ('ou_name') under specified parent 
+    OU ('parent_id')
+    """
     return org_client.create_organizational_unit(
         ParentId=parent_id,
         Name=ou_name
     )['OrganizationalUnit']
 
 
-# delete ou
+
 def delete_ou (ou_name):
+    """
+    Delete named OrganizaionalUnit from deployed AWS Organization.  Check if
+    any children OU exist first.
+    """
     if len(ou_table[ou_name]['Children']) > 0:
         print "OU %s has children. Can not delete." % ou_name
     else:
         org_client.delete_organizational_unit (
             OrganizationalUnitId=ou_table[ou_name]['Id']
         )
-
-# return ou name from an ou id
-def get_ou_name_by_id(ou_id):
-    if ou_id == root_id:
-        return 'root'
-    else:
-        return find_in_dictlist(deployed_ou, 'Id', ou_id, 'Name')
 
 
 # recursive function to display the existing org structure 
