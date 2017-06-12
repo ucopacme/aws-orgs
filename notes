@@ -23,10 +23,19 @@ in get_policy_spec_for_ou:
 in  specify_policy_content:
   test keys exist
   reformate json string with linebreaks
-    
+in display_provissioned_ou:
+  calls both client.get_children and find_in_dictlist .  should be one or the
+  other.  can indent default to 0?  if using find_in_dictlist only, can I
+  ommit parent_id?
+in build_ou_table:
+  I dont need ou_table if I add parents/children keys to deployed_ou dictionary
+  the only other def using it is delete_ou.
+
+
+
 
 CONSIDER:
-divide into sub modules
+divide into sub modules.  how would that look?
 should account spec be separate file?
 
 
