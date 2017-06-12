@@ -10,6 +10,9 @@ import json
 import sys
 import os
 import argparse
+from botocore.exceptions import (NoCredentialsError, ClientError)
+import inspect
+
 
 
 
@@ -72,6 +75,26 @@ def parse_args():
         args.build_policy = True
         args.build_ou = True
     return args
+
+
+def get_root_id():
+    """
+    Query deployed AWS Organization for its Root ID.
+    """
+    try:
+        root_id = org_client.list_roots()['Roots'][0]['Id']
+        return root_id
+    except NoCredentialsError as e:
+        print sys.argv[0]
+        print e
+        print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
+        print "in module:", __name__
+        raise SystemExit
+    except ClientError as e:
+        print e
+        print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
+        print "in module:", __name__
+        raise SystemExit
 
 
 def scan_resources_in_org(root_id):
@@ -309,7 +332,7 @@ def get_policy_description(policy_id):
 def get_policy_content(policy_id):
     """
     Query deployed AWS Organization.  Return the policy content (json string)
-    accociated with the policy referenced by 'policy_id'.
+    accociated with the Service Control Policy referenced by 'policy_id'.
     """
     return org_client.describe_policy(PolicyId=policy_id)['Policy']['Content']
     # handle exception
@@ -659,7 +682,7 @@ def main():
     org_client = boto3.client('organizations')
 
     # determine the Organization Root ID
-    root_id = org_client.list_roots()['Roots'][0]['Id']
+    root_id = get_root_id()
 
     # initialize change counter
     change_counter = 0

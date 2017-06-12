@@ -5,11 +5,11 @@ account creation in separate module
   parse account names for compliance
   account-spec details allowed values for name components
   
-IN PROGRESS create documentation (pydoc)
+DONE create documentation (pydoc)
 add README file
 add unit testing
 validate/sanitize org_spec input
-add execption handling
+IN PROGRESS add execption handling
 
 in aws-orgs.attach_policy
   test if new ou exists before adding policies
