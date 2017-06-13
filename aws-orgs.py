@@ -62,6 +62,10 @@ def parse_args():
         help='run all management tasks',
         action='store_true'
     )
+    parser.add_argument('--create-accounts',
+        help='create new AWS accounts in Org per account specifation',
+        action='store_true'
+    )
 
     args = parser.parse_args()
     if args.dry_run or args.report_only:
@@ -103,10 +107,18 @@ def scan_resources_in_org(root_id):
     for accounts, policies and OUs
     """
     global deployed_accounts, deployed_policies, deployed_ou, ou_table
-    deployed_accounts = org_client.list_accounts()['Accounts']
+
+    created_accounts = org_client.list_create_account_status(
+        States=['SUCCEEDED']
+    )['CreateAccountStatuses']
+    deployed_accounts = []
+    for account_id in map(lambda a: a['AccountId'], created_accounts):
+        deployed_accounts.append( org_client.describe_account(AccountId=account_id)['Account'] )
+    
     deployed_policies = org_client.list_policies(
         Filter='SERVICE_CONTROL_POLICY'
     )['Policies']
+
     deployed_ou = []
     ou_table = {}
     build_ou_table('root', root_id, ou_table, deployed_ou)
@@ -246,6 +258,13 @@ def list_accounts_in_ou (ou_id):
     return sorted(map(lambda a: a['Name'], account_list))
 
 
+def create_account(a_spec):
+    return org_client.create_account(
+        AccountName=a_spec['Name'],
+        Email=a_spec['Email']
+    )['CreateAccountStatus']['State']
+
+
 def move_account(account_id, parent_id, target_id):
     """
     Alter deployed AWS organanization. Move account referenced by 'account_id'
@@ -285,26 +304,32 @@ def manage_accounts(account_spec):
             account_id = get_account_id_by_name(account_name)
 
             if not account_id:
-                change_counter += 1
-                if not args.silent:
-                    print "creating account: %s" % (account_name)
-                if not args.dry_run:
-                    create_account(a_spec)
+                if args.create_accounts:
+                    change_counter += 1
+                    if not args.silent:
+                        print "creating account: %s" % (account_name)
+                    if not args.dry_run:
+                        account_state = create_account(a_spec)
+                else:
+                    if not args.silent:
+                        print "Warning: account %s not in Org." % (account_name)
+                        print "Use '--create-accounts' option to create new accounts."
 
-            # locate account in correct ou
-            parent_id = get_parent_id(account_id)
-            parent_ou_name = get_ou_name_by_id(parent_id)
-            if a_spec['OU'] != parent_ou_name:
-                change_counter += 1
-                if not args.silent:
-                    print "moving account %s from ou %s to ou %s" % (account_name, parent_ou_name, a_spec['OU'] )
-                if not args.dry_run:
-                    ou_id = get_ou_id_by_name(a_spec['OU'])
-                    if ou_id:
-                        move_account(account_id, parent_id, ou_id)
-                    else:
-                        # handle execption: ou_id not found
-                        print 'error: ou_id not found'
+            else:
+                # locate account in correct ou
+                parent_id = get_parent_id(account_id)
+                parent_ou_name = get_ou_name_by_id(parent_id)
+                if a_spec['OU'] != parent_ou_name:
+                    change_counter += 1
+                    if not args.silent:
+                        print "moving account %s from ou %s to ou %s" % (account_name, parent_ou_name, a_spec['OU'] )
+                    if not args.dry_run:
+                        ou_id = get_ou_id_by_name(a_spec['OU'])
+                        if ou_id:
+                            move_account(account_id, parent_id, ou_id)
+                        else:
+                            # handle execption: ou_id not found
+                            print 'error: ou_id not found'
 
 
 

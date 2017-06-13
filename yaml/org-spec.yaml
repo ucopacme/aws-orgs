@@ -3,6 +3,7 @@
 organizational_unit_spec:
   - Name: prod
   - Name: blee
+    Ensure: absent
     Policy: 
       - poc_service_policy
   - Name: poc
@@ -58,3 +59,9 @@ account_spec:
   - Name: Security
     Email: ashleyg@ucop.edu
     OU: prod
+  - Name: blee-poc
+    Email: blee-poc@blee.red
+    OU: nonprod
+  - Name: blee-dev
+    Email: blee-dev@blee.red
+    OU: nonprod
