@@ -81,7 +81,7 @@ def parse_args():
     return args
 
 
-def get_root_id():
+def get_root_id(org_client):
     """
     Query deployed AWS Organization for its Root ID.
     """
@@ -101,25 +101,17 @@ def get_root_id():
         raise SystemExit
 
 
-def scan_resources_in_org(root_id):
+def scan_resources_in_org(org_client, root_id):
     """
     scan deployed org resources and build lookup tables
     for accounts, policies and OUs
     """
-    global deployed_accounts, deployed_policies, deployed_ou, ou_table
+    global deployed_ou, ou_table
 
-    created_accounts = org_client.list_create_account_status(
-        States=['SUCCEEDED']
-    )['CreateAccountStatuses']
-    deployed_accounts = []
-    for account_id in map(lambda a: a['AccountId'], created_accounts):
-        deployed_accounts.append( org_client.describe_account(AccountId=account_id)['Account'] )
-    
-    deployed_policies = org_client.list_policies( Filter='SERVICE_CONTROL_POLICY')['Policies']
 
     deployed_ou = []
     ou_table = {}
-    build_ou_table('root', root_id, ou_table, deployed_ou)
+    build_ou_table(org_client, 'root', root_id, ou_table, deployed_ou)
 
 
 def parse_org_specification(args):
@@ -140,7 +132,7 @@ def parse_org_specification(args):
             master_account = account['Name']
 
 
-def enable_policy_type_in_root(root_id):
+def enable_policy_type_in_root(org_client, root_id):
     """
     ensure policy type 'SERVICE_CONTROL_POLICY' is enabled in the
     organization root.
@@ -259,7 +251,21 @@ def lookup(dlist, lkey, lvalue, rkey=None):
 #    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Email')
 
 
-def get_parent_id(account_id):
+def scan_deployed_accounts(org_client):
+    """
+    Query AWS Organization for successfully created accounts.
+    Returns a list of dictionary.
+    """
+    deployed_accounts = []
+    created_accounts = org_client.list_create_account_status(
+        States=['SUCCEEDED']
+    )['CreateAccountStatuses']
+    for account_id in map(lambda a: a['AccountId'], created_accounts):
+        deployed_accounts.append( org_client.describe_account(AccountId=account_id)['Account'] )
+    return deployed_accounts
+
+
+def get_parent_id(org_client, account_id):
     """
     Query deployed AWS organanization for 'account_id. Return the 'Id' of the
     parent OrganizationalUnit or 'None'.
@@ -273,7 +279,7 @@ def get_parent_id(account_id):
         return None
 
 
-def list_accounts_in_ou (ou_id):
+def list_accounts_in_ou(org_client, ou_id):
     """
     Query deployed AWS organanization for accounts contained in
     OrganizationalUnit ('ou_id').  Return a list of accounts
@@ -285,14 +291,14 @@ def list_accounts_in_ou (ou_id):
     return sorted(map(lambda a: a['Name'], account_list))
 
 
-def create_account(a_spec):
+def create_account(org_client, a_spec):
     return org_client.create_account(
         AccountName=a_spec['Name'],
         Email=a_spec['Email']
     )['CreateAccountStatus']['State']
 
 
-def move_account(account_id, parent_id, target_id):
+def move_account(org_client, account_id, parent_id, target_id):
     """
     Alter deployed AWS organanization. Move account referenced by 'account_id'
     out of current containing OU ('parent_id') and into target OU ('target_id')
@@ -305,7 +311,7 @@ def move_account(account_id, parent_id, target_id):
     # handle exception
 
 
-def display_provissioned_accounts():
+def display_provissioned_accounts(deployed_accounts):
     """
     Print report of currently deployed accounts in AWS Organization.
     """
@@ -318,7 +324,7 @@ def display_provissioned_accounts():
         print "Name:\t\t%s\nEmail:\t\t%s\nId:\t\t%s\n" % (a_name, a_email, a_id)
 
 
-def manage_accounts(account_spec):
+def manage_accounts(org_client, args, deployed_accounts, deployed_ou, account_spec):
     """
     Alter deployed AWS Organization.  Ensure accounts are contained
     by designated OrganizationalUnits based on account specification
@@ -336,7 +342,7 @@ def manage_accounts(account_spec):
                     if not args.silent:
                         print "creating account: %s" % (account_name)
                     if not args.dry_run:
-                        account_state = create_account(a_spec)
+                        account_state = create_account(org_client, a_spec)
                 else:
                     if not args.silent:
                         print "Warning: account %s not in Org." % (account_name)
@@ -344,7 +350,7 @@ def manage_accounts(account_spec):
 
             else:
                 # locate account in correct ou
-                parent_id = get_parent_id(account_id)
+                parent_id = get_parent_id(org_client, account_id)
                 parent_ou_name = lookup(deployed_ou, 'Id', parent_id, 'Name')
                 if a_spec['OU'] != parent_ou_name:
                     change_counter += 1
@@ -353,7 +359,7 @@ def manage_accounts(account_spec):
                     if not args.dry_run:
                         ou_id = lookup(deployed_ou, 'Name', a_spec['OU'], 'Id')
                         if ou_id:
-                            move_account(account_id, parent_id, ou_id)
+                            move_account(org_client, account_id, parent_id, ou_id)
                         else:
                             # handle execption: ou_id not found
                             print 'error: ou_id not found'
@@ -381,7 +387,7 @@ def manage_accounts(account_spec):
 #    return find_in_dictlist(deployed_policies, 'Id', policy_id, 'Description')
 
 
-def get_policy_content(policy_id):
+def get_policy_content(org_client, policy_id):
     """
     Query deployed AWS Organization.  Return the policy content (json string)
     accociated with the Service Control Policy referenced by 'policy_id'.
@@ -390,7 +396,7 @@ def get_policy_content(policy_id):
     # handle exception
 
 
-def list_policies_in_ou (ou_id):
+def list_policies_in_ou (org_client, ou_id):
     """
     Query deployed AWS organanization.  Return a list (of type dict)
     of policies attached to OrganizationalUnit referenced by 'ou_id'.
@@ -422,7 +428,7 @@ def specify_policy_content(p_spec):
     return """{ "Version": "2012-10-17", "Statement": [ { "Effect": "%s", "Action": %s, "Resource": "*" } ] }""" % (p_spec['Effect'], json.dumps(p_spec['Actions']))
 
 
-def create_policy(p_spec):
+def create_policy(org_client, p_spec):
     """
     Create a new Service Control Policy in the AWS Organization based on
     a policy specification ('p_spec').
@@ -435,7 +441,7 @@ def create_policy(p_spec):
     )
 
 
-def update_policy( p_spec, policy_id ):
+def update_policy(org_client,  p_spec, policy_id ):
     """
     Update a deployed Service Control Policy ('policy_id') in the
     AWS Organization based on a policy specification ('p_spec').
@@ -447,7 +453,7 @@ def update_policy( p_spec, policy_id ):
     )
 
 
-def delete_policy(policy_id):
+def delete_policy(org_client, policy_id):
     """
     Delete a deployed Service Control Policy ('policy_id') in the
     AWS Organization.
@@ -455,7 +461,7 @@ def delete_policy(policy_id):
     org_client.delete_policy(PolicyId=policy_id)
 
 
-def policy_attached(policy_id, ou_id,):
+def policy_attached(org_client, policy_id, ou_id,):
     """
     Test if a deployed Service Control Policy ('policy_id') is attached to a
     given OrganizationalUnit ('ou_id').  Returns a boolean.
@@ -468,7 +474,7 @@ def policy_attached(policy_id, ou_id,):
     return False
 
 
-def attach_policy (policy_id, ou_id,):
+def attach_policy (org_client, policy_id, ou_id,):
     """
     Attach a deployed Service Control Policy ('policy_id') to a given
     OrganizationalUnit ('ou_id').
@@ -479,7 +485,7 @@ def attach_policy (policy_id, ou_id,):
     )
 
 
-def detach_policy (policy_id, ou_id,):
+def detach_policy (org_client, policy_id, ou_id,):
     """
     Detach a deployed Service Control Policy ('policy_id') from a given
     OrganizationalUnit ('ou_id').
@@ -490,7 +496,7 @@ def detach_policy (policy_id, ou_id,):
     )
 
 
-def display_provissioned_policies():
+def display_provissioned_policies(org_client, deployed_policies):
     """
     Print report of currently deployed Service Control Policies in
     AWS Organization.
@@ -504,10 +510,10 @@ def display_provissioned_policies():
             policy['Description'],
             policy['Id']
         )
-        print "Content:\t%s\n" % get_policy_content(policy['Id'])
+        print "Content:\t%s\n" % get_policy_content(org_client, policy['Id'])
 
 
-def manage_policies(policy_spec):
+def manage_policies(org_client, args, deployed_policies, policy_spec):
     """
     Manage Service Control Policies in the AWS Organization.  Make updates
     according to the policy specification ('policy_spec').
@@ -523,7 +529,7 @@ def manage_policies(policy_spec):
                 if not args.silent:
                     print "deleting policy: %s" % (policy_name)
                 if not args.dry_run:
-                    delete_policy(policy_id)
+                    delete_policy(org_client, policy_id)
 
             else:
                 if not policy_id:
@@ -531,15 +537,15 @@ def manage_policies(policy_spec):
                     if not args.silent:
                         print "creating policy: %s" % (policy_name)
                     if not args.dry_run:
-                        create_policy(p_spec)
+                        create_policy(org_client, p_spec)
 
                 else:
-                    if p_spec['Description'] != lookup(deployed_policies, 'Id', policy_id, 'Description') or specify_policy_content(p_spec) != get_policy_content(policy_id):
+                    if p_spec['Description'] != lookup(deployed_policies, 'Id', policy_id, 'Description') or specify_policy_content(p_spec) != get_policy_content(org_client, policy_id):
                         change_counter += 1
                         if not args.silent:
                             print "updating policy: %s" % (policy_name)
                         if not args.dry_run:
-                            update_policy(p_spec, policy_id)
+                            update_policy(org_client, p_spec, policy_id)
 
 
 
@@ -576,7 +582,7 @@ def children_in_ou_spec(ou_spec):
 #        return find_in_dictlist(deployed_ou, 'Id', ou_id, 'Name')
 
 
-def create_ou (parent_id, ou_name):
+def create_ou (org_client, parent_id, ou_name):
     """
     Create new OrganizationalUnit ('ou_name') under specified parent
     OU ('parent_id')
@@ -588,7 +594,7 @@ def create_ou (parent_id, ou_name):
 
 
 
-def delete_ou (ou_name):
+def delete_ou (org_client, ou_name):
     """
     Delete named OrganizaionalUnit from deployed AWS Organization.  Check if
     any children OU exist first.
@@ -601,7 +607,7 @@ def delete_ou (ou_name):
         )
 
 
-def display_provissioned_ou (parent_name, parent_id, indent):
+def display_provissioned_ou (org_client, deployed_ou, parent_name, parent_id, indent):
     """
     Recursive function to display the deployed AWS Organization structure.
     """
@@ -614,11 +620,11 @@ def display_provissioned_ou (parent_name, parent_id, indent):
     tab = '  '
     print tab*indent + parent_name + ':'
     # look for policies
-    policy_names = list_policies_in_ou(parent_id)
+    policy_names = list_policies_in_ou(org_client, parent_id)
     if len(policy_names) > 0:
         print tab*indent + tab + 'policies: ' + ', '.join(policy_names)
     # look for accounts
-    account_list = list_accounts_in_ou(parent_id)
+    account_list = list_accounts_in_ou(org_client, parent_id)
     if len(account_list) > 0:
         print tab*indent + tab + 'accounts: ' + ', '.join(account_list)
     # look for child OUs
@@ -628,10 +634,10 @@ def display_provissioned_ou (parent_name, parent_id, indent):
         for ou in child_ou_list:
             # recurse
             ou_name = lookup(deployed_ou, 'Id', ou['Id'], 'Name')
-            display_provissioned_ou(ou_name, ou['Id'], indent)
+            display_provissioned_ou(org_client, deployed_ou, ou_name, ou['Id'], indent)
 
 
-def manage_policy_attachments(ou_spec, ou_id):
+def manage_policy_attachments(org_client, args, deployed_policies, ou_spec, ou_id):
     """
     Attach or detach specified Service Control Policy ('ou_spec') to a
     deployed OrganizatinalUnit ('ou_id)'.
@@ -642,15 +648,15 @@ def manage_policy_attachments(ou_spec, ou_id):
     for policy_name in p_spec:
         policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
 
-        if not policy_attached(policy_id, ou_id) and not ensure_absent(ou_spec):
+        if not policy_attached(org_client, policy_id, ou_id) and not ensure_absent(ou_spec):
             change_counter += 1
             if not args.silent:
                 print "attaching policy %s to OU %s" % (policy_name, ou_spec['Name'])
             if not args.dry_run:
-                attach_policy(policy_id, ou_id)
+                attach_policy(org_client, policy_id, ou_id)
 
     # detach unspecified policies
-    policy_list = list_policies_in_ou(ou_id)
+    policy_list = list_policies_in_ou(org_client, ou_id)
     for policy_name in policy_list:
         if policy_name not in p_spec and not ensure_absent(ou_spec):
             change_counter += 1
@@ -658,10 +664,10 @@ def manage_policy_attachments(ou_spec, ou_id):
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, ou_spec['Name'])
             if not args.dry_run:
-                detach_policy(policy_id, ou_id)
+                detach_policy(org_client, policy_id, ou_id)
 
 
-def build_ou_table(parent_name, parent_id, ou_table, deployed_ou):
+def build_ou_table(org_client, parent_name, parent_id, ou_table, deployed_ou):
     """
     Recursively traverse deployed AWS Organization.  Build the
     'deployed_ou' lookup table.
@@ -675,7 +681,7 @@ def build_ou_table(parent_name, parent_id, ou_table, deployed_ou):
         if not ou['Name'] in ou_table:
             ou_table[ou['Name']] = {}
         ou_table[ou['Name']]['ParentId'] = parent_id
-        build_ou_table(ou['Name'], ou['Id'], ou_table, deployed_ou)
+        build_ou_table(org_client, ou['Name'], ou['Id'], ou_table, deployed_ou)
 
     if not parent_name in ou_table:
         ou_table[parent_name] = {}
@@ -683,7 +689,7 @@ def build_ou_table(parent_name, parent_id, ou_table, deployed_ou):
     ou_table[parent_name]['Children'] = map(lambda ou: ou['Name'], children_ou)
 
 
-def manage_ou (ou_spec_list, parent_name):
+def manage_ou (org_client, args, deployed_policies, ou_spec_list, parent_name):
     """
     Recursive function to manage OrganizationalUnits in the AWS Organization.
     """
@@ -694,15 +700,15 @@ def manage_ou (ou_spec_list, parent_name):
         if ou_spec['Name'] in ou_table[parent_name]['Children']:
             if children_in_ou_spec(ou_spec):
                 # recurse
-                manage_ou(ou_spec['OU'], ou_spec['Name'])
+                manage_ou(org_client, args, deployed_policies, ou_spec['OU'], ou_spec['Name'])
             if ensure_absent(ou_spec):
                 change_counter += 1
                 if not args.silent:
                     print 'deleting OU', ou_spec['Name']
                 if not args.dry_run:
-                    delete_ou(ou_spec['Name'])
+                    delete_ou(org_client, ou_spec['Name'])
             else:
-                manage_policy_attachments(ou_spec, ou_table[ou_spec['Name']]['Id'])
+                manage_policy_attachments(org_client, args, deployed_policies, ou_spec, ou_table[ou_spec['Name']]['Id'])
 
         # ou does not exist
         elif not ensure_absent(ou_spec):
@@ -710,12 +716,12 @@ def manage_ou (ou_spec_list, parent_name):
             if not args.silent:
                 print "creating new ou %s under parent %s" % (ou_spec['Name'], parent_name)
             if not args.dry_run:
-                new_ou = create_ou(ou_table[parent_name]['Id'], ou_spec['Name'])
-                manage_policy_attachments(ou_spec, new_ou['Id'])
+                new_ou = create_ou(org_client, ou_table[parent_name]['Id'], ou_spec['Name'])
+                manage_policy_attachments(org_client, args, deployed_policies, ou_spec, new_ou['Id'])
                 if children_in_ou_spec(ou_spec) and isinstance(new_ou, dict) \
                         and 'Id' in new_ou:
                     # recurse
-                    manage_ou(ou_spec['OU'], new_ou['Name'])
+                    manage_ou(org_client, args, deployed_policies, ou_spec['OU'], new_ou['Name'])
 
 
 
@@ -725,7 +731,6 @@ def manage_ou (ou_spec_list, parent_name):
 
 def main():
 
-    global args, org_client, root_id, change_counter
     # get commandline args
     args = parse_args()
 
@@ -733,27 +738,31 @@ def main():
     org_client = boto3.client('organizations')
 
     # determine the Organization Root ID
-    root_id = get_root_id()
+    root_id = get_root_id(org_client)
 
     # initialize change counter
+    global change_counter
     change_counter = 0
 
     # scan deployed organization - initializes globals:
-    #   deployed_accounts
     #   deployed_policies
     #   deployed_ou
     #   ou_table
-    scan_resources_in_org(root_id)
+    scan_resources_in_org(org_client, root_id)
+    deployed_accounts = scan_deployed_accounts(org_client)
+    deployed_policies = org_client.list_policies(
+        Filter='SERVICE_CONTROL_POLICY'
+    )['Policies']
 
 
     # run reporting
     if args.report_only:
-        display_provissioned_policies()
-        display_provissioned_accounts()
+        display_provissioned_policies(org_client, deployed_policies)
+        display_provissioned_accounts(deployed_accounts)
         print
         print '_________________________________________'
         print 'Provissioned Organizational Units in Org:'
-        display_provissioned_ou('root', root_id, 0)
+        display_provissioned_ou(org_client, deployed_ou, 'root', root_id, 0)
 
 
     # process organization spec-file
@@ -767,24 +776,24 @@ def main():
         if args.dry_run: print "\nThis is a dry run!"
 
         if args.build_policy:
-            manage_policies(org_spec['policy_spec'])
+            manage_policies(org_client, args, deployed_policies, org_spec['policy_spec'])
         if args.build_account:
-            manage_accounts(org_spec['account_spec'])
+            manage_accounts(org_client, args, deployed_accounts, deployed_ou, org_spec['account_spec'])
         if args.build_ou:
-            enable_policy_type_in_root(root_id)
-            manage_ou(org_spec['organizational_unit_spec'], 'root')
+            enable_policy_type_in_root(org_client, root_id)
+            manage_ou(org_client, args, deployed_policies, org_spec['organizational_unit_spec'], 'root')
 
         # run follow-up report
         if not args.silent and not args.no_report:
             if change_counter > 0:
-                scan_resources_in_org(root_id)
-            if args.build_policy: display_provissioned_policies()
-            if args.build_account: display_provissioned_accounts()
+                scan_resources_in_org(org_client, root_id)
+            if args.build_policy: display_provissioned_policies(org_client, deployed_policies)
+            if args.build_account: display_provissioned_accounts(deployed_accounts)
             if args.build_ou:
                 print
                 print '_________________________________________'
                 print 'Provissioned Organizational Units in Org:'
-                display_provissioned_ou('root', root_id, 0)
+                display_provissioned_ou(org_client, deployed_ou, 'root', root_id, 0)
 
 
 

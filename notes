@@ -11,6 +11,7 @@ DONE create documentation (pydoc)
 add README file
 add unit testing
 validate/sanitize org_spec input
+get rid of var change_counter
 
 in aws-orgs.attach_policy
   test if new ou exists before adding policies
