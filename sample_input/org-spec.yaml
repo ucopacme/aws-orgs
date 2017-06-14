@@ -8,7 +8,7 @@ organizational_unit_spec:
       - poc_service_policy
   - Name: poc
     Policy: 
-      - poc_service_policy
+      - dev_service_policy
       - poc_service_policy
   - Name: nonprod
     Policy: 
@@ -28,7 +28,7 @@ policy_spec:
       - cloudformation:*
       - cloudtrail:*
       - sts:*
-      - sns:*
+        #- sns:*
       - cloudwatch:*
   - Name: dev_service_policy
     Ensure: present
@@ -58,7 +58,7 @@ account_spec:
     OU: prod
   - Name: Security
     Email: ashleyg@ucop.edu
-    OU: prod
+    OU: nonprod
   - Name: blee-poc
     Email: blee-poc@blee.red
     OU: nonprod
