@@ -115,9 +115,7 @@ def scan_resources_in_org(root_id):
     for account_id in map(lambda a: a['AccountId'], created_accounts):
         deployed_accounts.append( org_client.describe_account(AccountId=account_id)['Account'] )
     
-    deployed_policies = org_client.list_policies(
-        Filter='SERVICE_CONTROL_POLICY'
-    )['Policies']
+    deployed_policies = org_client.list_policies( Filter='SERVICE_CONTROL_POLICY')['Policies']
 
     deployed_ou = []
     ou_table = {}
@@ -165,35 +163,63 @@ def ensure_absent(spec):
         return False
 
 
-def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
+def lookup(dlist, lkey, lvalue, rkey=None):
     """
-    Find a value in a list of dictionaries based on a known key:value.
-    Return found value or 'None'.
-
+    Use a known key:value pair to lookup a dictionary in a list of
+    dictionaries.  Return the dictonary or None.  If rkey is provided,
+    return the value referenced by rkey or None.  If more than one
+    dict matches, raise an error.
     args:
-        dictlist:    data structure to search -  a list of type dictionary.
-        seachkey:    name of key to use as search criteria
-        seachvalue:  value to use as search criteria
-        returnkey:   name of key indexing the value to return
+        dlist:   lookup table -  a list of dictionaries
+        lkey:    name of key to use as lookup criteria
+        lvalue:  value to use as lookup criteria
+        key:     (optional) name of key referencing a value to return
     """
-
-    # make sure keys exist
-    if not filter(lambda d: searchkey in d and returnkey in d, dictlist):
-        #error: key not found
+    items = [d for d in dlist
+             if lkey in d
+             and d[lkey] == lvalue]
+    if not items:
         return None
-
-    # check for duplicate search values
-    values = map(lambda d: d[searchkey], dictlist)
-    if len(values) != len(set(values)):
-        # error: duplicate search values
+    if len(items) > 1:
+        raise RuntimeError(
+            "Data Error: lkey:lvalue lookup matches multiple items in dlist"
+        )
+    if rkey:
+        if rkey in items[0]:
+            return items[0][rkey]
         return None
+    return items[0]
 
-    # find the matching dictionary and return the indexed value
-    result = filter(lambda d: d[searchkey] == searchvalue, dictlist)
-    if len(result) == 1:
-        return result[0][returnkey]
-    else:
-        return None
+
+#def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
+#    """
+#    Find a value in a list of dictionaries based on a known key:value.
+#    Return found value or 'None'.
+#
+#    args:
+#        dictlist:    data structure to search -  a list of type dictionary.
+#        seachkey:    name of key to use as search criteria
+#        seachvalue:  value to use as search criteria
+#        returnkey:   name of key indexing the value to return
+#    """
+#
+#    # make sure keys exist
+#    if not filter(lambda d: searchkey in d and returnkey in d, dictlist):
+#        #error: key not found
+#        return None
+#
+#    # check for duplicate search values
+#    values = map(lambda d: d[searchkey], dictlist)
+#    if len(values) != len(set(values)):
+#        # error: duplicate search values
+#        return None
+#
+#    # find the matching dictionary and return the indexed value
+#    result = filter(lambda d: d[searchkey] == searchvalue, dictlist)
+#    if len(result) == 1:
+#        return result[0][returnkey]
+#    else:
+#        return None
 
 
 
@@ -216,20 +242,21 @@ def find_in_dictlist (dictlist, searchkey, searchvalue, returnkey):
 #        return False
 
 
-def get_account_id_by_name(account_name):
-    """
-    search 'deployed_account' dictlist for 'account_name'. return the
-    acccount Id or 'None'.
-    """
-    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Id')
+#def get_account_id_by_name(account_name):
+#    """
+#    search 'deployed_account' dictlist for 'account_name'. return the
+#    acccount Id or 'None'.
+#    """
+#    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Id')
+#    lookup(deployed_accounts, 'Name', account_name, 'Id')
 
 
-def get_account_email_by_name(account_name):
-    """
-    search 'deployed_account' dictlist for 'account_name'. return the
-    acccount Email or 'None'.
-    """
-    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Email')
+#def get_account_email_by_name(account_name):
+#    """
+#    search 'deployed_account' dictlist for 'account_name'. return the
+#    acccount Email or 'None'.
+#    """
+#    return find_in_dictlist(deployed_accounts, 'Name', account_name, 'Email')
 
 
 def get_parent_id(account_id):
@@ -286,8 +313,8 @@ def display_provissioned_accounts():
     print "_____________________________"
     print "Provissioned Accounts in Org:"
     for a_name in sorted(map(lambda a: a['Name'], deployed_accounts)):
-        a_id = get_account_id_by_name(a_name)
-        a_email = get_account_email_by_name(a_name)
+        a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
+        a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
         print "Name:\t\t%s\nEmail:\t\t%s\nId:\t\t%s\n" % (a_name, a_email, a_id)
 
 
@@ -301,7 +328,7 @@ def manage_accounts(account_spec):
     for a_spec in account_spec:
         if a_spec['Name'] != master_account:
             account_name = a_spec['Name']
-            account_id = get_account_id_by_name(account_name)
+            account_id = lookup(deployed_accounts, 'Name', account_name, 'Id')
 
             if not account_id:
                 if args.create_accounts:
@@ -318,13 +345,13 @@ def manage_accounts(account_spec):
             else:
                 # locate account in correct ou
                 parent_id = get_parent_id(account_id)
-                parent_ou_name = get_ou_name_by_id(parent_id)
+                parent_ou_name = lookup(deployed_ou, 'Id', parent_id, 'Name')
                 if a_spec['OU'] != parent_ou_name:
                     change_counter += 1
                     if not args.silent:
                         print "moving account %s from ou %s to ou %s" % (account_name, parent_ou_name, a_spec['OU'] )
                     if not args.dry_run:
-                        ou_id = get_ou_id_by_name(a_spec['OU'])
+                        ou_id = lookup(deployed_ou, 'Name', a_spec['OU'], 'Id')
                         if ou_id:
                             move_account(account_id, parent_id, ou_id)
                         else:
@@ -338,20 +365,20 @@ def manage_accounts(account_spec):
 # Policy functions
 #
 
-def get_policy_id_by_name(policy_name):
-    """
-    search 'deployed_policies' dictlist for 'policy_name'. return the
-    policy Id or 'None'.
-    """
-    return find_in_dictlist(deployed_policies, 'Name', policy_name, 'Id')
+#def get_policy_id_by_name(policy_name):
+#    """
+#    search 'deployed_policies' dictlist for 'policy_name'. return the
+#    policy Id or 'None'.
+#    """
+#    return find_in_dictlist(deployed_policies, 'Name', policy_name, 'Id')
 
 
-def get_policy_description(policy_id):
-    """
-    search 'deployed_policies' dictlist for 'policy_name'. return the
-    policy Description or 'None'.
-    """
-    return find_in_dictlist(deployed_policies, 'Id', policy_id, 'Description')
+#def get_policy_description(policy_id):
+#    """
+#    search 'deployed_policies' dictlist for 'policy_name'. return the
+#    policy Description or 'None'.
+#    """
+#    return find_in_dictlist(deployed_policies, 'Id', policy_id, 'Description')
 
 
 def get_policy_content(policy_id):
@@ -489,7 +516,8 @@ def manage_policies(policy_spec):
     for p_spec in policy_spec:
         if p_spec['Name'] != default_policy:
             policy_name = p_spec['Name']
-            policy_id = get_policy_id_by_name(policy_name)
+            #policy_id = get_policy_id_by_name(policy_name)
+            policy_id = lookup(deployed_ou, 'Name', policy_name, 'Id')
 
             if policy_id and ensure_absent(p_spec):
                 change_counter += 1
@@ -507,8 +535,7 @@ def manage_policies(policy_spec):
                         create_policy(p_spec)
 
                 else:
-                    if p_spec['Description'] != get_policy_description(policy_id) \
-                            or specify_policy_content(p_spec) != get_policy_content(policy_id):
+                    if p_spec['Description'] != lookup(deployed_policies, 'Id', policy_id, 'Description') or specify_policy_content(p_spec) != get_policy_content(policy_id):
                         change_counter += 1
                         if not args.silent:
                             print "updating policy: %s" % (policy_name)
@@ -531,24 +558,23 @@ def children_in_ou_spec(ou_spec):
     return False
 
 
-def get_ou_id_by_name(ou_name):
-    """
-    search 'deployed_ou' dictlist for 'ou_name'. return the
-    OrganizationalUnit Id or 'None'.
-    """
-    return find_in_dictlist(deployed_ou, 'Name', ou_name, 'Id')
+#def get_ou_id_by_name(ou_name):
+#    """
+#    search 'deployed_ou' dictlist for 'ou_name'. return the
+#    OrganizationalUnit Id or 'None'.
+#    """
+#    return find_in_dictlist(deployed_ou, 'Name', ou_name, 'Id')
 
 
-# return ou name from an ou id
-def get_ou_name_by_id(ou_id):
-    """
-    Search 'deployed_ou' dictlist for 'ou_id'. Return the OrganizationalUnit
-    Name or 'None'.  If ou_id is the root_id, return 'root'.
-    """
-    if ou_id == root_id:
-        return 'root'
-    else:
-        return find_in_dictlist(deployed_ou, 'Id', ou_id, 'Name')
+#def get_ou_name_by_id(ou_id):
+#    """
+#    Search 'deployed_ou' dictlist for 'ou_id'. Return the OrganizationalUnit
+#    Name or 'None'.  If ou_id is the root_id, return 'root'.
+#    """
+#    if ou_id == root_id:
+#        return 'root'
+#    else:
+#        return find_in_dictlist(deployed_ou, 'Id', ou_id, 'Name')
 
 
 def create_ou (parent_id, ou_name):
@@ -602,7 +628,8 @@ def display_provissioned_ou (parent_name, parent_id, indent):
         indent+=2
         for ou in child_ou_list:
             # recurse
-            display_provissioned_ou(get_ou_name_by_id(ou['Id']), ou['Id'], indent)
+            ou_name = lookup(deployed_ou, 'Id', ou['Id'], 'Name')
+            display_provissioned_ou(ou_name, ou['Id'], indent)
 
 
 def manage_policy_attachments(ou_spec, ou_id):
@@ -614,7 +641,8 @@ def manage_policy_attachments(ou_spec, ou_id):
     # attach specified policies
     p_spec = get_policy_spec_for_ou(ou_spec)
     for policy_name in p_spec:
-        policy_id = get_policy_id_by_name(policy_name)
+        #policy_id = get_policy_id_by_name(policy_name)
+        policy_id = lookup(deployed_ou, 'Name', policy_name, 'Id')
 
         if not policy_attached(policy_id, ou_id) and not ensure_absent(ou_spec):
             change_counter += 1
@@ -628,7 +656,8 @@ def manage_policy_attachments(ou_spec, ou_id):
     for policy_name in policy_list:
         if policy_name not in p_spec and not ensure_absent(ou_spec):
             change_counter += 1
-            policy_id = get_policy_id_by_name(policy_name)
+            #policy_id = get_policy_id_by_name(policy_name)
+            policy_id = lookup(deployed_ou, 'Name', policy_name, 'Id')
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, ou_spec['Name'])
             if not args.dry_run:
@@ -637,8 +666,8 @@ def manage_policy_attachments(ou_spec, ou_id):
 
 def build_ou_table(parent_name, parent_id, ou_table, deployed_ou):
     """
-    Recursively travers deployed AWS Organization.  Build the 'deployed_ou'
-    list for use by find_in_dictlist().
+    Recursively traverse deployed AWS Organization.  Build the
+    'deployed_ou' lookup table.
     """
     children_ou = org_client.list_organizational_units_for_parent(
         ParentId=parent_id
