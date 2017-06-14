@@ -516,8 +516,7 @@ def manage_policies(policy_spec):
     for p_spec in policy_spec:
         if p_spec['Name'] != default_policy:
             policy_name = p_spec['Name']
-            #policy_id = get_policy_id_by_name(policy_name)
-            policy_id = lookup(deployed_ou, 'Name', policy_name, 'Id')
+            policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
 
             if policy_id and ensure_absent(p_spec):
                 change_counter += 1
@@ -641,8 +640,7 @@ def manage_policy_attachments(ou_spec, ou_id):
     # attach specified policies
     p_spec = get_policy_spec_for_ou(ou_spec)
     for policy_name in p_spec:
-        #policy_id = get_policy_id_by_name(policy_name)
-        policy_id = lookup(deployed_ou, 'Name', policy_name, 'Id')
+        policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
 
         if not policy_attached(policy_id, ou_id) and not ensure_absent(ou_spec):
             change_counter += 1
@@ -656,8 +654,7 @@ def manage_policy_attachments(ou_spec, ou_id):
     for policy_name in policy_list:
         if policy_name not in p_spec and not ensure_absent(ou_spec):
             change_counter += 1
-            #policy_id = get_policy_id_by_name(policy_name)
-            policy_id = lookup(deployed_ou, 'Name', policy_name, 'Id')
+            policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
             if not args.silent:
                 print "detaching policy %s from OU %s" % (policy_name, ou_spec['Name'])
             if not args.dry_run:
