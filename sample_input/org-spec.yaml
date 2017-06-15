@@ -10,13 +10,18 @@ organizational_unit_spec:
     Policy: 
       - dev_service_policy
       - poc_service_policy
+    OU:
+      - Name: was
+      - Name: ppers
+        #Ensure: absent
+        Policy:
+          - dev_service_policy
+          - no-services
   - Name: nonprod
     Policy: 
       - dev_service_policy
 
 policy_spec:
-  - Name: FullAWSAccess
-    Default: True
   - Name: poc_service_policy
     Ensure: present
     Description: POC Accounts
@@ -45,13 +50,15 @@ policy_spec:
       - sts:*
       - sns:*
       - cloudwatch:*
+  - Name: no-services
+    Ensure: present
+    Description: Deny access to all AWS services
+    Effect: Deny
+    Actions:
+      - '*'
 
 
 account_spec:
-  - Name: Ashley Gould
-    Master: True
-    Email: ashleyg@sonic.net
-    OU: root
   - Name: Managment
     #this got misspelled
     Email: management@ucop.edu
@@ -64,4 +71,4 @@ account_spec:
     OU: nonprod
   - Name: blee-dev
     Email: blee-dev@blee.red
-    OU: nonprod
+    OU:

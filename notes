@@ -12,6 +12,8 @@ add README file
 add unit testing
 validate/sanitize org_spec input
 get rid of var change_counter
+send messages to a filehandle or text accumutator or ??
+
 
 in aws-orgs.attach_policy
   test if new ou exists before adding policies
@@ -37,11 +39,36 @@ in build_ou_table:
 
 
 CONSIDER:
-divide into sub modules.  how would that look?
-should account spec be separate file?
+NO divide into sub modules.  how would that look?
+NO should account spec be separate file?
 
 
 
 
 references:
 http://www.python-course.eu/python3_tests.php
+
+
+
+
+
+## Example: using exceptions:
+
+def get_root_id(org_client):
+    """
+    Query deployed AWS Organization for its Root ID.
+    """
+    try:
+        root_id = org_client.list_roots()['Roots'][0]['Id']
+        return root_id
+    except NoCredentialsError as e:
+        print sys.argv[0]
+        print e
+        print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
+        print "in module:", __name__
+        raise SystemExit
+    except ClientError as e:
+        print e
+        print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
+        print "in module:", __name__
+        raise SystemExit
