@@ -50,6 +50,18 @@ http://www.python-course.eu/python3_tests.php
 
 
 
+Interface:
+Options:
+  -h, --help            show this help message and exit
+  --version		display version info and exit
+  --make-report		display organization status report only
+  --make-org		run AWS Org management tasks per specification
+  --make-account	create new accounts in AWS Org per specifation
+  --spec-file SPEC_FILE
+                        AWS Org specification file in yaml format
+  --exec		execute proposed changes to AWS Org
+  --log-target		where to send log output.  default is STDOUT
+  --verbose             log to STDOUT as well as log-target
 
 
 ## Example: using exceptions:
