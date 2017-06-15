@@ -16,7 +16,6 @@ organizational_unit_spec:
         #Ensure: absent
         Policy:
           - dev_service_policy
-          - no-services
   - Name: nonprod
     Policy: 
       - dev_service_policy
@@ -33,7 +32,7 @@ policy_spec:
       - cloudformation:*
       - cloudtrail:*
       - sts:*
-        #- sns:*
+      - sns:*
       - cloudwatch:*
   - Name: dev_service_policy
     Ensure: present
@@ -72,3 +71,6 @@ account_spec:
   - Name: blee-dev
     Email: blee-dev@blee.red
     OU:
+  - Name: blee-prod
+    Email: blee-prod@blee.red
+    OU: prod

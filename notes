@@ -1,9 +1,8 @@
 
 
 TODO:
-get rid of globals
-remove redundant functions
-account creation in separate module
+DONE get rid of globals
+account creation:
   parse account names for compliance
   account-spec details allowed values for name components
   
@@ -11,30 +10,24 @@ DONE create documentation (pydoc)
 add README file
 add unit testing
 validate/sanitize org_spec input
-get rid of var change_counter
-send messages to a filehandle or text accumutator or ??
+DONE get rid of var change_counter
+IN PROGRESS send messages to a text accumutator or ??  
 
-
-in aws-orgs.attach_policy
-  test if new ou exists before adding policies
-in aws-orgs.find_in_dictlist:
-  allow return of matching dictionary if no returnkey arg
-  add error handling
 in aws-orgs.manage_accounts:
   test account creation status running move_account()
-in get_policy_spec_for_ou:
-  test for default_policy before adding it to list
-in  specify_policy_content:
+in specify_policy_content:
   test keys exist
-  reformate json string with linebreaks
-in display_provissioned_ou:
-  calls both client.get_children and find_in_dictlist .  should be one or the
-  other.  can indent default to 0?  if using find_in_dictlist only, can I
-  ommit parent_id?
-in build_ou_table:
-  I dont need ou_table if I add parents/children keys to deployed_ou dictionary
-  the only other def using it is delete_ou.
-
+  reformat json string with linebreaks
+in manage_policy_attachments:
+  raise error when:
+    detaching default policy
+    attaching to an absent ou
+in manage_policies:
+  dont delete a policy attached to an ou
+in logger:
+  prepend timestamp to messages
+in scan_deployed_accounts:
+  crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
 
 
 
@@ -48,20 +41,6 @@ NO should account spec be separate file?
 references:
 http://www.python-course.eu/python3_tests.php
 
-
-
-Interface:
-Options:
-  -h, --help            show this help message and exit
-  --version		display version info and exit
-  --make-report		display organization status report only
-  --make-org		run AWS Org management tasks per specification
-  --make-account	create new accounts in AWS Org per specifation
-  --spec-file SPEC_FILE
-                        AWS Org specification file in yaml format
-  --exec		execute proposed changes to AWS Org
-  --log-target		where to send log output.  default is STDOUT
-  --verbose             log to STDOUT as well as log-target
 
 
 ## Example: using exceptions:
