@@ -74,3 +74,17 @@ account_spec:
   - Name: blee-prod
     Email: blee-prod@blee.red
     OU: prod
+  - Name: gorp-poc
+    Email: gorp-pod@blee.red
+  - Name: gorp-dev
+    Email: gorp-dev@blee.red
+  - Name: gorp-prod
+    Email: gorp-prod@blee.red
+  - Name: test0
+    Email: test0@blee.red
+  - Name: test1
+    Email: test1@blee.red
+
+
+
+

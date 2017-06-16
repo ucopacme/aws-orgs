@@ -36,6 +36,7 @@ Supported log targets:
 import boto3
 import yaml
 import json
+import time
 from docopt import docopt
 
 
@@ -125,13 +126,41 @@ def scan_deployed_accounts(org_client):
     Query AWS Organization for successfully created accounts.
     Returns a list of dictionary.
     """
+
+#    policies_to_attach = [p for p in spec_policy_list
+#            if p not in attached_policy_list]
     deployed_accounts = []
     created_accounts = org_client.list_create_account_status(
-        States=['SUCCEEDED']
-    )['CreateAccountStatuses']
+            #States=['SUCCEEDED'])['CreateAccountStatuses']
+            States=['SUCCEEDED','IN_PROGRESS'])['CreateAccountStatuses']
+    #print created_accounts
+    failed_accounts = org_client.list_create_account_status(
+            States=['FAILED'])['CreateAccountStatuses']
+    #print failed_accounts
+
+    existing_accounts = org_client.list_accounts()['Accounts']
+    id_with_no_name = [d['Id'] for d in existing_accounts if 'Name' not in d ]
+    name_with_no_id = [d['Name'] for d in existing_accounts if 'Id' not in d ]
+    print
+    print [d for d in existing_accounts if 'Name' not in d ]
+    print [d for d in created_accounts if 'AccountName' not in d ]
+    print [d for d in existing_accounts if 'Id' not in d ]
+    print [d for d in created_accounts if 'AccountId' not in d ]
+    print
+    print id_with_no_name
+    #print lookup(created_accounts, 'AccountId', id_with_no_name[0],'AccountName')
+    print name_with_no_id
+    #print map(lambda d: d['Name'], existing_accounts)
+    #print map(lambda d: d['Id'], existing_accounts)
+    #print map(lambda d: d['AccountName'], created_accounts)
+    #print map(lambda d: d['AccountId'], created_accounts)
+    #print sorted([d['Name'] for d in existing_accounts if 'Name' in d ])
+    #print sorted([d['AccountName'] for d in created_accounts if 'AccountName' in d ])
+
     for account_id in map(lambda a: a['AccountId'], created_accounts):
         deployed_accounts.append( org_client.describe_account(AccountId=account_id)['Account'] )
     return deployed_accounts
+
 
 
 def get_parent_id(org_client, account_id):
@@ -151,8 +180,7 @@ def get_parent_id(org_client, account_id):
 def list_accounts_in_ou(org_client, ou_id):
     """
     Query deployed AWS organanization for accounts contained in
-    OrganizationalUnit ('ou_id').  Return a list of accounts
-    (list of dictonaries).
+    OrganizationalUnit ('ou_id').  Return a list of account names.
     """
     account_list = org_client.list_accounts_for_parent(
         ParentId=ou_id
@@ -163,7 +191,7 @@ def list_accounts_in_ou(org_client, ou_id):
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
     Compare deployed_ accounts to list of accounts in account_spec.
-    Create  accounts not found in deployed_accounts.
+    Create accounts not found in deployed_accounts.
     """
     for a_spec in account_spec:
         if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
@@ -171,8 +199,28 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
             if args['--exec']:
                 new_account = org_client.create_account(
                         AccountName=a_spec['Name'], Email=a_spec['Email'])
-                logger(log, "CreateAccountStatus Id: %s" %
-                        (new_account['CreateAccountStatus']['Id']))
+                create_id = new_account['CreateAccountStatus']['Id']
+                logger(log, "CreateAccountStatus Id: %s" % (create_id))
+                # try to validate creation status
+                counter = 0
+                while counter < 5:
+                    logger(log, "Testing account creation status")
+                    creation = org_client.describe_create_account_status(
+                            CreateAccountRequestId=create_id
+                            )['CreateAccountStatus']
+                    print creation['State']
+                    if creation['State'] == 'IN_PROGRESS':
+                        logger(log, "In progress.  wait a bit...")
+                        time.sleep(5)
+                    elif creation['State'] == 'SUCCEEDED':
+                        logger(log, "Account creation Succeeded!")
+                        return creation['Id']
+                    elif creation['State'] == 'FAILED':
+                        logger(log, "Account creation failed! %s" %
+                                creation['FailureReason'])
+                        return None
+                    counter += 1
+
 
 
 def display_provissioned_accounts(log, deployed_accounts):
@@ -473,14 +521,14 @@ if __name__ == "__main__":
             Filter='SERVICE_CONTROL_POLICY'
         )['Policies']
         deployed_accounts = scan_deployed_accounts(org_client)
-        deployed_ou = scan_deployed_ou(org_client, root_id)
+        #deployed_ou = scan_deployed_ou(org_client, root_id)
 
-        header = 'Provissioned Organizational Units in Org:'
-        overbar = '_' * len(header)
-        logger(log, "\n%s\n%s" % (overbar, header))
-        display_provissioned_ou(org_client, log, deployed_ou, 'root')
-        display_provissioned_policies(org_client, deployed_policies)
-        display_provissioned_accounts(log, deployed_accounts)
+        #header = 'Provissioned Organizational Units in Org:'
+        #overbar = '_' * len(header)
+        #logger(log, "\n%s\n%s" % (overbar, header))
+        #display_provissioned_ou(org_client, log, deployed_ou, 'root')
+        #display_provissioned_policies(org_client, deployed_policies)
+        #display_provissioned_accounts(log, deployed_accounts)
 
 
     if args['organization']:
