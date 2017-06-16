@@ -5,8 +5,8 @@
 
 Usage:
   awsorgs.py report [--verbose] [--log-target <target>]...
-  awsorgs.py (organization | accounts) (--spec-file FILE) [--exec] [--verbose]
-             [--log-target <target>]...
+  awsorgs.py (organization | accounts) (--spec-file FILE) [--exec]
+            [--verbose] [--log-target <target>]...
   awsorgs.py (-h | --help)
   awsorgs.py --version
 
@@ -123,50 +123,38 @@ def logger(log, message):
 
 def scan_deployed_accounts(org_client):
     """
-    Query AWS Organization for successfully created accounts.
+    Query AWS Organization for deployed accounts.
     Returns a list of dictionary.
     """
+    accounts = org_client.list_accounts()
+    deployed_accounts = accounts['Accounts']
+    while 'NextToken' in accounts and accounts['NextToken']:
+        accounts = org_client.list_accounts()
+        deployed_accounts += accounts['Accounts']
+    # only return accounts that have an 'Name' key
+    return [d for d in deployed_accounts if 'Name' in d ]
 
-#    policies_to_attach = [p for p in spec_policy_list
-#            if p not in attached_policy_list]
-    deployed_accounts = []
-    created_accounts = org_client.list_create_account_status(
-            #States=['SUCCEEDED'])['CreateAccountStatuses']
-            States=['SUCCEEDED','IN_PROGRESS'])['CreateAccountStatuses']
-    #print created_accounts
-    failed_accounts = org_client.list_create_account_status(
-            States=['FAILED'])['CreateAccountStatuses']
-    #print failed_accounts
 
-    existing_accounts = org_client.list_accounts()['Accounts']
-    id_with_no_name = [d['Id'] for d in existing_accounts if 'Name' not in d ]
-    name_with_no_id = [d['Name'] for d in existing_accounts if 'Id' not in d ]
-    print
-    print [d for d in existing_accounts if 'Name' not in d ]
-    print [d for d in created_accounts if 'AccountName' not in d ]
-    print [d for d in existing_accounts if 'Id' not in d ]
-    print [d for d in created_accounts if 'AccountId' not in d ]
-    print
-    print id_with_no_name
-    #print lookup(created_accounts, 'AccountId', id_with_no_name[0],'AccountName')
-    print name_with_no_id
-    #print map(lambda d: d['Name'], existing_accounts)
-    #print map(lambda d: d['Id'], existing_accounts)
-    #print map(lambda d: d['AccountName'], created_accounts)
-    #print map(lambda d: d['AccountId'], created_accounts)
-    #print sorted([d['Name'] for d in existing_accounts if 'Name' in d ])
-    #print sorted([d['AccountName'] for d in created_accounts if 'AccountName' in d ])
-
-    for account_id in map(lambda a: a['AccountId'], created_accounts):
-        deployed_accounts.append( org_client.describe_account(AccountId=account_id)['Account'] )
-    return deployed_accounts
-
+def scan_created_accounts(org_client):
+    """
+    Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
+    Returns a list of dictionary.
+    """
+    status = org_client.list_create_account_status(
+            States=['SUCCEEDED'])
+    created_accounts = status['CreateAccountStatuses']
+    while 'NextToken' in status and status['NextToken']:
+        status = org_client.list_create_account_status(
+                States=['SUCCEEDED'],
+                NextToken=status['NextToken'])
+        created_accounts += status['CreateAccountStatuses']
+    return created_accounts
 
 
 def get_parent_id(org_client, account_id):
     """
-    Query deployed AWS organanization for 'account_id. Return the 'Id' of the
-    parent OrganizationalUnit or 'None'.
+    Query deployed AWS organanization for 'account_id. Return the 'Id' of
+    the parent OrganizationalUnit or 'None'.
     """
     parents = org_client.list_parents(ChildId=account_id)['Parents']
     try:
@@ -185,7 +173,7 @@ def list_accounts_in_ou(org_client, ou_id):
     account_list = org_client.list_accounts_for_parent(
         ParentId=ou_id
     )['Accounts']
-    return sorted(map(lambda a: a['Name'], account_list))
+    return sorted([d['Name'] for d in account_list if 'Name' in d])
 
 
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
@@ -195,20 +183,30 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
     for a_spec in account_spec:
         if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
+
+            # check if it is still being provisioned
+            created_accounts = scan_created_accounts(org_client)
+            if lookup(created_accounts, 'AccountName', a_spec['Name']):
+                logger(log, "Account %s created, but not yet fully provisioned"
+                        % a_spec['Name'])
+                return lookup(created_accounts, 'AccountName', a_spec['Name'],
+                        'AccountId')
+
+            # create a new account
             logger(log, "creating account: %s" % (a_spec['Name']))
             if args['--exec']:
                 new_account = org_client.create_account(
                         AccountName=a_spec['Name'], Email=a_spec['Email'])
                 create_id = new_account['CreateAccountStatus']['Id']
                 logger(log, "CreateAccountStatus Id: %s" % (create_id))
-                # try to validate creation status
+
+                # validate creation status
                 counter = 0
                 while counter < 5:
                     logger(log, "Testing account creation status")
                     creation = org_client.describe_create_account_status(
                             CreateAccountRequestId=create_id
                             )['CreateAccountStatus']
-                    print creation['State']
                     if creation['State'] == 'IN_PROGRESS':
                         logger(log, "In progress.  wait a bit...")
                         time.sleep(5)
@@ -272,7 +270,7 @@ def manage_accounts(org_client, args, log, deployed_accounts, deployed_ou,
 
 def get_policy_content(org_client, policy_id):
     """
-    Query deployed AWS Organization.  Return the policy content (json string)
+    Query deployed AWS Organization. Return the policy content (json string)
     accociated with the Service Control Policy referenced by 'policy_id'.
     """
     return org_client.describe_policy(PolicyId=policy_id)['Policy']['Content']
@@ -409,7 +407,7 @@ def display_provissioned_ou(org_client, log, deployed_ou, parent_name,
     # query aws for child orgs
     parent_id = lookup(deployed_ou, 'Name', parent_name, 'Id')
     child_ou_list = lookup(deployed_ou, 'Name', parent_name, 'Children')
-    # print parent ou name
+    # display parent ou name
     tab = '  '
     logger(log, tab*indent + parent_name + ':')
     # look for policies
@@ -466,7 +464,8 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
 def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
         ou_spec_list, parent_name):
     """
-    Recursive function to manage OrganizationalUnits in the AWS Organization.
+    Recursive function to manage OrganizationalUnits in the AWS
+    Organization.
     """
     for ou_spec in ou_spec_list:
         if lookup(deployed_ou, 'Name', ou_spec['Name']):
@@ -518,17 +517,16 @@ if __name__ == "__main__":
 
     if args['report']:
         deployed_policies = org_client.list_policies(
-            Filter='SERVICE_CONTROL_POLICY'
-        )['Policies']
+            Filter='SERVICE_CONTROL_POLICY')['Policies']
         deployed_accounts = scan_deployed_accounts(org_client)
-        #deployed_ou = scan_deployed_ou(org_client, root_id)
+        deployed_ou = scan_deployed_ou(org_client, root_id)
 
-        #header = 'Provissioned Organizational Units in Org:'
-        #overbar = '_' * len(header)
-        #logger(log, "\n%s\n%s" % (overbar, header))
-        #display_provissioned_ou(org_client, log, deployed_ou, 'root')
-        #display_provissioned_policies(org_client, deployed_policies)
-        #display_provissioned_accounts(log, deployed_accounts)
+        header = 'Provissioned Organizational Units in Org:'
+        overbar = '_' * len(header)
+        logger(log, "\n%s\n%s" % (overbar, header))
+        display_provissioned_ou(org_client, log, deployed_ou, 'root')
+        display_provissioned_policies(org_client, deployed_policies)
+        display_provissioned_accounts(log, deployed_accounts)
 
 
     if args['organization']:
