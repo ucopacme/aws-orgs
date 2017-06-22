@@ -4,9 +4,9 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs.py report [--verbose] [--log-target <target>]...
+  awsorgs.py report [--profile <profile>] [--verbose] [--log-target <target>]...
   awsorgs.py (organization | accounts) (--spec-file FILE) [--exec]
-            [--verbose] [--log-target <target>]...
+                [--profile <profile>] [--verbose] [--log-target <target>]...
   awsorgs.py (-h | --help)
   awsorgs.py --version
 
@@ -18,10 +18,11 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
+  -p, --profile <profile>    AWS credentials profile to use [default: default].
   -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
   --exec                     Execute proposed changes to AWS Org.
   -l, --log-target <target>  Where to send log output.  This option can be
-                             Repeated to specicy multiple targets.
+                             repeated to specicy multiple targets.
   -v, --verbose              Log to STDOUT as well as log-target.
 
 Supported log targets:
@@ -510,7 +511,8 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
 if __name__ == "__main__":
     args = docopt(__doc__, version='awsorgs 0.0.0')
 
-    org_client = boto3.client('organizations')
+    session = boto3.Session(profile_name=args['--profile'])
+    org_client = session.client('organizations')
     root_id = get_root_id(org_client)
     log = []
 

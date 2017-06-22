@@ -92,6 +92,8 @@ account_spec:
     Email: test4@blee.red
   - Name: test5
     Email: test5@blee.red
+  - Name: test6
+    Email: test6@blee.red
 
 
 
