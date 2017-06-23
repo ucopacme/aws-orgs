@@ -432,7 +432,7 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
         ou_spec, ou_id):
     """
     Attach or detach specified Service Control Policy to a deployed 
-    OrganizatinalUnit.
+    OrganizatinalUnit.  Do not detach the default policy ever.
     """
     # create lists policies_to_attach and policies_to_detach
     attached_policy_list = list_policies_in_ou(org_client, ou_id)
@@ -444,7 +444,7 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
             if p not in attached_policy_list]
     policies_to_detach = [p for p in attached_policy_list
             if p not in spec_policy_list
-            and p != 'FullAWSAccess']
+            and p != args['default_policy']]
     # attach policies
     for policy_name in policies_to_attach:
         if not ensure_absent(ou_spec):
@@ -523,7 +523,7 @@ if __name__ == "__main__":
         deployed_accounts = scan_deployed_accounts(org_client)
         deployed_ou = scan_deployed_ou(org_client, root_id)
 
-        header = 'Provissioned Organizational Units in Org:'
+        header = 'Provisioned Organizational Units in Org:'
         overbar = '_' * len(header)
         logger(log, "\n%s\n%s" % (overbar, header))
         display_provissioned_ou(org_client, log, deployed_ou, 'root')
@@ -534,7 +534,12 @@ if __name__ == "__main__":
     if args['organization']:
         enable_policy_type_in_root(org_client, root_id)
         org_spec = yaml.load(open(args['--spec-file']).read())
+        master_account_id = org_client.describe_organization(
+                )['Organization']['MasterAccountId']
+        if master_account_id != org_spec['master_account_id']:
+            raise RuntimeError("The Organization Master Account Id '%s' does not match the 'master_account_id' set in the spec-file.  Is your '--profile' arg correct?" % master_account_id)
 
+        args['default_policy'] = org_spec['default_policy']
         deployed_policies = org_client.list_policies(
             Filter='SERVICE_CONTROL_POLICY'
         )['Policies']
@@ -542,8 +547,8 @@ if __name__ == "__main__":
         deployed_ou = scan_deployed_ou(org_client, root_id)
 
         logger(log, "Running AWS organization management.")
-        if not args['--exec']:
-            logger(log, "This is a dry run!\n")
+        if not args['--exec']: logger(log, "This is a dry run!\n")
+
         manage_policies(org_client, args, log, deployed_policies,
                 org_spec['policy_spec'])
         manage_ou(org_client, args, log, deployed_ou, deployed_policies,

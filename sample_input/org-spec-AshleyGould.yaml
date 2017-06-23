@@ -1,5 +1,8 @@
 # AWS Organization Specification
 
+master_account_id: '640965621536'
+default_policy: FullAWSAccess
+
 organizational_unit_spec:
   - Name: prod
   - Name: blee
