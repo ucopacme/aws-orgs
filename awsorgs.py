@@ -136,7 +136,7 @@ def validate_ou_spec(ou_spec):
         msg = err_prefix + ": missing 'Name' key: '%s'" % str(ou_spec)
         raise RuntimeError(msg)
     if not ensure_absent(ou_spec):
-        optional_keys = ['OU', 'Policy']
+        optional_keys = ['Child_OU', 'Policies']
         for key in optional_keys:
             if key in ou_spec and not isinstance(ou_spec[key], list):
                 msg = (err_prefix + " '%s': value of '%s' must be type list."
@@ -329,7 +329,7 @@ def manage_accounts(org_client, args, log, deployed_accounts, deployed_ou,
                 logger(log, "moving account '%s' from OU '%s' to OU '%s'" %
                         (a_spec['Name'], parent_ou_name, a_spec['OU'] ))
                 if args['--exec']:
-                    ou_id = lookup(deployed_ou, 'Name', a_spec['OU'], 'Id')
+                    ou_id = lookup(deployed_ou, 'Name', a_spec['OU'],'Id')
                     org_client.move_account(AccountId=account_id,
                             SourceParentId=parent_id,
                             DestinationParentId=lookup(deployed_ou, 'Name',
@@ -406,7 +406,7 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
                 elif args['--exec']:
                     org_client.delete_policy(PolicyId=policy_id)
 
-            else:
+            elif not ensure_absent(p_spec):
                 if not policy_id:
                     logger(log, "creating policy '%s'" % (policy_name))
                     if args['--exec']:
@@ -474,7 +474,7 @@ def children_in_ou_spec(ou_spec):
     """
     Check if if 'ou_spec' has any child OU.  Returns boolean.
     """
-    if 'OU' in ou_spec and isinstance(ou_spec['OU'], list):
+    if 'Child_OU' in ou_spec and isinstance(ou_spec['Child_OU'], list):
         return True
     return False
 
@@ -493,18 +493,18 @@ def display_provisioned_ou(org_client, log, deployed_ou, parent_name,
     # look for policies
     policy_names = list_policies_in_ou(org_client, parent_id)
     if len(policy_names) > 0:
-        logger(log, tab*indent + tab + 'policies: ' + ', '.join(policy_names))
+        logger(log, tab*indent + tab + 'Policies: ' + ', '.join(policy_names))
     # look for accounts
     account_list = list_accounts_in_ou(org_client, parent_id)
     if len(account_list) > 0:
-        logger(log, tab*indent + tab + 'accounts: ' + ', '.join(account_list))
+        logger(log, tab*indent + tab + 'Accounts: ' + ', '.join(account_list))
     # look for child OUs
     if child_ou_list:
-        logger(log, tab*indent + tab + 'child_ou:')
+        logger(log, tab*indent + tab + 'Child_OU:')
         indent+=2
         for ou_name in child_ou_list:
             # recurse
-            display_provisioned_ou(org_client, log, deployed_ou, ou_name, indent)
+            display_provisioned_ou(org_client, log, deployed_ou, ou_name,indent)
 
 
 def manage_policy_attachments(org_client, args, log, deployed_policies,
@@ -515,8 +515,8 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
     """
     # create lists policies_to_attach and policies_to_detach
     attached_policy_list = list_policies_in_ou(org_client, ou_id)
-    if 'Policy' in ou_spec and isinstance(ou_spec['Policy'],list):
-        spec_policy_list = ou_spec['Policy']
+    if 'Policies' in ou_spec and isinstance(ou_spec['Policies'],list):
+        spec_policy_list = ou_spec['Policies']
     else:
         spec_policy_list = []
     policies_to_attach = [p for p in spec_policy_list
@@ -554,7 +554,7 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
             if children_in_ou_spec(ou_spec):
                 # recurse
                 manage_ou(org_client, args, log, deployed_ou,
-                        deployed_policies, ou_spec['OU'], ou_spec['Name'])
+                        deployed_policies, ou_spec['Child_OU'], ou_spec['Name'])
             if ensure_absent(ou_spec):
                 # delete ou
                 logger(log,'deleting OU', ou_spec['Name'])
@@ -581,7 +581,8 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
                         isinstance(new_ou, dict) and 'Id' in new_ou):
                     # recurse
                     manage_ou(org_client, args, log, deployed_ou,
-                            deployed_policies, ou_spec['OU'], new_ou['Name'])
+                            deployed_policies, ou_spec['Child_OU'],
+                            new_ou['Name'])
 
 
 
@@ -627,8 +628,7 @@ if __name__ == "__main__":
         args['default_policy'] = org_spec['default_policy']
 
         deployed_policies = org_client.list_policies(
-            Filter='SERVICE_CONTROL_POLICY'
-        )['Policies']
+            Filter='SERVICE_CONTROL_POLICY')['Policies']
         deployed_accounts = scan_deployed_accounts(org_client)
         deployed_ou = scan_deployed_ou(org_client, root_id)
 
