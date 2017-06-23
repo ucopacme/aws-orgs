@@ -9,19 +9,19 @@ account creation:
 DONE create documentation (pydoc)
 add README file
 add unit testing
-validate/sanitize org_spec input
+IN PROGRESS validate/sanitize org_spec input
 DONE get rid of var change_counter
 IN PROGRESS send messages to a text accumutator or ??  
 
-in aws-orgs.manage_accounts:
-  test account creation status running move_account()
+DONE in aws-orgs.manage_accounts:
+  DONE test account creation status running move_account()
 in specify_policy_content:
   test keys exist
   reformat json string with linebreaks
-in manage_policy_attachments:
+DONE in manage_policy_attachments:
   raise error when:
-    detaching default policy
-    attaching to an absent ou
+    DONE detaching default policy
+    DONE attaching to an absent ou
 in manage_policies:
   dont delete a policy attached to an ou
 in logger:

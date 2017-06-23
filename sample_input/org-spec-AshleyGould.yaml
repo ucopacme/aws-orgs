@@ -22,8 +22,11 @@ organizational_unit_spec:
   - Name: nonprod
     Policy: 
       - dev_service_policy
+  - barf
 
 policy_spec:
+  - Name: FullAWSAccess
+    Ensure: absent
   - Name: poc_service_policy
     Ensure: present
     Description: POC Accounts
