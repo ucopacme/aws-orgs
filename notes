@@ -2,38 +2,38 @@
 
 TODO:
 DONE get rid of globals
-account creation:
-  parse account names for compliance
-  account-spec details allowed values for name components
+DONE account creation
+make spec-file input and report output similar
   
 DONE create documentation (pydoc)
 add README file
+  document spec-file structure
 add unit testing
-IN PROGRESS validate/sanitize org_spec input
+DONE validate/sanitize org_spec input
 DONE get rid of var change_counter
-IN PROGRESS send messages to a text accumutator or ??  
+DONE send messages to a text accumutator or ??  
 
+in logger: prepend timestamp to messages
 DONE in aws-orgs.manage_accounts:
   DONE test account creation status running move_account()
-in specify_policy_content:
-  test keys exist
-  reformat json string with linebreaks
-DONE in manage_policy_attachments:
-  raise error when:
+DONE in specify_policy_content: test keys exist
+DONE in manage_policy_attachments raise error when:
     DONE detaching default policy
     DONE attaching to an absent ou
-in manage_policies:
-  dont delete a policy attached to an ou
-in logger:
-  prepend timestamp to messages
-in scan_deployed_accounts:
-  crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
+DONE in manage_policies: dont delete a policy attached to an ou
+DONE in scan_deployed_accounts:
+  DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
+
+
+DONE in report reformat json string with linebreaks
 
 
 
 CONSIDER:
 NO divide into sub modules.  how would that look?
 NO should account spec be separate file?
+parse account names for compliance
+account-spec details allowed values for name components
 
 
 

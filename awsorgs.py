@@ -98,7 +98,7 @@ def validate_spec_file(spec_file):
     return org_spec
 
 
-def validate_policy_spec(p_spec):
+def validate_policy_spec(args, p_spec):
     """
     Validate this policy_spec is properly formed.
     """
@@ -109,18 +109,25 @@ def validate_policy_spec(p_spec):
     if not 'Name' in p_spec:
         msg = err_prefix + ": missing 'Name' key: '%s'" % str(p_spec)
         raise RuntimeError(msg)
+    if p_spec['Name'] == args['default_policy']:
+        return
     if not ensure_absent(p_spec):
         required_keys = ['Description', 'Effect', 'Actions']
         for key in required_keys:
             if not key in p_spec:
-                msg = err_prefix + " '%s': missing required param '%s'" % (p_spec['Name'], key)
+                msg = (err_prefix + " '%s': missing required param '%s'"
+                        % (p_spec['Name'], key))
                 raise RuntimeError(msg)
-        if not isinstance(p_spec('Actions'), list):
-            msg = err_prefix + " '%s': 'Actions' must be type list." % p_spec['Name']
+        if not isinstance(p_spec['Actions'], list):
+            msg = (err_prefix + " '%s': 'Actions' must be type list."
+                    % p_spec['Name'])
             raise RuntimeError(msg)
 
 
 def validate_ou_spec(ou_spec):
+    """
+    Validate this ou_spec is properly formed.
+    """
     err_prefix = "Malformed OU in spec-file"
     if not isinstance(ou_spec, dict):
         msg = err_prefix + ": not a dictionary: '%s'" % str(ou_spec)
@@ -128,12 +135,13 @@ def validate_ou_spec(ou_spec):
     if not 'Name' in ou_spec:
         msg = err_prefix + ": missing 'Name' key: '%s'" % str(ou_spec)
         raise RuntimeError(msg)
-    optional_keys = ['OU', 'Policy']
-    for key in optional_keys:
-        if key in ou_spec and not isinstance(ou_spec[key], list):
-            msg = (err_prefix + " '%s': value of '%s' must be type list."
-                    % (ou_spec['Name'], key))
-            raise RuntimeError(msg)
+    if not ensure_absent(ou_spec):
+        optional_keys = ['OU', 'Policy']
+        for key in optional_keys:
+            if key in ou_spec and not isinstance(ou_spec[key], list):
+                msg = (err_prefix + " '%s': value of '%s' must be type list."
+                        % (ou_spec['Name'], key))
+                raise RuntimeError(msg)
                     
 
 def ensure_absent(spec):
@@ -380,42 +388,46 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
     """
     Manage Service Control Policies in the AWS Organization.  Make updates
     according to the policy specification ('policy_spec').  Do not touch
-    the default policy.
+    the default policy.  Do not delete an attached policy.
     """
     for p_spec in policy_spec:
-        validate_policy_spec(p_spec)
+        validate_policy_spec(args, p_spec)
         policy_name = p_spec['Name']
-        if policy_name == args['default_policy']: return
+        if not policy_name == args['default_policy']:
 
-        policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
-        if policy_id and ensure_absent(p_spec):
-            logger(log, "deleting policy '%s'" % (policy_name))
-            if args['--exec']:
-                org_client.delete_policy(PolicyId=policy_id)
-
-        else:
-            if not policy_id:
-                logger(log, "creating policy '%s'" % (policy_name))
-                if args['--exec']:
-                    org_client.create_policy (
-                        Content=specify_policy_content(p_spec),
-                        Description=p_spec['Description'],
-                        Name=p_spec['Name'],
-                        Type='SERVICE_CONTROL_POLICY'
-                    )
+            policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
+            if policy_id and ensure_absent(p_spec):
+                logger(log, "deleting policy '%s'" % (policy_name))
+                if org_client.list_targets_for_policy(
+                        PolicyId=policy_id)['Targets']:
+                    logger(log,
+                             "Cannot delete policy '%s'. Still attached to OU."
+                             % (policy_name))
+                elif args['--exec']:
+                    org_client.delete_policy(PolicyId=policy_id)
 
             else:
-                if (p_spec['Description'] !=
-                      lookup(deployed_policies,'Id',policy_id,'Description') or
-                      specify_policy_content(p_spec) !=
-                      get_policy_content(org_client, policy_id)):
-                    logger(log, "updating policy '%s'" % (policy_name))
+                if not policy_id:
+                    logger(log, "creating policy '%s'" % (policy_name))
                     if args['--exec']:
-                        org_client.update_policy(
-                            PolicyId=policy_id,
+                        org_client.create_policy (
                             Content=specify_policy_content(p_spec),
                             Description=p_spec['Description'],
+                            Name=p_spec['Name'],
+                            Type='SERVICE_CONTROL_POLICY'
                         )
+
+                else:
+                    if (p_spec['Description'] !=
+                          lookup(deployed_policies,'Id',policy_id,'Description')                          or specify_policy_content(p_spec) !=
+                          get_policy_content(org_client, policy_id)):
+                        logger(log, "updating policy '%s'" % (policy_name))
+                        if args['--exec']:
+                            org_client.update_policy(
+                                PolicyId=policy_id,
+                                Content=specify_policy_content(p_spec),
+                                Description=p_spec['Description'],
+                            )
 
 
 
