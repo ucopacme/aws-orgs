@@ -329,7 +329,6 @@ def manage_accounts(org_client, args, log, deployed_accounts, deployed_ou,
                 logger(log, "moving account '%s' from OU '%s' to OU '%s'" %
                         (a_spec['Name'], parent_ou_name, a_spec['OU'] ))
                 if args['--exec']:
-                    ou_id = lookup(deployed_ou, 'Name', a_spec['OU'],'Id')
                     org_client.move_account(AccountId=account_id,
                             SourceParentId=parent_id,
                             DestinationParentId=lookup(deployed_ou, 'Name',
@@ -557,7 +556,7 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
                         deployed_policies, ou_spec['Child_OU'], ou_spec['Name'])
             if ensure_absent(ou_spec):
                 # delete ou
-                logger(log,'deleting OU', ou_spec['Name'])
+                logger(log, "deleting OU %s" % ou_spec['Name'])
                 if args['--exec']:
                     org_client.delete_organizational_unit(
                             OrganizationalUnitId=lookup(deployed_ou,
