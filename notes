@@ -5,6 +5,8 @@ in logger: prepend timestamp to messages
 add README file, document spec-file structure
 add unit testing
 make logger write to different url
+control order of organization tasks
+create setup.py and package module
 
 DONE get rid of globals
 DONE account creation
@@ -24,7 +26,6 @@ DONE in scan_deployed_accounts:
   DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
 
 
-DONE in report reformat json string with linebreaks
 
 
 
