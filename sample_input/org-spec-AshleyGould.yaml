@@ -5,6 +5,9 @@ default_policy: FullAWSAccess
 
 organizational_unit_spec:
   - Name: prod
+  - Name: auth
+    Policies:
+      - auth-only
   - Name: blee
     Ensure: absent
     Policies: 
@@ -59,9 +62,29 @@ policy_spec:
     Effect: Deny
     Actions:
       - '*'
+  - Name: auth-only
+    Ensure: present
+    Description: Utility account for configuring IAM user access.
+    Effect: Allow
+    Actions:
+      - iam:*
+      - cloudformation:*
+      - cloudtrail:*
+  - Name: test-policy
+    Ensure: present
+    Description: Utility account for configuring IAM user access.
+    Effect: Allow
+    Actions:
+      - iam:*
+      - cloudformation:*
+      - cloudtrail:*
+
 
 
 account_spec:
+  - Name: auth
+    Email: auth@blee.red
+    OU: auth
   - Name: Managment
     #this got misspelled
     Email: management@ucop.edu

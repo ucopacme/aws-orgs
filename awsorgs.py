@@ -392,41 +392,46 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
     for p_spec in policy_spec:
         validate_policy_spec(args, p_spec)
         policy_name = p_spec['Name']
+        # dont touch default policy
         if not policy_name == args['default_policy']:
-
             policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
-            if policy_id and ensure_absent(p_spec):
-                logger(log, "deleting policy '%s'" % (policy_name))
-                if org_client.list_targets_for_policy(
-                        PolicyId=policy_id)['Targets']:
-                    logger(log,
-                             "Cannot delete policy '%s'. Still attached to OU."
-                             % (policy_name))
-                elif args['--exec']:
-                    org_client.delete_policy(PolicyId=policy_id)
-
-            elif not ensure_absent(p_spec):
-                if not policy_id:
-                    logger(log, "creating policy '%s'" % (policy_name))
+            # policy already exists
+            if policy_id:
+                # check if we need to delete policy
+                if ensure_absent(p_spec):
+                    logger(log, "deleting policy '%s'" % (policy_name))
+                    # dont delete attached policy
+                    if org_client.list_targets_for_policy(
+                        PolicyId=policy_id
+                    )['Targets']:
+                        logger( log,
+                            "Cannot delete policy '%s'. Still attached to OU."
+                            % (policy_name)
+                        )
+                    elif args['--exec']:
+                        org_client.delete_policy(PolicyId=policy_id)
+                # check for policy updates
+                elif (p_spec['Description'] !=
+                      lookup(deployed_policies,'Id',policy_id,'Description')
+                      or specify_policy_content(p_spec) !=
+                      get_policy_content(org_client, policy_id)):
+                    logger(log, "updating policy '%s'" % (policy_name))
                     if args['--exec']:
-                        org_client.create_policy (
+                        org_client.update_policy(
+                            PolicyId=policy_id,
                             Content=specify_policy_content(p_spec),
                             Description=p_spec['Description'],
-                            Name=p_spec['Name'],
-                            Type='SERVICE_CONTROL_POLICY'
                         )
-
-                else:
-                    if (p_spec['Description'] !=
-                          lookup(deployed_policies,'Id',policy_id,'Description')                          or specify_policy_content(p_spec) !=
-                          get_policy_content(org_client, policy_id)):
-                        logger(log, "updating policy '%s'" % (policy_name))
-                        if args['--exec']:
-                            org_client.update_policy(
-                                PolicyId=policy_id,
-                                Content=specify_policy_content(p_spec),
-                                Description=p_spec['Description'],
-                            )
+            # create new policy
+            elif not ensure_absent(p_spec):
+                logger(log, "creating policy '%s'" % (policy_name))
+                if args['--exec']:
+                    org_client.create_policy (
+                        Content=specify_policy_content(p_spec),
+                        Description=p_spec['Description'],
+                        Name=p_spec['Name'],
+                        Type='SERVICE_CONTROL_POLICY'
+                    )
 
 
 
@@ -525,12 +530,18 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
             and p != args['default_policy']]
     # attach policies
     for policy_name in policies_to_attach:
+        if not lookup(deployed_policies,'Name',policy_name):
+            raise RuntimeError(
+                "spec-file: ou_spec: policy '%s' not defined" % policy_name
+            )
         if not ensure_absent(ou_spec):
             logger(log, "attaching policy '%s' to OU '%s'" %
                     (policy_name, ou_spec['Name']))
             if args['--exec']:
-                org_client.attach_policy(PolicyId=lookup(deployed_policies,
-                        'Name', policy_name, 'Id'), TargetId=ou_id)
+                org_client.attach_policy(
+                    PolicyId=lookup(deployed_policies,'Name',policy_name,'Id'),
+                    TargetId=ou_id
+                )
     # detach policies
     for policy_name in policies_to_detach:
         logger(log, "detaching policy '%s' from OU '%s'" %
@@ -636,6 +647,8 @@ if __name__ == "__main__":
 
         manage_policies(org_client, args, log, deployed_policies,
                 org_spec['policy_spec'])
+        deployed_policies = org_client.list_policies(
+            Filter='SERVICE_CONTROL_POLICY')['Policies']
         manage_ou(org_client, args, log, deployed_ou, deployed_policies,
                 org_spec['organizational_unit_spec'], 'root')
         manage_accounts(org_client, args, log, deployed_accounts,
