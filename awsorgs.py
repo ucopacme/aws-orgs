@@ -87,7 +87,7 @@ def validate_spec_file(spec_file):
         if not isinstance(org_spec[s], str):
             msg = "Invalid spec-file: '%s' must be type 'str'." % s
             raise RuntimeError(msg)
-    spec_list = ['organizational_unit_spec', 'policy_spec', 'account_spec']
+    spec_list = ['organizational_unit_spec', 'policy_spec']
     for a in spec_list:
         if not a in org_spec:
             msg = "Invalid spec-file: missing required param '%s'." % a
@@ -95,53 +95,76 @@ def validate_spec_file(spec_file):
         if not isinstance(org_spec[a], list):
             msg = "Invalid spec-file: '%s' must be type 'list'." % a
             raise RuntimeError(msg)
-    return org_spec
 
-
-def validate_policy_spec(args, p_spec):
-    """
-    Validate this policy_spec is properly formed.
-    """
+    # Validate this policy_spec is properly formed.
     err_prefix = "Malformed policy in spec-file"
-    if not isinstance(p_spec, dict):
-        msg = err_prefix + ": not a dictionary: '%s'" % str(p_spec)
-        raise RuntimeError(msg)
-    if not 'Name' in p_spec:
-        msg = err_prefix + ": missing 'Name' key: '%s'" % str(p_spec)
-        raise RuntimeError(msg)
-    if p_spec['Name'] == args['default_policy']:
-        return
-    if not ensure_absent(p_spec):
-        required_keys = ['Description', 'Effect', 'Actions']
-        for key in required_keys:
-            if not key in p_spec:
-                msg = (err_prefix + " '%s': missing required param '%s'"
-                        % (p_spec['Name'], key))
-                raise RuntimeError(msg)
-        if not isinstance(p_spec['Actions'], list):
-            msg = (err_prefix + " '%s': 'Actions' must be type list."
-                    % p_spec['Name'])
+    for p_spec in org_spec['policy_spec']:
+        if not isinstance(p_spec, dict):
+            msg = err_prefix + ": not a dictionary: '%s'" % str(p_spec)
             raise RuntimeError(msg)
-
-
-def validate_ou_spec(ou_spec):
-    """
-    Validate this ou_spec is properly formed.
-    """
-    err_prefix = "Malformed OU in spec-file"
-    if not isinstance(ou_spec, dict):
-        msg = err_prefix + ": not a dictionary: '%s'" % str(ou_spec)
-        raise RuntimeError(msg)
-    if not 'Name' in ou_spec:
-        msg = err_prefix + ": missing 'Name' key: '%s'" % str(ou_spec)
-        raise RuntimeError(msg)
-    if not ensure_absent(ou_spec):
-        optional_keys = ['Child_OU', 'Policies']
-        for key in optional_keys:
-            if key in ou_spec and not isinstance(ou_spec[key], list):
-                msg = (err_prefix + " '%s': value of '%s' must be type list."
-                        % (ou_spec['Name'], key))
+        if not 'Name' in p_spec:
+            msg = err_prefix + ": missing 'Name' key: '%s'" % str(p_spec)
+            raise RuntimeError(msg)
+        if p_spec['Name'] == org_spec['default_policy']:
+            org_spec['policy_spec'].remove(p_spec)
+            break
+        if not ensure_absent(p_spec):
+            required_keys = ['Description', 'Effect', 'Actions']
+            for key in required_keys:
+                if not key in p_spec:
+                    msg = (err_prefix + " '%s': missing required param '%s'"
+                            % (p_spec['Name'], key))
+                    raise RuntimeError(msg)
+            if not isinstance(p_spec['Actions'], list):
+                msg = (err_prefix + " '%s': 'Actions' must be type list."
+                        % p_spec['Name'])
                 raise RuntimeError(msg)
+
+    #  recursive function to validate ou_spec are properly formed.
+    def validate_ou_spec(ou_spec):
+        global accounts_in_ou_spec
+        err_prefix = "Malformed OU in spec-file: "
+        if not isinstance(ou_spec, dict):
+            msg = err_prefix + "not a dictionary: '%s'" % str(ou_spec)
+            raise RuntimeError(msg)
+        if not 'Name' in ou_spec:
+            msg = err_prefix + "missing 'Name' key: '%s'" % str(ou_spec)
+            raise RuntimeError(msg)
+        if not ensure_absent(ou_spec):
+            # check for optional keys
+            optional_keys = ['Accounts', 'Policies', 'Child_OU']
+            for key in optional_keys:
+                if key in ou_spec and ou_spec[key]:
+                    if not isinstance(ou_spec[key], list):
+                        msg = ("%s OU '%s': value of '%s' must be a list." % (
+                            err_prefix, ou_spec['Name'], key
+                        ))
+                        raise RuntimeError(msg)
+            # make sure accounts are uniq across org
+            if 'Accounts' in ou_spec and ou_spec['Accounts']:
+                for account in ou_spec['Accounts']:
+                    if account in accounts_in_ou_spec:
+                        msg = ("%s account %s set in two OU: %s, %s" % (
+                            err_prefix, account,
+                            accounts_in_ou_spec[account], ou_spec['Name']
+                        ))
+                        raise  RuntimeError(msg)
+                    else:
+                        accounts_in_ou_spec[account] = ou_spec['Name']
+            # check for children OUs
+            if 'Child_OU' in ou_spec and ou_spec['Child_OU']:
+                for ou in ou_spec['Child_OU']:
+                    # recurse
+                    validate_ou_spec(ou_spec['Child_OU'])
+
+    # call recursive function to validate OUs
+    global accounts_in_ou_spec
+    accounts_in_ou_spec = {}
+    for ou_spec in org_spec['organizational_unit_spec']:
+        validate_ou_spec(ou_spec)
+
+    # All done. We made it!
+    return org_spec
                     
 
 def ensure_absent(spec):
@@ -236,17 +259,6 @@ def get_parent_id(org_client, account_id):
     except:
         raise RuntimeError("API Error: account '%s' has more than one parent: "
                 % (account_id, parents))
-
-
-def list_accounts_in_ou(org_client, ou_id):
-    """
-    Query deployed AWS organanization for accounts contained in
-    OrganizationalUnit ('ou_id').  Return a list of account names.
-    """
-    account_list = org_client.list_accounts_for_parent(
-        ParentId=ou_id
-    )['Accounts']
-    return sorted([d['Name'] for d in account_list if 'Name' in d])
 
 
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
@@ -455,20 +467,26 @@ def build_deployed_ou_table(org_client, parent_name, parent_id, deployed_ou):
     Recursively traverse deployed AWS Organization.  Build the 'deployed_ou'
     lookup table (list of dictionaries).
     """
-    children_ou = org_client.list_organizational_units_for_parent(
+    child_ou = org_client.list_organizational_units_for_parent(
         ParentId=parent_id
     )['OrganizationalUnits']
+    accounts = org_client.list_accounts_for_parent(
+        ParentId=parent_id
+    )['Accounts']
+
     if not deployed_ou:
         deployed_ou.append(dict(
             Name = parent_name,
             Id = parent_id,
-            Children = map(lambda d: d['Name'], children_ou),
+            Child_OU = map(lambda d: d['Name'], child_ou),
+            Accounts = map(lambda d: d['Name'], accounts),
         ))
     else:
         for ou in deployed_ou:
             if ou['Name'] == parent_name:
-                ou['Children'] = map(lambda d: d['Name'], children_ou)
-    for ou in children_ou:
+                ou['Child_OU'] = map(lambda d: d['Name'], child_ou)
+                ou['Accounts'] = map(lambda d: d['Name'], accounts)
+    for ou in child_ou:
         ou['ParentId'] = parent_id
         deployed_ou.append(ou)
         build_deployed_ou_table(org_client, ou['Name'], ou['Id'], deployed_ou)
@@ -490,7 +508,8 @@ def display_provisioned_ou(org_client, log, deployed_ou, parent_name,
     """
     # query aws for child orgs
     parent_id = lookup(deployed_ou, 'Name', parent_name, 'Id')
-    child_ou_list = lookup(deployed_ou, 'Name', parent_name, 'Children')
+    child_ou_list = lookup(deployed_ou, 'Name', parent_name, 'Child_OU')
+    child_accounts = lookup(deployed_ou, 'Name', parent_name, 'Accounts')
     # display parent ou name
     tab = '  '
     logger(log, tab*indent + parent_name + ':')
@@ -499,7 +518,7 @@ def display_provisioned_ou(org_client, log, deployed_ou, parent_name,
     if len(policy_names) > 0:
         logger(log, tab*indent + tab + 'Policies: ' + ', '.join(policy_names))
     # look for accounts
-    account_list = list_accounts_in_ou(org_client, parent_id)
+    account_list = sorted(child_accounts)
     if len(account_list) > 0:
         logger(log, tab*indent + tab + 'Accounts: ' + ', '.join(account_list))
     # look for child OUs
@@ -558,7 +577,6 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
     Organization.
     """
     for ou_spec in ou_spec_list:
-        validate_ou_spec(ou_spec)
         if lookup(deployed_ou, 'Name', ou_spec['Name']):
             # ou exists
             if children_in_ou_spec(ou_spec):
@@ -608,15 +626,16 @@ if __name__ == "__main__":
 
     if args['--spec-file']:
         org_spec = validate_spec_file(args['--spec-file'])
+        print org_spec
 
-        # dont mangle the wrong org by accident
-        master_account_id = org_client.describe_organization(
-                )['Organization']['MasterAccountId']
-        if master_account_id != org_spec['master_account_id']:
-            errmsg = ("""The Organization Master Account Id '%s' does not
-              match the 'master_account_id' set in the spec-file.  
-              Is your '--profile' arg correct?""" % master_account_id)
-            raise RuntimeError(errmsg)
+        ## dont mangle the wrong org by accident
+        #master_account_id = org_client.describe_organization(
+        #        )['Organization']['MasterAccountId']
+        #if master_account_id != org_spec['master_account_id']:
+        #    errmsg = ("""The Organization Master Account Id '%s' does not
+        #      match the 'master_account_id' set in the spec-file.  
+        #      Is your '--profile' arg correct?""" % master_account_id)
+        #    raise RuntimeError(errmsg)
 
 
     if args['report']:
@@ -629,30 +648,30 @@ if __name__ == "__main__":
         overbar = '_' * len(header)
         logger(log, "\n%s\n%s" % (overbar, header))
         display_provisioned_ou(org_client, log, deployed_ou, 'root')
-        display_provisioned_policies(org_client, deployed_policies)
-        display_provisioned_accounts(log, deployed_accounts)
+        #display_provisioned_policies(org_client, deployed_policies)
+        #display_provisioned_accounts(log, deployed_accounts)
 
 
-    if args['organization']:
-        enable_policy_type_in_root(org_client, root_id)
-        args['default_policy'] = org_spec['default_policy']
+    #if args['organization']:
+    #    enable_policy_type_in_root(org_client, root_id)
+    #    args['default_policy'] = org_spec['default_policy']
 
-        deployed_policies = org_client.list_policies(
-            Filter='SERVICE_CONTROL_POLICY')['Policies']
-        deployed_accounts = scan_deployed_accounts(org_client)
-        deployed_ou = scan_deployed_ou(org_client, root_id)
+    #    deployed_policies = org_client.list_policies(
+    #        Filter='SERVICE_CONTROL_POLICY')['Policies']
+    #    deployed_accounts = scan_deployed_accounts(org_client)
+    #    deployed_ou = scan_deployed_ou(org_client, root_id)
 
-        logger(log, "Running AWS organization management.")
-        if not args['--exec']: logger(log, "This is a dry run!\n")
+    #    logger(log, "Running AWS organization management.")
+    #    if not args['--exec']: logger(log, "This is a dry run!\n")
 
-        manage_policies(org_client, args, log, deployed_policies,
-                org_spec['policy_spec'])
-        deployed_policies = org_client.list_policies(
-            Filter='SERVICE_CONTROL_POLICY')['Policies']
-        manage_ou(org_client, args, log, deployed_ou, deployed_policies,
-                org_spec['organizational_unit_spec'], 'root')
-        manage_accounts(org_client, args, log, deployed_accounts,
-                deployed_ou, org_spec['account_spec'])
+    #    manage_policies(org_client, args, log, deployed_policies,
+    #            org_spec['policy_spec'])
+    #    deployed_policies = org_client.list_policies(
+    #        Filter='SERVICE_CONTROL_POLICY')['Policies']
+    #    manage_ou(org_client, args, log, deployed_ou, deployed_policies,
+    #            org_spec['organizational_unit_spec'], 'root')
+    #    manage_accounts(org_client, args, log, deployed_accounts,
+    #            deployed_ou, org_spec['account_spec'])
 
 
     if args['accounts']:
