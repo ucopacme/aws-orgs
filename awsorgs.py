@@ -122,7 +122,7 @@ def validate_spec_file(spec_file):
 
     # recursive function to validate ou_spec are properly formed.
     def validate_ou_spec(ou_spec_list):
-        global account_map
+        global account_map, ou_map
         err_prefix = "Malformed OU in spec-file:"
         for ou_spec in ou_spec_list:
             if not isinstance(ou_spec, dict):
@@ -131,6 +131,7 @@ def validate_spec_file(spec_file):
             if not 'Name' in ou_spec:
                 msg = err_prefix + "missing 'Name' key: '%s'" % str(ou_spec)
                 raise RuntimeError(msg)
+            ou_map.append(ou_spec['Name'])
             # check for children OUs. recurse before running other tests
             if 'Child_OU' in ou_spec and isinstance(ou_spec['Child_OU'], list):
                 validate_ou_spec(ou_spec['Child_OU'])
@@ -164,13 +165,17 @@ def validate_spec_file(spec_file):
                             account_map[account] = ou_spec['Name']
 
     # call recursive function to validate OUs
-    global account_map
+    global account_map, ou_map
     account_map = {}
+    ou_map = []
     validate_ou_spec(org_spec['organizational_unit_spec'])
-
+    managed = dict(
+        accounts = account_map.keys(),
+        policies = map(lambda p: p['Name'], org_spec['policy_spec']),
+        ou       = ou_map
+    )
     # All done. We made it!
-    org_spec['account_map'] = account_map
-    return org_spec
+    return org_spec, managed
                     
 
 def ensure_absent(spec):
@@ -355,34 +360,32 @@ def manage_account_moves(org_client, args, log, deployed_accounts,
                         )
 
 
-def place_accounts_in_org(org_client, args, log, deployed_accounts,
-        deployed_ou, account_map):
-    for account in account_map.keys():
-        account_id = lookup(deployed_accounts, 'Name', account, 'Id')
-        if not account_id:
-            logger(log,"Warning: account '%s' not yet in Org." % account)
-        else:
-            dest_parent      = account_map[account]
-            dest_parent_id   = lookup(deployed_ou, 'Name', dest_parent, 'Id')
-            source_parent_id = get_parent_id(org_client, account_id)
-            if dest_parent_id and dest_parent_id != source_parent_id:
-                logger(log, "moving account '%s' to OU '%s'" %
-                    (account, ou_spec['Name'])
-                )
-                if args['--exec']:
-                    org_client.move_account(
-                        AccountId=account_id,
-                        SourceParentId=source_parent_id,
-                        DestinationParentId=dest_parent_id
-                    )
-
-
-def list_unmanaged_accounts(deployed_accounts, account_map):
-    """
-    Return list of any deployed accounts not present in org_spec.
-    """
-    return [a for a in map(lambda a: a['Name'], deployed_accounts)
-            if a not in account_map]
+#def place_accounts_in_org(org_client, args, log, deployed_accounts,
+#    """
+#    # alternative account method
+#    #deployed_ou       = scan_deployed_ou(org_client, root_id)
+#    #place_accounts_in_org(org_client, args, log, deployed_accounts,
+#    #        deployed_ou, org_spec['account_map'])
+#    deployed_ou, account_map):
+#    """
+#    for account in account_map.keys():
+#        account_id = lookup(deployed_accounts, 'Name', account, 'Id')
+#        if not account_id:
+#            logger(log,"Warning: account '%s' not yet in Org." % account)
+#        else:
+#            dest_parent      = account_map[account]
+#            dest_parent_id   = lookup(deployed_ou, 'Name', dest_parent, 'Id')
+#            source_parent_id = get_parent_id(org_client, account_id)
+#            if dest_parent_id and dest_parent_id != source_parent_id:
+#                logger(log, "moving account '%s' to OU '%s'" %
+#                    (account, ou_spec['Name'])
+#                )
+#                if args['--exec']:
+#                    org_client.move_account(
+#                        AccountId=account_id,
+#                        SourceParentId=source_parent_id,
+#                        DestinationParentId=dest_parent_id
+#                    )
 
 
 
@@ -598,8 +601,7 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
                     'Name', policy_name, 'Id'), TargetId=ou_id)
 
 
-def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
-        ou_spec_list, parent_name):
+def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
     """
     Recursive function to manage OrganizationalUnits in the AWS
     Organization.
@@ -607,12 +609,12 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
     for ou_spec in ou_spec_list:
 
         # ou exists
-        ou = lookup(deployed_ou, 'Name', ou_spec['Name'])
+        ou = lookup(deployed['ou'], 'Name', ou_spec['Name'])
         if ou:
 
             # check for child_ou. recurse before other tasks.
             if 'Child_OU' in ou_spec:
-                manage_ou(org_client, args, log, deployed_ou, deployed_policies,
+                manage_ou(org_client, args, log, deployed,
                     ou_spec['Child_OU'], ou_spec['Name']
                 )
 
@@ -636,10 +638,10 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
 
             else:
                 manage_policy_attachments(
-                    org_client, args, log, deployed_policies, ou_spec, ou['Id']
+                    org_client, args, log, deployed['policies'], ou_spec, ou['Id']
                 )
                 manage_account_moves(
-                    org_client, args, log, deployed_accounts, ou_spec, ou['Id']
+                    org_client, args, log, deployed['accounts'], ou_spec, ou['Id']
                 )
 
         elif not ensure_absent(ou_spec):
@@ -648,15 +650,15 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
                     (ou_spec['Name'], parent_name))
             if args['--exec']:
                 new_ou = org_client.create_organizational_unit(
-                    ParentId=lookup(deployed_ou, 'Name', parent_name, 'Id'),
+                    ParentId=lookup(deployed['ou'], 'Name', parent_name, 'Id'),
                     Name=ou_spec['Name']
                 )['OrganizationalUnit']
                 manage_policy_attachments(
-                    org_client, args, log, deployed_policies,
+                    org_client, args, log, deployed['policies'],
                     ou_spec, new_ou['Id']
                 )
                 manage_account_moves(
-                    org_client, args, log, deployed_accounts,
+                    org_client, args, log, deployed['accounts'],
                     ou_spec, new_ou['Id']
                 )
                 if ('Child_OU' in ou_spec
@@ -665,7 +667,7 @@ def manage_ou (org_client, args, log, deployed_ou, deployed_policies,
                 ):
                     # recurse
                     manage_ou(
-                        org_client, args, log, deployed_ou, deployed_policies,
+                        org_client, args, log, deployed,
                         ou_spec['Child_OU'], new_ou['Name']
                     )
 
@@ -680,10 +682,14 @@ if __name__ == "__main__":
     org_client = session.client('organizations')
     root_id = get_root_id(org_client)
     log = []
+    deployed = dict(
+        policies = scan_deployed_policies(org_client),
+        accounts = scan_deployed_accounts(org_client),
+        ou       = scan_deployed_ou(org_client, root_id)
+    )
 
     if args['--spec-file']:
-        org_spec = validate_spec_file(args['--spec-file'])
-
+        org_spec, managed = validate_spec_file(args['--spec-file'])
         # dont mangle the wrong org by accident
         master_account_id = org_client.describe_organization(
                 )['Organization']['MasterAccountId']
@@ -695,16 +701,12 @@ if __name__ == "__main__":
 
 
     if args['report']:
-        deployed_policies = scan_deployed_policies(org_client)
-        deployed_accounts = scan_deployed_accounts(org_client)
-        deployed_ou       = scan_deployed_ou(org_client, root_id)
-
         header = 'Provisioned Organizational Units in Org:'
         overbar = '_' * len(header)
         logger(log, "\n%s\n%s" % (overbar, header))
-        display_provisioned_ou(org_client, log, deployed_ou, 'root')
-        display_provisioned_policies(org_client, deployed_policies)
-        display_provisioned_accounts(log, deployed_accounts)
+        display_provisioned_ou(org_client, log, deployed['ou'], 'root')
+        display_provisioned_policies(org_client, deployed['policies'])
+        display_provisioned_accounts(log, deployed['accounts'])
 
 
     if args['organization']:
@@ -713,31 +715,27 @@ if __name__ == "__main__":
             logger(log, "This is a dry run!\n")
         enable_policy_type_in_root(org_client, root_id)
         args['default_policy'] = org_spec['default_policy']
-
-        deployed_policies = scan_deployed_policies(org_client)
-        manage_policies(org_client, args, log, deployed_policies,
+        manage_policies(org_client, args, log, deployed['policies'],
                 org_spec['policy_spec'])
-
-        deployed_policies = scan_deployed_policies(org_client)
-        deployed_ou       = scan_deployed_ou(org_client, root_id)
-        deployed_accounts = scan_deployed_accounts(org_client)
-        manage_ou(org_client, args, log, deployed_ou, deployed_policies,
+        # rescan deployed policies
+        deployed['policies'] = scan_deployed_policies(org_client)
+        manage_ou(org_client, args, log, deployed,
                 org_spec['organizational_unit_spec'], 'root')
+        # warn about unmanaged org resources
+        for key in managed.keys():
+            unmanaged= [a for a in map(lambda a: a['Name'], deployed[key])
+                if a not in managed[key]]
+            if unmanaged:
+                logger(log, "Warning: unmanaged %s found: %s" %
+                    (key,', '.join(unmanaged))
+                )
 
-        # alternative account method
-        #deployed_ou       = scan_deployed_ou(org_client, root_id)
-        #place_accounts_in_org(org_client, args, log, deployed_accounts,
-        #        deployed_ou, org_spec['account_map'])
 
-        unmanaged_accounts = list_unmanaged_accounts(
-            deployed_accounts,
-            org_spec['account_map']
-        )
-        if unmanaged_accounts:
-            logger(log, "Warning: unmanaged accounts found: %s" %
-                ', '.join(unmanaged_accounts)
-            )
+    if args['--verbose']:
+        for line in log:
+            print line
 
+######################################
 
     #if args['accounts']:
     #    deployed_accounts = scan_deployed_accounts(org_client)
@@ -746,8 +744,3 @@ if __name__ == "__main__":
     #        logger(log, "This is a dry run!\n")
     #    create_accounts(org_client, args, log, deployed_accounts,
     #            org_spec['account_spec'])
-
-
-    if args['--verbose']:
-        for line in log:
-            print line
