@@ -1,41 +1,47 @@
 # AWS Organization Specification
 
 master_account_id: '640965621536'
+master_account: Ashley Gould
 default_policy: FullAWSAccess
+default_ou: root
 
 organizational_unit_spec:
-  - Name: prod
-    Policies: 
+  - Name: root
     Accounts:
-      - blee-prod
-      - gorp-prod
-      - gorp-dev
-  - Name: auth
-    Accounts:
-      - auth
-    Policies:
-      - auth-only
-  - Name: poc
-    Accounts:
-      - gorp-poc
-      - blee-poc
-      - ghost
-    Policies: 
-      - dev_service_policy
-      - poc_service_policy
-  - Name: nonprod
-    #Ensure: absent
-    Accounts:
-    #  - blee-dev
-    Policies: 
-    #  - dev_service_policy
     Child_OU:
-      - Name: formal
+      - Name: prod
+        Policies: 
         Accounts:
-          - test1
-          - test2
-      - Name: nice
-      - Name: humble
+          - Ashley Gould
+          - blee-prod
+          - gorp-prod
+          - gorp-dev
+      - Name: auth
+        Accounts:
+          - auth
+        Policies:
+          - auth-only
+      - Name: poc
+        Accounts:
+          - gorp-poc
+          - blee-poc
+          - ghost
+        Policies: 
+          - dev_service_policy
+          - poc_service_policy
+      - Name: nonprod
+        #Ensure: absent
+        Accounts:
+        #  - blee-dev
+        Policies: 
+        #  - dev_service_policy
+        Child_OU:
+          - Name: formal
+            Accounts:
+              - test1
+              - test2
+          - Name: nice
+          - Name: humble
 
 
 policy_spec:
