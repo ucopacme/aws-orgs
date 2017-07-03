@@ -63,8 +63,8 @@ def validate_spec_file(spec_file):
     """
     Validate spec-file is properly formed.
     """
-    org_spec = yaml.load(open(args['--spec-file']).read())
-    return org_spec
+    spec = yaml.load(open(args['--spec-file']).read())
+    return spec
                     
 #def lookup(dlist, lkey, lvalue, rkey=None):
 #    """
@@ -209,11 +209,11 @@ if __name__ == "__main__":
 
 
     if args['--spec-file']:
-        org_spec = validate_spec_file(args['--spec-file'])
+        spec = validate_spec_file(args['--spec-file'])
         # dont mangle the wrong org by accident
         master_account_id = org_client.describe_organization(
                 )['Organization']['MasterAccountId']
-        if master_account_id != org_spec['master_account_id']:
+        if master_account_id != spec['master_account_id']:
             errmsg = ("""The Organization Master Account Id '%s' does not
               match the 'master_account_id' set in the spec-file.  
               Is your '--profile' arg correct?""" % master_account_id)
@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
 
     if args['report']:
-        display_provisioned_accounts(log, deployed['accounts'])
+        display_provisioned_accounts(log, deployed_accounts)
 
 
     if args['accounts']:
@@ -230,11 +230,11 @@ if __name__ == "__main__":
         if not args['--exec']:
             logger(log, "This is a dry run!\n")
         create_accounts(org_client, args, log, deployed_accounts,
-                org_spec['account_spec'])
+                spec['accounts'])
 
         # check for unmanaged accounts
         unmanaged= [ a for a in map(lambda a: a['Name'], deployed_accounts)
-                    if a not in map(lambda a: a['Name'], account_spec) ]
+                    if a not in map(lambda a: a['Name'], spec['accounts']) ]
         # warn about unmanaged org resources
         if unmanaged:
             logger(

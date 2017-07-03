@@ -5,7 +5,7 @@
 
 Usage:
   awsorgs.py report [--profile <profile>] [--verbose] [--log-target <target>]...
-  awsorgs.py (organization | accounts) (--spec-file FILE) [--exec]
+  awsorgs.py organization (--spec-file FILE) [--exec]
                 [--profile <profile>] [--verbose] [--log-target <target>]...
   awsorgs.py (-h | --help)
   awsorgs.py --version
@@ -13,7 +13,6 @@ Usage:
 Modes of operation:
   report         Display organization status report only.
   orgnanizaion   Run AWS Org management tasks per specification.
-  accounts       Create new accounts in AWS Org per specifation.
 
 Options:
   -h, --help                 Show this help message and exit.
@@ -280,65 +279,6 @@ def get_parent_id(org_client, account_id):
     except:
         raise RuntimeError("API Error: account '%s' has more than one parent: "
                 % (account_id, parents))
-
-
-def create_accounts(org_client, args, log, deployed_accounts, account_spec):
-    """
-    Compare deployed_ accounts to list of accounts in account_spec.
-    Create accounts not found in deployed_accounts.
-    """
-    for a_spec in account_spec:
-        if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
-
-            # check if it is still being provisioned
-            created_accounts = scan_created_accounts(org_client)
-            if lookup(created_accounts, 'AccountName', a_spec['Name']):
-                logger(log, "Account '%s' created, but not fully provisioned" %
-                        a_spec['Name'])
-                return lookup(created_accounts, 'AccountName', a_spec['Name'],
-                        'AccountId')
-
-            # create a new account
-            logger(log, "creating account '%s'" % (a_spec['Name']))
-            if args['--exec']:
-                new_account = org_client.create_account(
-                        AccountName=a_spec['Name'], Email=a_spec['Email'])
-                create_id = new_account['CreateAccountStatus']['Id']
-                logger(log, "CreateAccountStatus Id: %s" % (create_id))
-
-                # validate creation status
-                counter = 0
-                while counter < 5:
-                    logger(log, "Testing account creation status")
-                    creation = org_client.describe_create_account_status(
-                            CreateAccountRequestId=create_id
-                            )['CreateAccountStatus']
-                    if creation['State'] == 'IN_PROGRESS':
-                        logger(log, "In progress.  wait a bit...")
-                        time.sleep(5)
-                    elif creation['State'] == 'SUCCEEDED':
-                        logger(log, "Account creation Succeeded!")
-                        return creation['Id']
-                    elif creation['State'] == 'FAILED':
-                        logger(log, "Account creation failed! %s" %
-                                creation['FailureReason'])
-                        return None
-                    counter += 1
-
-
-
-def display_provisioned_accounts(log, deployed_accounts):
-    """
-    Print report of currently deployed accounts in AWS Organization.
-    """
-    header = "Provisioned Accounts in Org:"
-    overbar = '_' * len(header)
-    logger(log, "\n%s\n%s" % (overbar, header))
-    for a_name in sorted(map(lambda a: a['Name'], deployed_accounts)):
-        a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
-        a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
-        logger(log, "Name:\t\t%s\nEmail:\t\t%s\nId:\t\t%s\n" %
-                (a_name, a_email, a_id))
 
 
 def manage_account_moves(org_client, args, log, deployed_accounts,
@@ -705,7 +645,6 @@ if __name__ == "__main__":
         logger(log, "\n%s\n%s" % (overbar, header))
         display_provisioned_ou(org_client, log, deployed['ou'], 'root')
         display_provisioned_policies(org_client, deployed['policies'])
-        #display_provisioned_accounts(log, deployed['accounts'])
 
 
     if args['organization']:
@@ -743,13 +682,3 @@ if __name__ == "__main__":
     if args['--verbose']:
         for line in log:
             print line
-
-######################################
-
-    #if args['accounts']:
-    #    deployed_accounts = scan_deployed_accounts(org_client)
-    #    logger(log, "Running AWS account creation.")
-    #    if not args['--exec']:
-    #        logger(log, "This is a dry run!\n")
-    #    create_accounts(org_client, args, log, deployed_accounts,
-    #            org_spec['account_spec'])

@@ -1,4 +1,6 @@
-account_spec:
+master_account_id: '640965621536'
+accounts:
+  - Name: Ashley Gould
   - Name: auth
     Email: auth@blee.red
   - Name: Managment
