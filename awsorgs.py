@@ -724,7 +724,6 @@ if __name__ == "__main__":
 
         # check for unmanaged resources
         for key in org_spec['managed'].keys():
-            print org_spec['managed'][key]
             unmanaged= [ a for a in map(lambda a: a['Name'], deployed[key])
                         if a not in org_spec['managed'][key] ]
             # warn about unmanaged org resources
