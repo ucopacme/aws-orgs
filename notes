@@ -1,18 +1,17 @@
 
-
-TODO:
+__________________
+TODO awsorgs.py:
+have exeptions write to logger. how?
 in logger: prepend timestamp to messages
 add README file, document spec-file structure
 add unit testing
 make logger write to different url
-control order of organization tasks
 create setup.py and package module
 scan_deployed_accounts: fix 'NextToken' logic.
+make master_id check a function. import into accounts.
 
-
-
+DONE control order of organization tasks
 DONE get rid of globals
-DONE account creation
 DONE make spec-file input and report output similar
 DONE create documentation (pydoc)
 DONE validate/sanitize org_spec input
@@ -25,18 +24,35 @@ DONE in manage_policy_attachments raise error when:
     DONE detaching default policy
     DONE attaching to an absent ou
 DONE in manage_policies: dont delete a policy attached to an ou
-DONE in scan_deployed_accounts:
-  DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
-
-
-
-
 
 CONSIDER:
 NO divide into sub modules.  how would that look?
-NO should account spec be separate file?
+
+
+
+__________________
+TODO accounts.py:
+IN PROGRESSprovision default resources with cloudformation 
+support cf templates from s3
+import more functions from awsorgs
+
+DONE account creation
+DONE in scan_deployed_accounts:
+  DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
+
+CONSIDER:
+YES should account spec be separate file?
 parse account names for compliance
 account-spec details allowed values for name components
+
+
+
+
+
+
+
+
+
 
 
 
@@ -66,3 +82,35 @@ def get_root_id(org_client):
         print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
         print "in module:", __name__
         raise SystemExit
+
+
+
+
+
+
+
+
+Use the response contained within the exception. Here is an example:
+
+import boto3
+from botocore.exceptions import ClientError
+
+try:
+    iam = boto3.client('iam')
+    user = iam.create_user(UserName='fred')
+    print "Created user: %s" % user
+except ClientError as e:
+    if e.response['Error']['Code'] == 'EntityAlreadyExists':
+        print "User already exists"
+    else:
+        print "Unexpected error: %s" % e
+The response dict in the exception will contain the following:
+
+- ['Error']['Code'] e.g. 'EntityAlreadyExists' or 'ValidationError'
+- ['ResponseMetadata']['HTTPStatusCode'] e.g. 400
+- ['ResponseMetadata']['RequestId'] e.g. 'd2b06652-88d7-11e5-99d0-812348583a35'
+- ['Error']['Message'] e.g. "An error occurred (EntityAlreadyExists) ..."
+- ['Error']['Type'] e.g. 'Sender'
+
+
+

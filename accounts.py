@@ -4,21 +4,27 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  accounts.py report [--profile <profile>] [--verbose] [--log-target <target>]...
-  accounts.py accounts (--spec-file FILE) [--exec]
-                       [--profile <profile>] [--verbose] [--log-target <target>]...
+  accounts.py report [--profile <profile>] [--verbose]
+                     [--log-target <target>]...
+  accounts.py create (--spec-file FILE) [--exec] [--profile <profile>]
+                     [--verbose] [--log-target <target>]...
+  accounts.py provision (--spec-file FILE) (--template-dir DIR) [--exec]
+                     [--profile <profile>] [--verbose]
+                     [--log-target <target>]...
   accounts.py (-h | --help)
   accounts.py --version
 
 Modes of operation:
   report         Display organization status report only.
-  accounts       Create new accounts in AWS Org per specifation.
+  create         Create new accounts in AWS Org per specifation.
+  provision      Manage default resources in Org accounts per specifation.
 
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
   -p, --profile <profile>    AWS credentials profile to use [default: default].
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
+  -d DIR, --template-dir DIR  Directory where to search for cloudformation templates.
   --exec                     Execute proposed changes to AWS accounts.
   -l, --log-target <target>  Where to send log output.  This option can be
                              repeated to specify multiple targets.
@@ -34,6 +40,7 @@ Supported log targets:
 
 
 import boto3
+from botocore.exceptions import ClientError
 import yaml
 import json
 import time
@@ -65,39 +72,6 @@ def validate_spec_file(spec_file):
     """
     spec = yaml.load(open(args['--spec-file']).read())
     return spec
-                    
-#def lookup(dlist, lkey, lvalue, rkey=None):
-#    """
-#    Use a known key:value pair to lookup a dictionary in a list of
-#    dictionaries.  Return the dictonary or None.  If rkey is provided,
-#    return the value referenced by rkey or None.  If more than one
-#    dict matches, raise an error.
-#    args:
-#        dlist:   lookup table -  a list of dictionaries
-#        lkey:    name of key to use as lookup criteria
-#        lvalue:  value to use as lookup criteria
-#        key:     (optional) name of key referencing a value to return
-#    """
-#    items = [d for d in dlist
-#             if lkey in d
-#             and d[lkey] == lvalue]
-#    if not items:
-#        return None
-#    if len(items) > 1:
-#        raise RuntimeError(
-#            "Data Error: lkey:lvalue lookup matches multiple items in dlist"
-#        )
-#    if rkey:
-#        if rkey in items[0]:
-#            return items[0][rkey]
-#        return None
-#    return items[0]
-#
-#
-#def logger(log, message):
-#    if message:
-#        log.append(message)
-#    return
 
 
 
@@ -136,12 +110,12 @@ def scan_created_accounts(org_client):
     return created_accounts
 
 
-def create_accounts(org_client, args, log, deployed_accounts, account_spec):
+def create_accounts(org_client, args, log, deployed_accounts, spec):
     """
-    Compare deployed_ accounts to list of accounts in account_spec.
+    Compare deployed_accounts to list of accounts in the accounts spec.
     Create accounts not found in deployed_accounts.
     """
-    for a_spec in account_spec:
+    for a_spec in spec['accounts']:
         if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
 
             # check if it is still being provisioned
@@ -191,8 +165,85 @@ def display_provisioned_accounts(log, deployed_accounts):
     for a_name in sorted(map(lambda a: a['Name'], deployed_accounts)):
         a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
         a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
-        logger(log, "Name:\t\t%s\nEmail:\t\t%s\nId:\t\t%s\n" %
-                (a_name, a_email, a_id))
+        spacer = ' ' * (16 - len(a_name))
+        logger(log, "%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
+
+
+def provision_accounts(log, session, args, deployed_accounts, spec):
+    """
+    Generate default resources in new accounts using cloudformation.
+    """
+    for account in spec['accounts']:
+        if 'Provision' in account and account['Provision']:
+            account_id = lookup(deployed_accounts,'Name',account['Name'],'Id')
+            # get temporary credentials for this account
+            role_name = spec['org_access_role']
+            role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
+            role_session_name = account_id + '-' + role_name
+            sts_client = session.client('sts')
+            credentials = sts_client.assume_role(
+                RoleArn=role_arn,
+                RoleSessionName=role_session_name,
+            )['Credentials'] 
+            # apply temp creds to cloudformantion client
+            cf_client = session.client(
+                'cloudformation',
+                aws_access_key_id = credentials['AccessKeyId'],
+                aws_secret_access_key = credentials['SecretAccessKey'],
+                aws_session_token = credentials['SessionToken'],
+            )
+            # build specified stacks
+            for stack in spec['cloudformation']['stacks']:
+                template_body = open(
+                    '/'.join([args['--template-dir'], stack['template']])
+                ).read()
+                #kwargs = (
+                #    StackName=stack['name'],
+                #    TemplateBody=template_body,
+                #    Capabilities=stack['capabilities'],
+                #    Parameters=stack['parameters'],
+                #    Tags=stack['tags'],
+                #)
+                try:
+                    #response = cf_client.create_stack(kwargs)
+                    response = cf_client.create_stack(
+                        StackName=stack['name'],
+                        TemplateBody=template_body,
+                        Capabilities=stack['capabilities'],
+                        Parameters=stack['parameters'],
+                        Tags=stack['tags'],
+                    )
+                    logger(
+                        log, "Notice: account %s: created stack %s." %
+                        (account['Name'], stack['name'])
+                    )
+                except ClientError as e:
+                    # probably I want to just ignore this error
+                    if e.response['Error']['Code'] == 'AlreadyExistsException':
+                        logger(
+                            log, "Notice: account %s: stack %s exists." % 
+                            (account['Name'], stack['name'])
+                        )
+                        try:
+                            response = cf_client.update_stack(
+                                StackName=stack['name'],
+                                TemplateBody=template_body,
+                                Capabilities=stack['capabilities'],
+                                Parameters=stack['parameters'],
+                                Tags=stack['tags'],
+                            )
+                        except ClientError as e:
+                            if e.response['Error']['Code'] == 'ValidationError':
+                                logger(
+                                    log, "Notice: account %s: stack %s: %s" % (
+                                    account['Name'], stack['name'],
+                                    e.response['Error']['Message']
+                                ))
+                            else: raise e
+                    else: raise e
+
+
+
 
 
 
@@ -224,23 +275,27 @@ if __name__ == "__main__":
         display_provisioned_accounts(log, deployed_accounts)
 
 
-    if args['accounts']:
-        deployed_accounts = scan_deployed_accounts(org_client)
+    if args['create']:
         logger(log, "Running AWS account creation.")
         if not args['--exec']:
             logger(log, "This is a dry run!\n")
-        create_accounts(org_client, args, log, deployed_accounts,
-                spec['accounts'])
+        create_accounts(org_client, args, log, deployed_accounts, spec)
 
         # check for unmanaged accounts
         unmanaged= [ a for a in map(lambda a: a['Name'], deployed_accounts)
                     if a not in map(lambda a: a['Name'], spec['accounts']) ]
-        # warn about unmanaged org resources
         if unmanaged:
             logger(
                 log, "Warning: unmanaged accounts in Org: %s" %
                 (', '.join(unmanaged))
             )
+
+
+    if args['provision']:
+        logger(log, "Running AWS account provisioning.")
+        if not args['--exec']:
+            logger(log, "This is a dry run!\n")
+        provision_accounts(log, session, args, deployed_accounts, spec)
 
 
     if args['--verbose']:

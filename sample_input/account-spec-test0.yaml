@@ -1,4 +1,22 @@
 master_account_id: '640965621536'
+org_access_role: OrganizationAccountAccessRole
+cloudformation:
+  stacks:
+    - name: role-central-admin
+      ensure: present
+      template: role-central-admin.yaml
+      capabilities:
+        - CAPABILITY_IAM
+        - CAPABILITY_NAMED_IAM
+      parameters:
+        - ParameterKey: CentralAdminAccount
+          ParameterValue: arn:aws:iam::962936672038:root
+        - ParameterKey: RoamingAdminRoleName
+          ParameterValue: roam
+      tags:
+        - Key: team
+          Value: syseng
+
 accounts:
   - Name: Ashley Gould
   - Name: auth
@@ -22,12 +40,16 @@ accounts:
     Email: gorp-prod@blee.red
   - Name: test0
     Email: test0@blee.red
+    Provision: True
   - Name: test1
     Email: test1@blee.red
+    Provision: True
   - Name: test2
     Email: test2@blee.red
+    Provision: True
   - Name: test3
     Email: test3@blee.red
+    Provision: True
   - Name: test4
     Email: test4@blee.red
   - Name: test5
