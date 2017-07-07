@@ -1,0 +1,40 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: roaming admin role with mfa from central ucop-its mgmt account
+
+Parameters:
+  CentralAdminAccount:
+    Description: account number of central shared services account
+    Type: String
+    Default: arn:aws:iam::613726763327:root
+  RoamingAdminRoleName:
+    Description: name of RoamingAdminRole
+    Type: String
+    Default: roam
+
+Resources:
+  RoamingAdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref CentralAdminAccount
+            Action: sts:AssumeRole
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: 'true'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+        - arn:aws:iam::aws:policy/AWSSupportAccess
+      RoleName: !Ref RoamingAdminRoleName
+
+Outputs:
+  RoamingAdminRole:
+    Description: assume admin role from central account
+    Value:
+      Ref: RoamingAdminRole
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-RoamingAdminRole

@@ -73,6 +73,20 @@ def enable_policy_type_in_root(org_client, root_id):
         )
 
 
+def validate_master_id(org_client, spec):
+    """
+    Don't mangle the wrong org by accident
+    """
+    master_account_id = org_client.describe_organization(
+            )['Organization']['MasterAccountId']
+    if master_account_id != spec['master_account_id']:
+        errmsg = ("""The Organization Master Account Id '%s' does not
+          match the 'master_account_id' set in the spec-file.  
+          Is your '--profile' arg correct?""" % master_account_id)
+        raise RuntimeError(errmsg)
+    return
+
+
 def validate_spec_file(spec_file):
     """
     Validate spec-file is properly formed.
@@ -629,14 +643,7 @@ if __name__ == "__main__":
 
     if args['--spec-file']:
         org_spec = validate_spec_file(args['--spec-file'])
-        # dont mangle the wrong org by accident
-        master_account_id = org_client.describe_organization(
-                )['Organization']['MasterAccountId']
-        if master_account_id != org_spec['master_account_id']:
-            errmsg = ("""The Organization Master Account Id '%s' does not
-              match the 'master_account_id' set in the spec-file.  
-              Is your '--profile' arg correct?""" % master_account_id)
-            raise RuntimeError(errmsg)
+        validate_master_id(org_client, org_spec)
 
 
     if args['report']:

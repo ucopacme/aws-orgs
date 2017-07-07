@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 
-"""Manage recources in an AWS Organization.
+"""Manage accounts in an AWS Organization.
 
 Usage:
   accounts.py report [--profile <profile>] [--verbose]
@@ -42,56 +42,24 @@ Supported log targets:
 import boto3
 from botocore.exceptions import ClientError
 import yaml
-import json
-import time
 from docopt import docopt
-from awsorgs import lookup, logger
+from awsorgs import (lookup, logger, get_root_id, scan_deployed_accounts,
+    validate_master_id)
 
 
+"""
+TODO:
+fill out validate_account_spec_file()
+display_provisioned_accounts(): add option to print .aws/config file
+"""
 
 
-#
-# General functions
-#
-
-def get_root_id(org_client):
-    """
-    Query deployed AWS Organization for its Root ID.
-    """
-    roots = org_client.list_roots()['Roots']
-    if len(roots) >1:
-        raise RuntimeError(
-            "org_client.list_roots returned multiple roots.  Go figure!"
-        )
-    return roots[0]['Id']
-
-
-def validate_spec_file(spec_file):
+def validate_account_spec_file(spec_file):
     """
     Validate spec-file is properly formed.
     """
-    spec = yaml.load(open(args['--spec-file']).read())
-    return spec
-
-
-
-#
-# Account functions
-#
-
-
-def scan_deployed_accounts(org_client):
-    """
-    Query AWS Organization for deployed accounts.
-    Returns a list of dictionary.
-    """
-    accounts = org_client.list_accounts()
-    deployed_accounts = accounts['Accounts']
-    while 'NextToken' in accounts and accounts['NextToken']:
-        accounts = org_client.list_accounts()
-        deployed_accounts += accounts['Accounts']
-    # only return accounts that have an 'Name' key
-    return [d for d in deployed_accounts if 'Name' in d ]
+    account_spec = yaml.load(open(args['--spec-file']).read())
+    return account_spec
 
 
 def scan_created_accounts(org_client):
@@ -110,12 +78,13 @@ def scan_created_accounts(org_client):
     return created_accounts
 
 
-def create_accounts(org_client, args, log, deployed_accounts, spec):
+def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
     Compare deployed_accounts to list of accounts in the accounts spec.
     Create accounts not found in deployed_accounts.
     """
-    for a_spec in spec['accounts']:
+    import time
+    for a_spec in account_spec['accounts']:
         if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
 
             # check if it is still being provisioned
@@ -169,22 +138,33 @@ def display_provisioned_accounts(log, deployed_accounts):
         logger(log, "%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
 
 
-def provision_accounts(log, session, args, deployed_accounts, spec):
-    """
-    Generate default resources in new accounts using cloudformation.
-    """
-    for account in spec['accounts']:
-        if 'Provision' in account and account['Provision']:
-            account_id = lookup(deployed_accounts,'Name',account['Name'],'Id')
-            # get temporary credentials for this account
-            role_name = spec['org_access_role']
+def get_assume_role_credentials(session, account_id, role_name):
+            """
+            Get temporary sts assume_role credentials for account.
+            """
             role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
             role_session_name = account_id + '-' + role_name
             sts_client = session.client('sts')
             credentials = sts_client.assume_role(
                 RoleArn=role_arn,
                 RoleSessionName=role_session_name,
-            )['Credentials'] 
+            )['Credentials']
+            return credentials
+
+
+def provision_accounts(log, session, args, deployed_accounts, account_spec):
+    """
+    Generate default resources in new accounts using cloudformation.
+    """
+    for account in account_spec['accounts']:
+        if 'Provision' in account and account['Provision']:
+            account_id = lookup(
+                deployed_accounts,'Name',account['Name'],'Id'
+            )
+            credentials = get_assume_role_credentials(
+                session, account_id, account_spec['org_access_role']
+            )
+
             # apply temp creds to cloudformantion client
             cf_client = session.client(
                 'cloudformation',
@@ -193,7 +173,7 @@ def provision_accounts(log, session, args, deployed_accounts, spec):
                 aws_session_token = credentials['SessionToken'],
             )
             # build specified stacks
-            for stack in spec['cloudformation']['stacks']:
+            for stack in account_spec['cloudformation']['stacks']:
                 template_body = open(
                     '/'.join([args['--template-dir'], stack['template']])
                 ).read()
@@ -260,15 +240,8 @@ if __name__ == "__main__":
 
 
     if args['--spec-file']:
-        spec = validate_spec_file(args['--spec-file'])
-        # dont mangle the wrong org by accident
-        master_account_id = org_client.describe_organization(
-                )['Organization']['MasterAccountId']
-        if master_account_id != spec['master_account_id']:
-            errmsg = ("""The Organization Master Account Id '%s' does not
-              match the 'master_account_id' set in the spec-file.  
-              Is your '--profile' arg correct?""" % master_account_id)
-            raise RuntimeError(errmsg)
+        account_spec = validate_account_spec_file(args['--spec-file'])
+        validate_master_id(org_client, account_spec)
 
 
     if args['report']:
@@ -279,11 +252,13 @@ if __name__ == "__main__":
         logger(log, "Running AWS account creation.")
         if not args['--exec']:
             logger(log, "This is a dry run!\n")
-        create_accounts(org_client, args, log, deployed_accounts, spec)
+        create_accounts(org_client, args, log, deployed_accounts, account_spec)
 
         # check for unmanaged accounts
-        unmanaged= [ a for a in map(lambda a: a['Name'], deployed_accounts)
-                    if a not in map(lambda a: a['Name'], spec['accounts']) ]
+        unmanaged= [
+            a for a in map(lambda a: a['Name'], deployed_accounts)
+            if a not in map(lambda a: a['Name'], account_spec['accounts'])
+        ]
         if unmanaged:
             logger(
                 log, "Warning: unmanaged accounts in Org: %s" %
@@ -295,7 +270,7 @@ if __name__ == "__main__":
         logger(log, "Running AWS account provisioning.")
         if not args['--exec']:
             logger(log, "This is a dry run!\n")
-        provision_accounts(log, session, args, deployed_accounts, spec)
+        provision_accounts(log, session, args, deployed_accounts, account_spec)
 
 
     if args['--verbose']:
