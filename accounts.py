@@ -42,14 +42,15 @@ Supported log targets:
 import boto3
 from botocore.exceptions import ClientError
 import yaml
+import time
 from docopt import docopt
-from awsorgs import (lookup, logger, get_root_id, scan_deployed_accounts,
-    validate_master_id)
+from awsorgs import (lookup, logger, get_root_id, ensure_absent,
+    scan_deployed_accounts, validate_master_id)
 
 
 """
 TODO:
-fill out validate_account_spec_file()
+DONE fill out validate_account_spec_file()
 display_provisioned_accounts(): add option to print .aws/config file
 """
 
@@ -58,8 +59,69 @@ def validate_account_spec_file(spec_file):
     """
     Validate spec-file is properly formed.
     """
-    account_spec = yaml.load(open(args['--spec-file']).read())
-    return account_spec
+    spec = yaml.load(open(args['--spec-file']).read())
+    string_keys = ['master_account_id', 'org_access_role']
+    for key in string_keys:
+        if not key in spec:
+            msg = "Invalid spec-file: missing required param '%s'." % key
+            raise RuntimeError(msg)
+        if not isinstance(spec[key], str):
+            msg = "Invalid spec-file: '%s' must be type 'str'." % key
+            raise RuntimeError(msg)
+    list_keys = ['cloudformation_stacks', 'accounts']
+    for key in list_keys:
+        if not key in spec:
+            msg = "Invalid spec-file: missing required param '%s'." % key
+            raise RuntimeError(msg)
+        if not isinstance(spec[key], list):
+            msg = "Invalid spec-file: '%s' must be type 'list'." % key
+            raise RuntimeError(msg)
+
+    # validate accounts spec
+    err_prefix = "Malformed accounts spec in spec-file"
+    for a_spec in spec['accounts']:
+        if not isinstance(a_spec, dict):
+            msg = "%s: not a dictionary: '%s'" % (err_prefix, str(a_spec))
+            raise RuntimeError(msg)
+        if not 'Name' in a_spec:
+            msg = (
+                "%s: missing 'Name' key near: '%s'" %
+                (err_prefix, str(a_spec))
+            )
+            raise RuntimeError(msg)
+
+    # validate cloudformation_stacks spec
+    err_prefix = "Malformed cloudformation spec in spec-file"
+    for cf_spec in spec['cloudformation_stacks']:
+        if not isinstance(cf_spec, dict):
+            msg = "%s: not a dictionary: '%s'" % (err_prefix, str(cf_spec))
+            raise RuntimeError(msg)
+        if not 'Name' in cf_spec:
+            msg = (
+                "%s: missing 'Name' key near: '%s'" %
+                (err_prefix, str(cf_spec))
+            )
+            raise RuntimeError(msg)
+        if not ensure_absent(cf_spec):
+            required_keys = ['Template', 'Tags']
+            for key in required_keys:
+                if not key in cf_spec:
+                    msg = (
+                        "%s: stack '%s': missing required param '%s'" %
+                        (err_prefix, cf_spec['Name'], key)
+                    )
+                    raise RuntimeError(msg)
+            list_keys = ['Capabilities', 'Parameters', 'Tags']
+            for key in list_keys:
+                if key in cf_spec and cf_spec[key]:
+                    if not isinstance(cf_spec[key], list):
+                        msg = (
+                            "%s: stack '%s': value of '%s' must be a list." %
+                            (err_prefix, cf_spec['Name'], key)
+                        )
+                        raise RuntimeError(msg)
+    # all done!
+    return spec
 
 
 def scan_created_accounts(org_client):
@@ -83,7 +145,6 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     Compare deployed_accounts to list of accounts in the accounts spec.
     Create accounts not found in deployed_accounts.
     """
-    import time
     for a_spec in account_spec['accounts']:
         if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
 
@@ -123,7 +184,6 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                     counter += 1
 
 
-
 def display_provisioned_accounts(log, deployed_accounts):
     """
     Print report of currently deployed accounts in AWS Organization.
@@ -152,6 +212,70 @@ def get_assume_role_credentials(session, account_id, role_name):
             return credentials
 
 
+def create_stack(cf_client, args, log, account_name, stack_kwargs):
+    """
+    Create or update a cloudformation stack using change sets.
+    """
+
+    #print
+    #print account_name
+    # test if stack exists
+    try:
+        stack_status = cf_client.describe_stack_events(
+            StackName=stack_kwargs['StackName']
+        )['StackEvents'][0]['ResourceStatus']
+        if stack_status == 'REVIEW_IN_PROGRESS':
+            stack_kwargs['ChangeSetType'] = 'CREATE'
+        else:
+            stack_kwargs['ChangeSetType'] = 'UPDATE'
+    except ClientError as e:
+        if not e.response['Error']['Code'] == 'ValidationError':
+            raise e
+        else:
+            stack_kwargs['ChangeSetType'] = 'CREATE'
+    except:
+        raise
+
+    # create a change set
+    stack_kwargs['ChangeSetName'] = stack_kwargs['StackName'] + '-changeset'
+    cf_client.create_change_set(**stack_kwargs)
+
+    # check its status. wash. and repeat.
+    counter = 0
+    while counter < 5:
+        change_sets = cf_client.list_change_sets(
+            StackName=stack_kwargs['StackName']
+        )['Summaries']
+        change_set = lookup(
+            change_sets, 'ChangeSetName', stack_kwargs['ChangeSetName']
+        )
+        #print change_set['Status']
+        #print change_set['ExecutionStatus']
+        if change_set['Status'] == 'CREATE_PENDING':
+            logger(log, "In progress.  wait a bit...")
+            time.sleep(5)
+        elif change_set['Status'] == 'FAILED':
+            cf_client.delete_change_set(
+                StackName=stack_kwargs['StackName'],
+                ChangeSetName=stack_kwargs['ChangeSetName']
+            )
+            break
+        elif (change_set['Status'] == 'CREATE_COMPLETE'
+              and change_set['ExecutionStatus'] == 'AVAILABLE'):
+            logger(
+                log, "Notice: running %s stack '%s' in account '%s'." % (
+                account_name, stack_kwargs['ChangeSetType'].lower(),
+                stack_kwargs['StackName']
+            ))
+            if args['--exec']:
+                cf_client.execute_change_set(
+                    StackName=stack_kwargs['StackName'],
+                    ChangeSetName=stack_kwargs['ChangeSetName']
+                )
+            break
+        counter += 1
+
+
 def provision_accounts(log, session, args, deployed_accounts, account_spec):
     """
     Generate default resources in new accounts using cloudformation.
@@ -159,13 +283,11 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
     for account in account_spec['accounts']:
         if 'Provision' in account and account['Provision']:
             account_id = lookup(
-                deployed_accounts,'Name',account['Name'],'Id'
+                deployed_accounts, 'Name', account['Name'], 'Id'
             )
             credentials = get_assume_role_credentials(
                 session, account_id, account_spec['org_access_role']
             )
-
-            # apply temp creds to cloudformantion client
             cf_client = session.client(
                 'cloudformation',
                 aws_access_key_id = credentials['AccessKeyId'],
@@ -173,58 +295,21 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
                 aws_session_token = credentials['SessionToken'],
             )
             # build specified stacks
-            for stack in account_spec['cloudformation']['stacks']:
-                template_body = open(
-                    '/'.join([args['--template-dir'], stack['template']])
-                ).read()
-                #kwargs = (
-                #    StackName=stack['name'],
-                #    TemplateBody=template_body,
-                #    Capabilities=stack['capabilities'],
-                #    Parameters=stack['parameters'],
-                #    Tags=stack['tags'],
-                #)
-                try:
-                    #response = cf_client.create_stack(kwargs)
-                    response = cf_client.create_stack(
-                        StackName=stack['name'],
-                        TemplateBody=template_body,
-                        Capabilities=stack['capabilities'],
-                        Parameters=stack['parameters'],
-                        Tags=stack['tags'],
-                    )
-                    logger(
-                        log, "Notice: account %s: created stack %s." %
-                        (account['Name'], stack['name'])
-                    )
-                except ClientError as e:
-                    # probably I want to just ignore this error
-                    if e.response['Error']['Code'] == 'AlreadyExistsException':
-                        logger(
-                            log, "Notice: account %s: stack %s exists." % 
-                            (account['Name'], stack['name'])
-                        )
-                        try:
-                            response = cf_client.update_stack(
-                                StackName=stack['name'],
-                                TemplateBody=template_body,
-                                Capabilities=stack['capabilities'],
-                                Parameters=stack['parameters'],
-                                Tags=stack['tags'],
-                            )
-                        except ClientError as e:
-                            if e.response['Error']['Code'] == 'ValidationError':
-                                logger(
-                                    log, "Notice: account %s: stack %s: %s" % (
-                                    account['Name'], stack['name'],
-                                    e.response['Error']['Message']
-                                ))
-                            else: raise e
-                    else: raise e
-
-
-
-
+            for stack in account_spec['cloudformation_stacks']:
+                template_file =  '/'.join([
+                    args['--template-dir'], stack['Template']
+                ])
+                template_body = open(template_file).read()
+                stack_kwargs = dict(
+                    StackName=stack['Name'],
+                    TemplateBody=template_body,
+                    Capabilities=stack['Capabilities'],
+                    Parameters=stack['Parameters'],
+                    Tags=stack['Tags'],
+                )
+                create_stack(
+                    cf_client, args, log, account['Name'], stack_kwargs
+                )
 
 
 #

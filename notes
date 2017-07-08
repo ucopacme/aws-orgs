@@ -114,3 +114,15 @@ The response dict in the exception will contain the following:
 
 
 
+
+
+nice little bit of code:
+        response = cf_client.describe_stack_events(
+            StackName=stack_kwargs['StackName']
+        )
+        stack_exists = [d for d in response['StackEvents']
+            if d['ResourceType'] == 'AWS::CloudFormation::Stack'
+            and (d['ResourceStatus'] == 'CREATE_COMPLETE'
+            or d['ResourceStatus'] == 'UPDATE_COMPLETE')
+        ]
+        print stack_exists

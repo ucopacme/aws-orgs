@@ -1,21 +1,20 @@
 master_account_id: '640965621536'
 org_access_role: OrganizationAccountAccessRole
-cloudformation:
-  stacks:
-    - name: role-central-admin
-      ensure: present
-      template: role-central-admin.yaml
-      capabilities:
-        - CAPABILITY_IAM
-        - CAPABILITY_NAMED_IAM
-      parameters:
-        - ParameterKey: CentralAdminAccount
-          ParameterValue: arn:aws:iam::962936672038:root
-        - ParameterKey: RoamingAdminRoleName
-          ParameterValue: roam
-      tags:
-        - Key: team
-          Value: syseng
+cloudformation_stacks:
+  - Name: role-central-admin
+    Ensure: present
+    Template: role-central-admin.yaml
+    Capabilities:
+      - CAPABILITY_IAM
+      - CAPABILITY_NAMED_IAM
+    Parameters:
+      - ParameterKey: CentralAdminAccount
+        ParameterValue: arn:aws:iam::962936672038:root
+      - ParameterKey: RoamingAdminRoleName
+        ParameterValue: roam
+    Tags:
+      - Key: team
+        Value: syseng
 
 accounts:
   - Name: Ashley Gould
@@ -52,7 +51,7 @@ accounts:
     Provision: True
   - Name: test4
     Email: test4@blee.red
+    Provision: True
   - Name: test5
     Email: test5@blee.red
-  #- Name: test6
-    #Email: test6@blee.red
+    Provision: True

@@ -143,7 +143,7 @@ def validate_spec_file(spec_file):
                 msg = err_prefix + "not a dictionary: '%s'" % str(ou_spec)
                 raise RuntimeError(msg)
             if not 'Name' in ou_spec:
-                msg = err_prefix + "missing 'Name' key: '%s'" % str(ou_spec)
+                msg = err_prefix + "missing 'Name' key near: '%s'" % str(ou_spec)
                 raise RuntimeError(msg)
             ou_list.append(ou_spec['Name'])
             # check for children OUs. recurse before running other tests
