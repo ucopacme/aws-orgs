@@ -1,3 +1,11 @@
+
+
+prereqs:
+  pip install boto3 argsparse
+  pip install docopt==0.6.2
+
+
+
 __________________
 TODO project:
 
@@ -138,3 +146,19 @@ nice little bit of code:
             or d['ResourceStatus'] == 'UPDATE_COMPLETE')
         ]
         print stack_exists
+
+
+
+
+
+
+
+
+
+
+
+_________________________________________
+
+using pip and setup.py
+
+

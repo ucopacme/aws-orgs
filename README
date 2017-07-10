@@ -1,4 +1,0 @@
-
-prereqs:
-  pip install boto3 argsparse
-  pip install docopt==0.6.2
