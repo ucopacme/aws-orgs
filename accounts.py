@@ -48,12 +48,6 @@ from awsorgs import (lookup, logger, get_root_id, ensure_absent,
     scan_deployed_accounts, validate_master_id)
 
 
-"""
-TODO:
-DONE fill out validate_account_spec_file()
-display_provisioned_accounts(): add option to print .aws/config file
-"""
-
 
 def validate_account_spec_file(spec_file):
     """

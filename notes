@@ -1,15 +1,25 @@
+__________________
+TODO project:
+
+add README file, document spec-file structure
+create setup.py and package project
+devise workflow for using this in real service context:
+  change mgmt process
+  data in git/s3
+  log to cloudwatch
+  run from lambda/jenkins
+
 
 __________________
 TODO awsorgs.py:
+
 have exeptions write to logger. how?
 in logger: prepend timestamp to messages
-add README file, document spec-file structure
 add unit testing
 make logger write to different url
-create setup.py and package module
 scan_deployed_accounts: fix 'NextToken' logic.
-make master_id check a function. import into accounts.
 
+DONE make master_id check a function. import into accounts.
 DONE control order of organization tasks
 DONE get rid of globals
 DONE make spec-file input and report output similar
@@ -32,11 +42,13 @@ NO divide into sub modules.  how would that look?
 
 __________________
 TODO accounts.py:
-IN PROGRESSprovision default resources with cloudformation 
 support cf templates from s3
 import more functions from awsorgs
+display_provisioned_accounts(): add option to print .aws/config file
 
 DONE account creation
+DONE fill out validate_account_spec_file()
+DONE provision default resources with cloudformation 
 DONE in scan_deployed_accounts:
   DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
 
