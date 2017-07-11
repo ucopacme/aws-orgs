@@ -38,5 +38,5 @@ setup(
 
     keywords='aws organizations',
     packages=find_packages(exclude=['scratch', 'notes', 'sample_input']),
-    install_requires=['boto3, docopt'],
+    install_requires=['boto3', 'docopt'],
 )

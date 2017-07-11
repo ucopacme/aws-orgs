@@ -161,4 +161,18 @@ _________________________________________
 
 using pip and setup.py
 
+[ashely@horus ~]$ pip install --user -e aws/aws-orgs/
+[ashely@horus ~]$ ll .local/lib/python2.7/site-packages/
+total 8
+-rw-rw-r--. 1 ashely ashely  27 Jul 10 13:51 aws-orgs.egg-link
+-rw-rw-r--. 1 ashely ashely 221 Jul 10 13:51 easy-install.pth
+
+[ashely@horus ~]$ cat .local/lib/python2.7/site-packages/aws-orgs.egg-link 
+/home/ashely/aws/aws-orgs
+
+[ashely@horus ~]$ cat .local/lib/python2.7/site-packages/easy-install.pth 
+import sys; sys.__plen = len(sys.path)
+/home/ashely/aws/aws-orgs
+import sys; new = sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p = getattr(sys, '__egginsert', 0); sys.path[p:p] = new; sys.__egginsert = p + len(new)
+
 
