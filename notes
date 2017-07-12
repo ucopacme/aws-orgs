@@ -1,16 +1,11 @@
 
 
-prereqs:
-  pip install boto3 argsparse
-  pip install docopt==0.6.2
-
-
 
 __________________
 TODO project:
 
 add README file, document spec-file structure
-create setup.py and package project
+DONE create setup.py and package project
 devise workflow for using this in real service context:
   change mgmt process
   data in git/s3
@@ -51,9 +46,11 @@ NO divide into sub modules.  how would that look?
 __________________
 TODO accounts.py:
 support cf templates from s3
-import more functions from awsorgs
 display_provisioned_accounts(): add option to print .aws/config file
+parse account names for compliance
+account-spec details allowed values for name components
 
+DONE import more functions from awsorgs
 DONE account creation
 DONE fill out validate_account_spec_file()
 DONE provision default resources with cloudformation 
@@ -62,8 +59,6 @@ DONE in scan_deployed_accounts:
 
 CONSIDER:
 YES should account spec be separate file?
-parse account names for compliance
-account-spec details allowed values for name components
 
 
 
