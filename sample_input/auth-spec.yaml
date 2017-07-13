@@ -1,0 +1,39 @@
+auth_account_id: '962936672038'
+default_region: us-west-2
+
+groups:
+  - Name: admins
+    Ensure: absent
+    Path:
+    Members:
+      - agould
+      - ericthered
+    Policies:
+      Mangaged:
+        - AdministratorAccess
+
+users:
+  - Name: agould
+    Ensure: present
+    Path: sysadm
+    Tags:
+      Email: agould@ucop.edu
+  - Name: ericthered
+    Ensure: absent
+    Path: astro
+    Tags:
+      Email: ericthered@blee.red
+
+
+
+
+
+
+#######################################################################
+#users:
+#  - Name: agould
+#    Email: agould@ucop.edu
+#    Team: sysadm
+#  - Name: ericthered
+#    Email: ericthered@blee.red
+#    Team: astro
