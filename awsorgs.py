@@ -470,8 +470,8 @@ def build_deployed_ou_table(org_client, parent_name, parent_id, deployed_ou):
         deployed_ou.append(dict(
             Name = parent_name,
             Id = parent_id,
-            Child_OU = map(lambda d: d['Name'], child_ou),
-            Accounts = map(lambda d: d['Name'], accounts),
+            Child_OU = [ou['Name'] for ou in child_ou if 'Name' in ou],
+            Accounts = [acc['Name'] for acc in accounts if 'Name' in acc]
         ))
     else:
         for ou in deployed_ou:
