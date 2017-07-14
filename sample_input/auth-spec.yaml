@@ -3,7 +3,7 @@ default_region: us-west-2
 
 groups:
   - Name: admins
-    Ensure: absent
+    Ensure: present
     Path:
     Members:
       - agould

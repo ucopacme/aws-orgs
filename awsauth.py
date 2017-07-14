@@ -149,6 +149,39 @@ def create_groups(session, args, log, deployed, auth_spec):
                 logger(log, response['Group']['Arn'])
 
 
+def manage_group_members(session, args, log, deployed, auth_spec):
+    """
+    Populate users into groups based on group specification.
+    """
+    iam_client = session.client('iam')
+    for g_spec in auth_spec['groups']:
+        if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
+                and not ensure_absent(g_spec)):
+            response = iam_client.get_group(
+                    GroupName=g_spec['Name'])['Users']
+            current_members = [user['UserName'] for user in response
+                    if 'UserName' in user]
+            print current_members
+            spec_members = [g_spec['Members'] for g_spec in [g_spec]
+                    if 'Members' in g_spec]
+            print spec_members
+            add_users = [username for username in spec_members
+                    if username not in current_members]
+            remove_users = [username for username in current_members
+                    if username not in spec_members]
+            #if 'Members' in g_spec:
+            #    spec_members = g_spec['Members']
+            #else:
+            #    spec_members = []
+            for username in add_users:
+                iam_client.add_user_to_group(
+                    GroupName=g_spec['Name'],
+                    UserName=username)
+            for username in remove_users:
+                iam_client.remove_user_from_group(
+                    GroupName=g_spec['Name'],
+                    UserName=username)
+
 
 
 
@@ -166,7 +199,7 @@ if __name__ == "__main__":
       groups = scan_deployed_groups(session),
     )
     #print deployed['users']
-    print deployed['groups']
+    #print deployed['groups']
 
     if args['--spec-file']:
         auth_spec = validate_auth_spec_file(args['--spec-file'])
@@ -181,6 +214,7 @@ if __name__ == "__main__":
     if args['create']:
         create_users(session, args, log, deployed, auth_spec)
         create_groups(session, args, log, deployed, auth_spec)
+        manage_group_members(session, args, log, deployed, auth_spec)
 
 
     if args['--verbose']:
