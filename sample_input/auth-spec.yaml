@@ -1,4 +1,5 @@
 auth_account_id: '962936672038'
+master_account_id: '640965621536'
 default_region: us-west-2
 
 groups:
@@ -43,6 +44,15 @@ users:
   - Name: mary
   - Name: quincey
 
+policies:
+  - Name: org-list-accounts
+    Ensure: present
+    Description: Allow Users to list account in an Organization
+    Effect: Allow
+    Actions:
+      - organization:ListAccounts
+    Principle: 
+    Resources: '*'
 
 
 
