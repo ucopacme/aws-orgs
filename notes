@@ -1,0 +1,12 @@
+Thu Jul 13 13:16:44 PDT 2017
+
+TODO:
+get org root id
+report users, groups, roles
+DONE create users
+DONE create groups
+populate users in groups
+create custom policies
+attach policies to groups
+create roles
+populate roles in other org accounts.

@@ -6,11 +6,25 @@ groups:
     Ensure: present
     Path:
     Members:
-      - agould
       - ericthered
+      - mary
+      - jethro
+      - quincey
     Policies:
       Mangaged:
         - AdministratorAccess
+  - Name: eas-users
+    Ensure: present
+    Path: eas
+    Members:
+      - mary
+      - jethro
+      - agould
+  - Name: was-users
+    Ensure: absent
+    Path: was
+    Members:
+      - quincey
 
 users:
   - Name: agould
@@ -19,10 +33,15 @@ users:
     Tags:
       Email: agould@ucop.edu
   - Name: ericthered
-    Ensure: absent
+    #Ensure: absent
     Path: astro
     Tags:
       Email: ericthered@blee.red
+  - Name: jethro
+    #Ensure: absent
+    #Path: astro
+  - Name: mary
+  - Name: quincey
 
 
 

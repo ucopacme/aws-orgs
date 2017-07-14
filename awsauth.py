@@ -94,6 +94,11 @@ def create_users(session, args, log, deployed, auth_spec):
     """
     iam_client = session.client('iam')
     for u_spec in auth_spec['users']:
+        # ISSUE: does this belong in validate_spec()?
+        if 'Path' in u_spec and u_spec['Path']:
+            path = "/%s/" % u_spec['Path']
+        else:
+            path = '/'
         user = lookup(deployed['users'], 'UserName', u_spec['Name'])
         if user:
             if ensure_absent(u_spec):
@@ -101,18 +106,16 @@ def create_users(session, args, log, deployed, auth_spec):
                 if args['--exec']:
                     iam_client.delete_user( UserName=u_spec['Name'])
                     logger(log, response['User']['Arn'])
-            elif user['Path'] != "/%s/" % u_spec['Path']:
+            elif user['Path'] != path:
                 logger(log, "updating path on user '%s'" % u_spec['Name'])
                 if args['--exec']:
                     iam_client.update_user(
-                            UserName=u_spec['Name'],
-                            NewPath="/%s/" % u_spec['Path'])
+                            UserName=u_spec['Name'], NewPath=path)
         elif not ensure_absent(u_spec):
             logger(log, "creating user '%s'" % u_spec['Name'])
             if args['--exec']:
                 response = iam_client.create_user(
-                        UserName=u_spec['Name'],
-                        Path="/%s/" % u_spec['Path'])
+                        UserName=u_spec['Name'], Path=path)
                 logger(log, response['User']['Arn'])
 
 
@@ -122,6 +125,11 @@ def create_groups(session, args, log, deployed, auth_spec):
     """
     iam_client = session.client('iam')
     for g_spec in auth_spec['groups']:
+        # ISSUE: does this belong in validate_spec()?
+        if 'Path' in g_spec and g_spec['Path']:
+            path = "/%s/" % g_spec['Path']
+        else:
+            path = '/'
         group = lookup(deployed['groups'], 'GroupName', g_spec['Name'])
         if group:
             if ensure_absent(g_spec):
@@ -130,22 +138,23 @@ def create_groups(session, args, log, deployed, auth_spec):
                     logger(log,
                       "Warning: group '%s' still has users.  Can't delete." %
                       g_spec['Name'])
+                # delete group
                 else:
                     logger(log, "deleting group '%s'" % g_spec['Name'])
                     if args['--exec']:
                         iam_client.delete_group(GroupName=g_spec['Name'])
-            elif group['Path'] != "/%s/" % g_spec['Path']:
+            elif group['Path'] != path:
+                # update group
                 logger(log, "updating path on group '%s'" % g_spec['Name'])
                 if args['--exec']:
                     iam_client.update_group(
-                            GroupName=g_spec['Name'],
-                            NewPath="/%s/" % g_spec['Path'])
+                            GroupName=g_spec['Name'], NewPath=path)
         elif not ensure_absent(g_spec):
+            # create group
             logger(log, "creating group '%s'" % g_spec['Name'])
             if args['--exec']:
                 response = iam_client.create_group(
-                        GroupName=g_spec['Name'],
-                        Path="/%s/" % g_spec['Path'])
+                        GroupName=g_spec['Name'], Path=path)
                 logger(log, response['Group']['Arn'])
 
 
@@ -161,26 +170,33 @@ def manage_group_members(session, args, log, deployed, auth_spec):
                     GroupName=g_spec['Name'])['Users']
             current_members = [user['UserName'] for user in response
                     if 'UserName' in user]
-            print current_members
-            spec_members = [g_spec['Members'] for g_spec in [g_spec]
-                    if 'Members' in g_spec]
-            print spec_members
+            if 'Members' in g_spec and g_spec['Members']:
+                spec_members = g_spec['Members']
+            else:
+                spec_members = []
             add_users = [username for username in spec_members
                     if username not in current_members]
             remove_users = [username for username in current_members
                     if username not in spec_members]
-            #if 'Members' in g_spec:
-            #    spec_members = g_spec['Members']
-            #else:
-            #    spec_members = []
+            #print current_members
+            #print spec_members
+            #print add_users
+            #print remove_users
             for username in add_users:
-                iam_client.add_user_to_group(
-                    GroupName=g_spec['Name'],
-                    UserName=username)
+                if lookup(deployed['users'], 'UserName', username):
+                    logger(log, "Adding user '%s' to group '%s'." %
+                            (username, g_spec['Name']))
+                    if args['--exec']:
+                        iam_client.add_user_to_group(
+                                GroupName=g_spec['Name'],
+                                UserName=username)
             for username in remove_users:
-                iam_client.remove_user_from_group(
-                    GroupName=g_spec['Name'],
-                    UserName=username)
+                logger(log, "Removig user '%s' from group '%s'." %
+                        (username, g_spec['Name']))
+                if args['--exec']:
+                    iam_client.remove_user_from_group(
+                            GroupName=g_spec['Name'],
+                            UserName=username)
 
 
 
