@@ -33,10 +33,11 @@ Supported log targets:
 """
 
 
-import boto3
 import yaml
 import json
 import time
+
+import boto3
 from docopt import docopt
 
 
@@ -53,24 +54,22 @@ def get_root_id(org_client):
     roots = org_client.list_roots()['Roots']
     if len(roots) >1:
         raise RuntimeError(
-            "org_client.list_roots returned multiple roots.  Go figure!"
-        )
+          "org_client.list_roots returned multiple roots.  Go figure!")
     return roots[0]['Id']
 
 
 def enable_policy_type_in_root(org_client, root_id):
     """
-    ensure policy type 'SERVICE_CONTROL_POLICY' is enabled in the
+    Ensure policy type 'SERVICE_CONTROL_POLICY' is enabled in the
     organization root.
     """
     p_type = org_client.describe_organization(
-            )['Organization']['AvailablePolicyTypes'][0]
+      )['Organization']['AvailablePolicyTypes'][0]
     if (p_type['Type'] == 'SERVICE_CONTROL_POLICY'
-            and p_type['Status'] != 'ENABLED'):
+      and p_type['Status'] != 'ENABLED'):
         org_client.enable_policy_type(
-            RootId=root_id,
-            PolicyType='SERVICE_CONTROL_POLICY'
-        )
+          RootId=root_id,
+          PolicyType='SERVICE_CONTROL_POLICY')
 
 
 def validate_master_id(org_client, spec):
@@ -78,7 +77,7 @@ def validate_master_id(org_client, spec):
     Don't mangle the wrong org by accident
     """
     master_account_id = org_client.describe_organization(
-            )['Organization']['MasterAccountId']
+      )['Organization']['MasterAccountId']
     if master_account_id != spec['master_account_id']:
         errmsg = ("""The Organization Master Account Id '%s' does not
           match the 'master_account_id' set in the spec-file.  
@@ -110,13 +109,13 @@ def validate_spec_file(spec_file):
             raise RuntimeError(msg)
 
     # Validate this policy_spec is properly formed.
-    err_prefix = "Malformed policy in spec-file"
+    err_prefix = "Malformed policy in spec-file:"
     for p_spec in org_spec['policy_spec']:
         if not isinstance(p_spec, dict):
-            msg = err_prefix + ": not a dictionary: '%s'" % str(p_spec)
+            msg = "%s not a dictionary: '%s'" % (err_prefix, str(p_spec))
             raise RuntimeError(msg)
         if not 'Name' in p_spec:
-            msg = err_prefix + ": missing 'Name' key: '%s'" % str(p_spec)
+            msg = "%s missing 'Name' key: '%s'" % (err_prefix, str(p_spec))
             raise RuntimeError(msg)
         # dont manage default policy
         if p_spec['Name'] == org_spec['default_policy']:
@@ -126,12 +125,12 @@ def validate_spec_file(spec_file):
             required_keys = ['Description', 'Effect', 'Actions']
             for key in required_keys:
                 if not key in p_spec:
-                    msg = (err_prefix + " '%s': missing required param '%s'"
-                            % (p_spec['Name'], key))
+                    msg = ("%s '%s': missing required param '%s'" %
+                      (err_prefix, p_spec['Name'], key))
                     raise RuntimeError(msg)
             if not isinstance(p_spec['Actions'], list):
-                msg = (err_prefix + " '%s': 'Actions' must be type list."
-                        % p_spec['Name'])
+                msg = ("%s '%s': 'Actions' must be type list." %
+                  (err_prefix, p_spec['Name']))
                 raise RuntimeError(msg)
 
     # recursive function to validate ou_spec are properly formed.

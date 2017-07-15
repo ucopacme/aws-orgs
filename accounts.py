@@ -5,7 +5,6 @@
 
 Usage:
   accounts.py report [--profile <profile>] [--verbose]
-                     [--log-target <target>]...
   accounts.py create (--spec-file FILE) [--exec]
                      [--region <region>][--profile <profile>] [--verbose]
   accounts.py provision (--spec-file FILE) (--template-dir DIR) [--exec]
@@ -266,15 +265,20 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
                       log, "Notice: New account '%s' is not yet available." %
                       a_spec['Name'])
             else:
-                # assume role into account
-                credentials = get_assume_role_credentials(
-                  session, account_id, account_spec['org_access_role'])
-                cf_client = session.client(
-                  'cloudformation',
-                  aws_access_key_id = credentials['AccessKeyId'],
-                  aws_secret_access_key = credentials['SecretAccessKey'],
-                  aws_session_token = credentials['SessionToken'],
-                  region_name=account_spec['region_name'])
+                if account_id == account_spec['master_account_id']:
+                    cf_client = session.client(
+                      'cloudformation',
+                      region_name=account_spec['region_name'])
+                else:
+                    # assume role into account
+                    credentials = get_assume_role_credentials(
+                      session, account_id, account_spec['org_access_role'])
+                    cf_client = session.client(
+                      'cloudformation',
+                      aws_access_key_id = credentials['AccessKeyId'],
+                      aws_secret_access_key = credentials['SecretAccessKey'],
+                      aws_session_token = credentials['SessionToken'],
+                      region_name=account_spec['region_name'])
                 # build specified stacks
                 for stack in account_spec['cloudformation_stacks']:
                     template_file = '/'.join(
