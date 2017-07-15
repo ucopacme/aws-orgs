@@ -150,6 +150,22 @@ nice little bit of code:
 
 
 
+ISSUES:
+
+Sat Jul 15 10:16:02 PDT 2017
+[ashely@horus aws-orgs]$ ./accounts.py -v provision -s sample_input/account-spec-test0.yaml -d sample_input/ --exec
+Traceback (most recent call last):
+  File "./accounts.py", line 334, in <module>
+    provision_accounts(log, session, args, deployed_accounts, account_spec)
+  File "./accounts.py", line 294, in provision_accounts
+    cf_client, args, log, a_spec['Name'], stack_kwargs)
+  File "./accounts.py", line 223, in create_stack
+    cf_client.create_change_set(**stack_kwargs)
+  File "/usr/lib/python2.7/site-packages/botocore/client.py", line 253, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+  File "/usr/lib/python2.7/site-packages/botocore/client.py", line 557, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.exceptions.ClientError: An error occurred (ValidationError) when calling the CreateChangeSet operation: Stack:arn:aws:cloudformation:us-west-2:640965621536:stack/role-central-admin/9aaf0060-6980-11e7-802b-503acbd4dc61 is in CREATE_IN_PROGRESS state and can not be updated.
 
 
 

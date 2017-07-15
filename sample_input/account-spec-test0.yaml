@@ -1,5 +1,7 @@
 master_account_id: '640965621536'
+default_region: us-west-2
 org_access_role: OrganizationAccountAccessRole
+
 cloudformation_stacks:
   - Name: role-central-admin
     Ensure: present
@@ -11,13 +13,14 @@ cloudformation_stacks:
       - ParameterKey: CentralAdminAccount
         ParameterValue: arn:aws:iam::962936672038:root
       - ParameterKey: RoamingAdminRoleName
-        ParameterValue: roam
+        ParameterValue: AWSAccountsAuthAdminRole
     Tags:
       - Key: team
         Value: syseng
 
 accounts:
   - Name: Ashley Gould
+    Provision: True
   - Name: auth
     Email: auth@blee.red
   - Name: Managment
