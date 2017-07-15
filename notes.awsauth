@@ -21,5 +21,12 @@ how/where do we structure/deploy yaml data for teams specification?
   currently this resides in the spec-file used by accounts.py.
 
 
-
-organizations:ListAccounts
+# policy for group in trusted accoiunt to assume given role in trusting account.
+{
+  "Version": "2012-10-17",
+  "Statement": {
+    "Effect": "Allow",
+    "Action": "sts:AssumeRole",
+    "Resource": "arn:aws:iam::ACCOUNT-ID-WITHOUT-HYPHENS:role/PATH/ROLENAME"
+  }
+}

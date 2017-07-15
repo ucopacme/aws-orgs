@@ -1,8 +1,11 @@
 auth_account_id: '962936672038'
 master_account_id: '640965621536'
 default_region: us-west-2
+default_group: all-users
+auth_access_role: AWSAccountsAuthAdminRole
 
 groups:
+  - Name: all-users
   - Name: admins
     Ensure: present
     Path:
@@ -44,8 +47,19 @@ users:
   - Name: mary
   - Name: quincey
 
+
+
+delegations:
+  - RoleName: AWSAuthListAccounts
+    Ensure: present
+    TrustingAccount: Ashley Gould
+    TrustedAccount: Management
+    TrustedGroup: admins
+    Policies:
+      - AWSAuthListAccountsInOrganization
+
 policies:
-  - Name: ListAccountsInOrganization
+  - Name: AWSAuthListAccountsInOrganization
     Description: Allow Users to list accounts in an Organization
     Statement:
       - Effect: Allow
@@ -55,16 +69,3 @@ policies:
         Condition:
           Bool:
             aws:MultiFactorAuthPresent: true 
-
-
-
-
-
-#######################################################################
-#users:
-#  - Name: agould
-#    Email: agould@ucop.edu
-#    Team: sysadm
-#  - Name: ericthered
-#    Email: ericthered@blee.red
-#    Team: astro
