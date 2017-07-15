@@ -4,13 +4,13 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  accounts.py report [--profile <profile>] [--verbose]
-  accounts.py create (--spec-file FILE) [--exec]
+  awsaccounts.py report [--profile <profile>] [--verbose]
+  awsaccounts.py create (--spec-file FILE) [--exec]
                      [--region <region>][--profile <profile>] [--verbose]
-  accounts.py provision (--spec-file FILE) (--template-dir DIR) [--exec]
+  awsaccounts.py provision (--spec-file FILE) (--template-dir DIR) [--exec]
                      [--region <region>][--profile <profile>] [--verbose]
-  accounts.py (-h | --help)
-  accounts.py --version
+  awsaccounts.py (-h | --help)
+  awsaccounts.py --version
 
 Modes of operation:
   report         Display organization status report only.

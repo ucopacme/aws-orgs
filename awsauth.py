@@ -35,6 +35,8 @@ from docopt import docopt
 
 import awsorgs
 from awsorgs import (lookup, logger, ensure_absent)
+import awsaccounts
+from awsaccounts import get_assume_role_credentials
 
 
 
