@@ -45,14 +45,16 @@ users:
   - Name: quincey
 
 policies:
-  - Name: org-list-accounts
-    Ensure: present
-    Description: Allow Users to list account in an Organization
-    Effect: Allow
-    Actions:
-      - organization:ListAccounts
-    Principle: 
-    Resources: '*'
+  - Name: ListAccountsInOrganization
+    Description: Allow Users to list accounts in an Organization
+    Statement:
+      - Effect: Allow
+        Action:
+          - organizations:ListAccounts
+        Resource: '*'
+        Condition:
+          Bool:
+            aws:MultiFactorAuthPresent: true 
 
 
 

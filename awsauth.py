@@ -24,6 +24,7 @@ Options:
 """
 
 import yaml
+import json
 #import time
 
 import boto3
@@ -199,7 +200,85 @@ def manage_group_members(session, args, log, deployed, auth_spec):
                             UserName=username)
 
 
+def create_policy(session, args, logger, p_spec):
+    # assume name and statement keys exist
+    if 'Path' in p_spec and p_spec['Path']:
+        path = "/%s/" % p_spec['Path']
+    else:
+        path = '/'
+    if 'Description' in p_spec and p_spec['Description']:
+        desc = p_spec['Description']
+    else:
+        desc = ''
+    policy_doc = json.dumps(
+            dict(Version='2012-10-17', Statement=p_spec['Statement'],),
+            indent=2,
+            separators=(',', ': '))
+    print policy_doc
+    iam_client = session.client('iam')
+    response = iam_client.create_policy(
+            PolicyName=p_spec['Name'],
+            Path=path,
+            PolicyDocument=policy_doc,
+            Description=desc)
 
+
+def create_policies(session, args, log, deployed, auth_spec):
+    for p_spec in auth_spec['policies']:
+        create_policy(session, args, logger, p_spec)
+
+#def create_policies(session, args, log, deployed, auth_spec):
+#    iam_client = session.client('iam')
+#    for p_spec in auth_spec['policies']:
+#        if 'Path' in p_spec and p_spec['Path']:
+#            path = "/%s/" % p_spec['Path']
+#        else:
+#            path = '/'
+#        policy = lookup(deployed['policies'], 'PolicyName', p_spec['Name'])
+#        if policy:
+#            if ensure_absent(p_spec):
+#                logger(log, "deleting user '%s'" % p_spec['Name'])
+#                if args['--exec']:
+#                    iam_client.delete_policy( PolicyName=p_spec['Name'])
+#                    logger(log, response['Policy']['Arn'])
+#            elif policy['Path'] != path:
+#                logger(log, "updating path on policy '%s'" % p_spec['Name'])
+#                if args['--exec']:
+#                    iam_client.update_policy(
+#                            PolicyName=p_spec['Name'], NewPath=path)
+#        elif not ensure_absent(p_spec):
+#            logger(log, "creating policy '%s'" % p_spec['Name'])
+#            if args['--exec']:
+#                response = iam_client.create_policy(
+#                        PolicyName=p_spec['Name'], Path=path)
+#                logger(log, response['Policy']['Arn'])
+    
+
+
+#    canned_policy_doc = """{
+#  "Version": "2012-10-17",
+#  "Statement": {
+#    "Effect": "%s",
+#    "Action": "%s",
+#    "Resource": "*",
+#    "Condition: "%s"
+#  }
+#}""" % (p_spec['Effect'], json.dumps(p_spec['Actions']), p_spec['Principle'])
+
+
+#def create_role(iam_client, rolename, path, desc, account_id):
+#    assume_role_policy_doc = """{
+#  "Version": "2012-10-17",
+#  "Statement": {
+#    "Effect": "Allow",
+#    "Principal": { "AWS": "arn:aws:iam::%s:root" },
+#    "Action": "sts:AssumeRole",
+#    "Condition": { "Bool": { "aws:MultiFactorAuthPresent": "true" } }
+#  }
+#}""" % account_id
+#    iam_client.create_role(
+#            Path=path, RoleName=rolename,
+#            AssumeRolePolicyDocument=assume_role_policy_doc, Description=desc)
 
 
 #
@@ -209,7 +288,7 @@ if __name__ == "__main__":
     args = docopt(__doc__, version='awsorgs 0.0.0')
     session = boto3.Session(profile_name=args['--profile'])
     log = []
-    #print args
+    print args
     deployed = dict(
       users = scan_deployed_users(session),
       groups = scan_deployed_groups(session),
@@ -228,9 +307,10 @@ if __name__ == "__main__":
 
 
     if args['create']:
-        create_users(session, args, log, deployed, auth_spec)
-        create_groups(session, args, log, deployed, auth_spec)
-        manage_group_members(session, args, log, deployed, auth_spec)
+        #create_users(session, args, log, deployed, auth_spec)
+        #create_groups(session, args, log, deployed, auth_spec)
+        #manage_group_members(session, args, log, deployed, auth_spec)
+        create_policies(session, args, log, deployed, auth_spec)
 
 
     if args['--verbose']:
