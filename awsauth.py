@@ -34,7 +34,11 @@ import docopt
 from docopt import docopt
 
 import awsorgs
-from awsorgs import (lookup, logger, ensure_absent)
+from awsorgs import (
+        scan_deployed_accounts,
+        lookup,
+        logger,
+        ensure_absent)
 import awsaccounts
 from awsaccounts import get_assume_role_credentials
 
@@ -202,7 +206,7 @@ def manage_group_members(session, args, log, deployed, auth_spec):
                             UserName=username)
 
 
-def create_policy(session, args, logger, p_spec):
+def create_policy(iam_client, args, logger, p_spec):
     # assume name and statement keys exist
     if 'Path' in p_spec and p_spec['Path']:
         path = "/%s/" % p_spec['Path']
@@ -213,74 +217,40 @@ def create_policy(session, args, logger, p_spec):
     else:
         desc = ''
     policy_doc = json.dumps(
-            dict(Version='2012-10-17', Statement=p_spec['Statement'],),
-            indent=2,
-            separators=(',', ': '))
-    print policy_doc
-    iam_client = session.client('iam')
+            dict(Version='2012-10-17', Statement=p_spec['Statement']),
+            indent=2, separators=(',', ': '))
+    #print policy_doc
     response = iam_client.create_policy(
             PolicyName=p_spec['Name'],
             Path=path,
             PolicyDocument=policy_doc,
             Description=desc)
 
-
-def create_policies(session, args, log, deployed, auth_spec):
-    for p_spec in auth_spec['policies']:
-        create_policy(session, args, logger, p_spec)
-
+## Used for testing only
 #def create_policies(session, args, log, deployed, auth_spec):
 #    iam_client = session.client('iam')
 #    for p_spec in auth_spec['policies']:
-#        if 'Path' in p_spec and p_spec['Path']:
-#            path = "/%s/" % p_spec['Path']
-#        else:
-#            path = '/'
-#        policy = lookup(deployed['policies'], 'PolicyName', p_spec['Name'])
-#        if policy:
-#            if ensure_absent(p_spec):
-#                logger(log, "deleting user '%s'" % p_spec['Name'])
-#                if args['--exec']:
-#                    iam_client.delete_policy( PolicyName=p_spec['Name'])
-#                    logger(log, response['Policy']['Arn'])
-#            elif policy['Path'] != path:
-#                logger(log, "updating path on policy '%s'" % p_spec['Name'])
-#                if args['--exec']:
-#                    iam_client.update_policy(
-#                            PolicyName=p_spec['Name'], NewPath=path)
-#        elif not ensure_absent(p_spec):
-#            logger(log, "creating policy '%s'" % p_spec['Name'])
-#            if args['--exec']:
-#                response = iam_client.create_policy(
-#                        PolicyName=p_spec['Name'], Path=path)
-#                logger(log, response['Policy']['Arn'])
-    
+#        create_policy(iam_client, args, logger, p_spec)
 
 
-#    canned_policy_doc = """{
-#  "Version": "2012-10-17",
-#  "Statement": {
-#    "Effect": "%s",
-#    "Action": "%s",
-#    "Resource": "*",
-#    "Condition: "%s"
-#  }
-#}""" % (p_spec['Effect'], json.dumps(p_spec['Actions']), p_spec['Principle'])
-
-
-#def create_role(iam_client, rolename, path, desc, account_id):
-#    assume_role_policy_doc = """{
-#  "Version": "2012-10-17",
-#  "Statement": {
-#    "Effect": "Allow",
-#    "Principal": { "AWS": "arn:aws:iam::%s:root" },
-#    "Action": "sts:AssumeRole",
-#    "Condition": { "Bool": { "aws:MultiFactorAuthPresent": "true" } }
-#  }
-#}""" % account_id
-#    iam_client.create_role(
-#            Path=path, RoleName=rolename,
-#            AssumeRolePolicyDocument=assume_role_policy_doc, Description=desc)
+def create_delegation_role(iam_client, args, logger, deployed, d_spec):
+    principal = "arn:aws:iam::%s:root" % lookup(
+            deployed['accounts'], 'Name' ,d_spec['TrustingAccount'], 'Id')
+    statement = dict(
+            Effect=Allow,
+            Principal=dict(AWS=principal),
+            Action='sts:AssumeRole')
+    if 'MFA' in d_spec and d_spec['MFA'] == 'role':
+        statement['Condition'] = {'Bool':{'aws:MultiFactorAuthPresent':'true'}}
+    policy_doc = json.dumps(
+            dict(Version='2012-10-17', Statement=statement),
+            indent=2, separators=(',', ': '))
+    #print policy_doc
+    iam_client.create_role(
+            #Description=desc,
+            #Path=path,
+            RoleName=d_spec['RoleName'],
+            AssumeRolePolicyDocument=policy_doc)
 
 
 #
@@ -292,9 +262,8 @@ if __name__ == "__main__":
     log = []
     print args
     deployed = dict(
-      users = scan_deployed_users(session),
-      groups = scan_deployed_groups(session),
-    )
+            users = scan_deployed_users(session),
+            groups = scan_deployed_groups(session))
     #print deployed['users']
     #print deployed['groups']
 
@@ -312,7 +281,19 @@ if __name__ == "__main__":
         #create_users(session, args, log, deployed, auth_spec)
         #create_groups(session, args, log, deployed, auth_spec)
         #manage_group_members(session, args, log, deployed, auth_spec)
-        create_policies(session, args, log, deployed, auth_spec)
+        ##create_policies(session, args, log, deployed, auth_spec)
+
+        credentials = get_assume_role_credentials(
+                session, auth_spec['master_account_id'],
+                auth_spec['auth_access_role'])
+        org_client = session.client(
+                'organizations',
+                aws_access_key_id = credentials['AccessKeyId'],
+                aws_secret_access_key = credentials['SecretAccessKey'],
+                aws_session_token = credentials['SessionToken'],
+                region_name=auth_spec['region_name'])
+        deployed['accounts'] = scan_deployed_accounts(org_client)
+        print deployed['accounts']
 
 
     if args['--verbose']:
