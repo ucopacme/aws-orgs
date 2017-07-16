@@ -23,6 +23,7 @@ Options:
 
 """
 
+import os
 import yaml
 import json
 #import time
@@ -258,9 +259,20 @@ def create_delegation_role(iam_client, args, logger, deployed, d_spec):
 #
 if __name__ == "__main__":
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    session = boto3.Session(profile_name=args['--profile'])
+    if os.environ.get('AWS_PROFILE'): 
+        aws_profile = os.environ.get('AWS_PROFILE')
+    else:
+        aws_profile = args['--profile']
+    session_args = dict(
+            profile_name=aws_profile,
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', ''),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
+            aws_session_token=os.environ.get('AWS_SESSION_TOKEN', ''))
+    session = boto3.Session(**session_args)
+    print session_args
+    print
+
     log = []
-    print args
     deployed = dict(
             users = scan_deployed_users(session),
             groups = scan_deployed_groups(session))
@@ -270,10 +282,6 @@ if __name__ == "__main__":
     if args['--spec-file']:
         auth_spec = validate_auth_spec_file(args['--spec-file'])
         validate_auth_account_id(session, auth_spec)
-        if args['--region']:
-            auth_spec['region_name'] = args['--region']
-        else:
-            auth_spec['region_name'] = auth_spec['default_region']
     #print auth_spec
 
 
@@ -286,12 +294,13 @@ if __name__ == "__main__":
         credentials = get_assume_role_credentials(
                 session, auth_spec['master_account_id'],
                 auth_spec['auth_access_role'])
+        print credentials
+        print
         org_client = session.client(
                 'organizations',
                 aws_access_key_id = credentials['AccessKeyId'],
                 aws_secret_access_key = credentials['SecretAccessKey'],
-                aws_session_token = credentials['SessionToken'],
-                region_name=auth_spec['region_name'])
+                aws_session_token = credentials['SessionToken'])
         deployed['accounts'] = scan_deployed_accounts(org_client)
         print deployed['accounts']
 
