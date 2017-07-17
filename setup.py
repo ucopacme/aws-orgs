@@ -19,7 +19,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='aws-orgs',
-    version='0.0.1.dev1',
+    version='0.0.2.dev1',
     description='Tools to manage AWS Organizations',
     long_description=long_description,
     url='https://github.com/ashleygould/aws-orgs',
@@ -30,13 +30,21 @@ setup(
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
+        'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
-        'Topic :: Software Development :: Build Tools',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2.7',
     ],
 
     keywords='aws organizations',
-    packages=find_packages(exclude=['scratch', 'notes', 'sample_input']),
+    packages=find_packages(exclude=['scratch', 'notes*', 'tools', 'sample_input']),
     install_requires=['boto3', 'docopt'],
+    entry_points={
+        'console_scripts': [
+            'awsorgs=awsorgs:main',
+            'awsaccounts=awsaccounts:main',
+            'awsauth=awsauth:main',
+        ],
+    },
+
 )

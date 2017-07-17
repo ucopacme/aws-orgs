@@ -4,11 +4,11 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs.py report [--profile <profile>] [--verbose] [--log-target <target>]...
-  awsorgs.py organization (--spec-file FILE) [--exec]
-                [--profile <profile>] [--verbose] [--log-target <target>]...
-  awsorgs.py (-h | --help)
-  awsorgs.py --version
+  awsorgs report [--profile <profile>] [--verbose] [--log-target <target>]...
+  awsorgs organization (--spec-file FILE) [--exec]
+             [--profile <profile>] [--verbose] [--log-target <target>]...
+  awsorgs (-h | --help)
+  awsorgs --version
 
 Modes of operation:
   report         Display organization status report only.
@@ -86,7 +86,7 @@ def validate_master_id(org_client, spec):
     return
 
 
-def validate_spec_file(spec_file):
+def validate_spec_file(args):
     """
     Validate spec-file is properly formed.
     """
@@ -372,7 +372,7 @@ def specify_policy_content(p_spec):
     return """{ "Version": "2012-10-17", "Statement": [ { "Effect": "%s", "Action": %s, "Resource": "*" } ] }""" % (p_spec['Effect'], json.dumps(p_spec['Actions']))
 
 
-def display_provisioned_policies(org_client, deployed_policies):
+def display_provisioned_policies(org_client, log, deployed_policies):
     """
     Print report of currently deployed Service Control Policies in
     AWS Organization.
@@ -623,11 +623,7 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
                     )
 
 
-
-#
-# Main
-#
-if __name__ == "__main__":
+def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
     session = boto3.Session(profile_name=args['--profile'])
     org_client = session.client('organizations')
@@ -641,7 +637,7 @@ if __name__ == "__main__":
 
 
     if args['--spec-file']:
-        org_spec = validate_spec_file(args['--spec-file'])
+        org_spec = validate_spec_file(args)
         validate_master_id(org_client, org_spec)
 
 
@@ -650,7 +646,7 @@ if __name__ == "__main__":
         overbar = '_' * len(header)
         logger(log, "\n%s\n%s" % (overbar, header))
         display_provisioned_ou(org_client, log, deployed['ou'], 'root')
-        display_provisioned_policies(org_client, deployed['policies'])
+        display_provisioned_policies(org_client, log, deployed['policies'])
 
 
     if args['organization']:
@@ -688,3 +684,6 @@ if __name__ == "__main__":
     if args['--verbose']:
         for line in log:
             print line
+
+if __name__ == "__main__":
+    main()

@@ -4,13 +4,13 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts.py report [--profile <profile>] [--verbose]
-  awsaccounts.py create (--spec-file FILE) [--exec]
-                     [--region <region>][--profile <profile>] [--verbose]
-  awsaccounts.py provision (--spec-file FILE) (--template-dir DIR) [--exec]
-                     [--region <region>][--profile <profile>] [--verbose]
-  awsaccounts.py (-h | --help)
-  awsaccounts.py --version
+  awsaccounts report [--profile <profile>] [--verbose]
+  awsaccounts create (--spec-file FILE) [--exec]
+                  [--region <region>][--profile <profile>] [--verbose]
+  awsaccounts provision (--spec-file FILE) (--template-dir DIR) [--exec]
+                  [--region <region>][--profile <profile>] [--verbose]
+  awsaccounts (-h | --help)
+  awsaccounts --version
 
 Modes of operation:
   report         Display organization status report only.
@@ -50,7 +50,7 @@ from awsorgs import (
 
 
 
-def validate_account_spec_file(spec_file):
+def validate_account_spec_file(args):
     """
     Validate spec-file is properly formed.
     """
@@ -294,7 +294,7 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
                       cf_client, args, log, a_spec['Name'], stack_kwargs)
 
 
-if __name__ == "__main__":
+def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
     session = boto3.Session(profile_name=args['--profile'])
     org_client = session.client('organizations')
@@ -303,7 +303,7 @@ if __name__ == "__main__":
     deployed_accounts = scan_deployed_accounts(org_client)
 
     if args['--spec-file']:
-        account_spec = validate_account_spec_file(args['--spec-file'])
+        account_spec = validate_account_spec_file(args)
         validate_master_id(org_client, account_spec)
         if args['--region']:
             account_spec['region_name'] = args['--region']
@@ -337,3 +337,6 @@ if __name__ == "__main__":
         for line in log:
             print line
 
+
+if __name__ == "__main__":
+    main()

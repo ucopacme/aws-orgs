@@ -4,12 +4,12 @@
 """Manage users, group, and roles for cross account authentication in AWS.
 
 Usage:
-  awsauth.py report [--profile <profile>] [--verbose]
-  awsauth.py create (--spec-file FILE) [--exec]
-                     [--region <region>][--profile <profile>] [--verbose]
-  awsauth.py provision (--spec-file FILE) (--template-dir DIR) [--exec]
-                     [--region <region>][--profile <profile>] [--verbose]
-  awsauth.py --version
+  awsauth report [--profile <profile>] [--verbose]
+  awsauth create (--spec-file FILE) [--exec]
+                  [--region <region>][--profile <profile>] [--verbose]
+  awsauth provision (--spec-file FILE) (--template-dir DIR) [--exec]
+                  [--region <region>][--profile <profile>] [--verbose]
+  awsauth --version
 
 Options:
   -h, --help                 Show this help message and exit.
@@ -254,10 +254,7 @@ def create_delegation_role(iam_client, args, logger, deployed, d_spec):
             AssumeRolePolicyDocument=policy_doc)
 
 
-#
-# Main
-#
-if __name__ == "__main__":
+def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
     if os.environ.get('AWS_PROFILE'): 
         aws_profile = os.environ.get('AWS_PROFILE')
@@ -309,3 +306,6 @@ if __name__ == "__main__":
         for line in log:
             print line
      
+
+if __name__ == "__main__":
+    main()
