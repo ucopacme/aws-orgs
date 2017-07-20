@@ -46,9 +46,12 @@ from awsorgs import (
         scan_deployed_accounts,
         lookup,
         logger,
-        ensure_absent)
-import awsaccounts
-from awsaccounts import get_assume_role_credentials
+        ensure_absent,
+        get_assume_role_credentials,
+)
+from awsorgs.orgs import (
+        scan_deployed_accounts,
+)
 
 
 
@@ -284,18 +287,6 @@ def get_session(aws_profile):
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', ''),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
             aws_session_token=os.environ.get('AWS_SESSION_TOKEN', ''))
-
-
-def get_client_for_assumed_role(service_name, session, account_id, role):
-    """
-    Return boto3 client object for an assumed role
-    """
-    credentials = get_assume_role_credentials(session, account_id, role)
-    return session.client(
-            service_name,
-            aws_access_key_id = credentials['AccessKeyId'],
-            aws_secret_access_key = credentials['SecretAccessKey'],
-            aws_session_token = credentials['SessionToken'])
 
 
 def main():

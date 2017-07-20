@@ -40,13 +40,18 @@ import docopt
 from docopt import docopt
 
 import awsorgs
+import awsorgs.orgs
 from awsorgs import (
   lookup,
   logger,
-  get_root_id,
   ensure_absent,
+  get_root_id,
+  validate_master_id,
   scan_deployed_accounts,
-  validate_master_id)
+)
+from awsorgs.orgs import (
+  scan_deployed_accounts,
+)
 
 
 
@@ -181,21 +186,6 @@ def display_provisioned_accounts(log, deployed_accounts):
         a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
         spacer = ' ' * (24 - len(a_name))
         logger(log, "%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
-
-
-# TODO: move this to common base module ( __init__.py?)
-def get_assume_role_credentials(session, account_id, role_name):
-    """
-    Get temporary sts assume_role credentials for account.
-    """
-    role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
-    role_session_name = account_id + '-' + role_name
-    sts_client = session.client('sts')
-    credentials = sts_client.assume_role(
-      RoleArn=role_arn,
-      RoleSessionName=role_session_name
-      )['Credentials']
-    return credentials
 
 
 def create_stack(cf_client, args, log, account_name, stack_kwargs):
