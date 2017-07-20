@@ -5,11 +5,18 @@
 
 Usage:
   awsauth report [--profile <profile>] [--verbose]
-  awsauth create (--spec-file FILE) [--exec]
+  awsauth users (--spec-file FILE) [--exec]
                   [--region <region>][--profile <profile>] [--verbose]
-  awsauth provision (--spec-file FILE) (--template-dir DIR) [--exec]
+  awsauth delegation (--spec-file FILE) [--exec]
                   [--region <region>][--profile <profile>] [--verbose]
   awsauth --version
+  awsauth --help
+
+Modes of operation:
+  report        Display provisioned resources
+  users         Provision users, groups and group membership
+  delegation    Provision policies and roles for cross account access
+
 
 Options:
   -h, --help                 Show this help message and exit.
@@ -254,6 +261,7 @@ def create_policy(iam_client, args, logger, p_spec):
 #            AssumeRolePolicyDocument=policy_doc)
 
 
+# TODO: import from aws_shelltools
 def get_profile(args):
     if os.environ.get('AWS_PROFILE'):
         aws_profile = os.environ.get('AWS_PROFILE')
@@ -264,6 +272,7 @@ def get_profile(args):
     return aws_profile
 
 
+# TODO: import from aws_shelltools
 def get_session(aws_profile):
     """
     Return boto3 session object for a given profile.  Try to 
@@ -292,9 +301,7 @@ def get_client_for_assumed_role(service_name, session, account_id, role):
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
     aws_profile = get_profile(args)
-    print aws_profile
     session = get_session(aws_profile)
-    print session
     log = []
     deployed = dict(
             users = scan_deployed_users(session),
@@ -308,20 +315,21 @@ def main():
     #print auth_spec
 
 
-    if args['create']:
-        #create_users(session, args, log, deployed, auth_spec)
-        #create_groups(session, args, log, deployed, auth_spec)
-        #manage_group_members(session, args, log, deployed, auth_spec)
-        ##create_policies(session, args, log, deployed, auth_spec)
+    if args['users']:
+        create_users(session, args, log, deployed, auth_spec)
+        create_groups(session, args, log, deployed, auth_spec)
+        manage_group_members(session, args, log, deployed, auth_spec)
 
+    if args['delegation']:
         org_client = get_client_for_assumed_role(
                 'organizations', session,
                 auth_spec['master_account_id'],
                 auth_spec['auth_access_role'])
 
         deployed['accounts'] = scan_deployed_accounts(org_client)
-        print deployed['accounts']
+        #print deployed['accounts']
 
+        ##create_policies(session, args, log, deployed, auth_spec)
 
     if args['--verbose']:
         for line in log:

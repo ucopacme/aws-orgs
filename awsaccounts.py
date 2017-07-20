@@ -183,6 +183,7 @@ def display_provisioned_accounts(log, deployed_accounts):
         logger(log, "%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
 
 
+# TODO: move this to common base module ( __init__.py?)
 def get_assume_role_credentials(session, account_id, role_name):
     """
     Get temporary sts assume_role credentials for account.
