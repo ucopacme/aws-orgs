@@ -30,3 +30,8 @@ how/where do we structure/deploy yaml data for teams specification?
     "Resource": "arn:aws:iam::ACCOUNT-ID-WITHOUT-HYPHENS:role/PATH/ROLENAME"
   }
 }
+
+
+
+One liners:
+aws iam list-policies| grep PolicyName| sort |less

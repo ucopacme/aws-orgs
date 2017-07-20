@@ -49,7 +49,7 @@ def validate_auth_spec_file(spec_file):
     """
     Validate spec-file is properly formed.
     """
-    spec = yaml.load(open(args['--spec-file']).read())
+    spec = yaml.load(open(spec_file).read())
     string_keys = ['auth_account_id', 'default_region']
     for key in string_keys:
         if not key in spec:
@@ -234,41 +234,67 @@ def create_policy(iam_client, args, logger, p_spec):
 #        create_policy(iam_client, args, logger, p_spec)
 
 
-def create_delegation_role(iam_client, args, logger, deployed, d_spec):
-    principal = "arn:aws:iam::%s:root" % lookup(
-            deployed['accounts'], 'Name' ,d_spec['TrustingAccount'], 'Id')
-    statement = dict(
-            Effect=Allow,
-            Principal=dict(AWS=principal),
-            Action='sts:AssumeRole')
-    if 'MFA' in d_spec and d_spec['MFA'] == 'role':
-        statement['Condition'] = {'Bool':{'aws:MultiFactorAuthPresent':'true'}}
-    policy_doc = json.dumps(
-            dict(Version='2012-10-17', Statement=statement),
-            indent=2, separators=(',', ': '))
-    #print policy_doc
-    iam_client.create_role(
-            #Description=desc,
-            #Path=path,
-            RoleName=d_spec['RoleName'],
-            AssumeRolePolicyDocument=policy_doc)
+#def create_delegation_role(iam_client, args, logger, deployed, d_spec):
+#    principal = "arn:aws:iam::%s:root" % lookup(
+#            deployed['accounts'], 'Name' ,d_spec['TrustingAccount'], 'Id')
+#    statement = dict(
+#            Effect=Allow,
+#            Principal=dict(AWS=principal),
+#            Action='sts:AssumeRole')
+#    if 'MFA' in d_spec and d_spec['MFA'] == 'role':
+#        statement['Condition'] = {'Bool':{'aws:MultiFactorAuthPresent':'true'}}
+#    policy_doc = json.dumps(
+#            dict(Version='2012-10-17', Statement=statement),
+#            indent=2, separators=(',', ': '))
+#    #print policy_doc
+#    iam_client.create_role(
+#            #Description=desc,
+#            #Path=path,
+#            RoleName=d_spec['RoleName'],
+#            AssumeRolePolicyDocument=policy_doc)
 
 
-def main():
-    args = docopt(__doc__, version='awsorgs 0.0.0')
-    if os.environ.get('AWS_PROFILE'): 
+def get_profile(args):
+    if os.environ.get('AWS_PROFILE'):
         aws_profile = os.environ.get('AWS_PROFILE')
-    else:
+    elif args['--profile']:
         aws_profile = args['--profile']
-    session_args = dict(
+    else:
+        aws_profile = 'default'
+    return aws_profile
+
+
+def get_session(aws_profile):
+    """
+    Return boto3 session object for a given profile.  Try to 
+    obtain client credentials from shell environment.  This should
+    capture MFA credential if present in user's shell env.
+    """
+    return boto3.Session(
             profile_name=aws_profile,
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', ''),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
             aws_session_token=os.environ.get('AWS_SESSION_TOKEN', ''))
-    session = boto3.Session(**session_args)
-    print session_args
-    print
 
+
+def get_client_for_assumed_role(service_name, session, account_id, role):
+    """
+    Return boto3 client object for an assumed role
+    """
+    credentials = get_assume_role_credentials(session, account_id, role)
+    return session.client(
+            service_name,
+            aws_access_key_id = credentials['AccessKeyId'],
+            aws_secret_access_key = credentials['SecretAccessKey'],
+            aws_session_token = credentials['SessionToken'])
+
+
+def main():
+    args = docopt(__doc__, version='awsorgs 0.0.0')
+    aws_profile = get_profile(args)
+    print aws_profile
+    session = get_session(aws_profile)
+    print session
     log = []
     deployed = dict(
             users = scan_deployed_users(session),
@@ -288,16 +314,11 @@ def main():
         #manage_group_members(session, args, log, deployed, auth_spec)
         ##create_policies(session, args, log, deployed, auth_spec)
 
-        credentials = get_assume_role_credentials(
-                session, auth_spec['master_account_id'],
+        org_client = get_client_for_assumed_role(
+                'organizations', session,
+                auth_spec['master_account_id'],
                 auth_spec['auth_access_role'])
-        print credentials
-        print
-        org_client = session.client(
-                'organizations',
-                aws_access_key_id = credentials['AccessKeyId'],
-                aws_secret_access_key = credentials['SecretAccessKey'],
-                aws_session_token = credentials['SessionToken'])
+
         deployed['accounts'] = scan_deployed_accounts(org_client)
         print deployed['accounts']
 

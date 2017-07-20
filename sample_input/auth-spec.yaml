@@ -11,9 +11,8 @@ groups:
     Path:
     Members:
       - ericthered
-      - mary
-      - jethro
-      - quincey
+      - ashley
+      - authtemp
     Policies:
       Mangaged:
         - AdministratorAccess
@@ -31,6 +30,7 @@ groups:
       - quincey
 
 users:
+  - Name: authtemp
   - Name: agould
     Ensure: present
     Path: sysadm
@@ -50,15 +50,26 @@ users:
 
 
 delegations:
-  - RoleName: AWSAuthListAccounts
+  #- RoleName: AWSAuthListAccounts
+  #  Ensure: present
+  #  TrustingAccount: Ashley Gould
+  #  TrustedAccount: Managment
+  #  TrustedGroup: admins
+  #  Policies:
+  #    - AWSAuthListAccountsInOrganization
+  - RoleName: AWSAuthFullAdmin
     Ensure: present
-    TrustingAccount: Ashley Gould
-    TrustedAccount: Management
+    TrustingAccount:
+      - test1
+      - test2
+      - test3
+    TrustedAccount: Managment
     TrustedGroup: admins
+    RequireMFA: True
     Policies:
-      - AWSAuthListAccountsInOrganization
+      - AdministratorAccess
 
-policies:
+custom_policies:
   - Name: AWSAuthListAccountsInOrganization
     Description: Allow Users to list accounts in an Organization
     Statement:
