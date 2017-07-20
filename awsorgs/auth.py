@@ -43,11 +43,12 @@ from docopt import docopt
 
 import awsorgs
 from awsorgs import (
-        scan_deployed_accounts,
         lookup,
         logger,
         ensure_absent,
-        get_assume_role_credentials,
+        get_profile,
+        get_session,
+        get_client_for_assumed_role,
 )
 from awsorgs.orgs import (
         scan_deployed_accounts,
@@ -264,34 +265,9 @@ def create_policy(iam_client, args, logger, p_spec):
 #            AssumeRolePolicyDocument=policy_doc)
 
 
-# TODO: import from aws_shelltools
-def get_profile(args):
-    if os.environ.get('AWS_PROFILE'):
-        aws_profile = os.environ.get('AWS_PROFILE')
-    elif args['--profile']:
-        aws_profile = args['--profile']
-    else:
-        aws_profile = 'default'
-    return aws_profile
-
-
-# TODO: import from aws_shelltools
-def get_session(aws_profile):
-    """
-    Return boto3 session object for a given profile.  Try to 
-    obtain client credentials from shell environment.  This should
-    capture MFA credential if present in user's shell env.
-    """
-    return boto3.Session(
-            profile_name=aws_profile,
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', ''),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
-            aws_session_token=os.environ.get('AWS_SESSION_TOKEN', ''))
-
-
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    aws_profile = get_profile(args)
+    aws_profile = get_profile(args['--profile'])
     session = get_session(aws_profile)
     log = []
     deployed = dict(
@@ -320,6 +296,7 @@ def main():
         deployed['accounts'] = scan_deployed_accounts(org_client)
         #print deployed['accounts']
 
+        ## # testing only:
         ##create_policies(session, args, log, deployed, auth_spec)
 
     if args['--verbose']:

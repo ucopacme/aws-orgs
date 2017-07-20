@@ -41,9 +41,9 @@ setup(
     install_requires=['boto3', 'docopt'],
     entry_points={
         'console_scripts': [
-            'awsorgs=awsorgs:main',
-            'awsaccounts=awsaccounts:main',
-            'awsauth=awsauth:main',
+            'awsorgs=awsorgs.orgs:main',
+            'awsaccounts=awsorgs.accounts:main',
+            'awsauth=awsorgs.auth:main',
         ],
     },
 

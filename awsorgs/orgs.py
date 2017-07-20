@@ -40,6 +40,16 @@ import time
 import boto3
 from docopt import docopt
 
+import awsorgs
+from awsorgs import (
+        lookup,
+        logger,
+        ensure_absent,
+        get_profile,
+        get_session,
+        get_root_id,
+        validate_master_id,
+)
 
 
 
@@ -558,7 +568,8 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
 
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    session = boto3.Session(profile_name=args['--profile'])
+    aws_profile = get_profile(args['--profile'])
+    session = get_session(aws_profile)
     org_client = session.client('organizations')
     root_id = get_root_id(org_client)
     log = []

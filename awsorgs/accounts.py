@@ -42,15 +42,17 @@ from docopt import docopt
 import awsorgs
 import awsorgs.orgs
 from awsorgs import (
-  lookup,
-  logger,
-  ensure_absent,
-  get_root_id,
-  validate_master_id,
-  scan_deployed_accounts,
+        lookup,
+        logger,
+        ensure_absent,
+        get_profile,
+        get_session,
+        get_root_id,
+        validate_master_id,
+        get_client_for_assumed_role,
 )
 from awsorgs.orgs import (
-  scan_deployed_accounts,
+        scan_deployed_accounts,
 )
 
 
@@ -261,15 +263,19 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
                       'cloudformation',
                       region_name=account_spec['region_name'])
                 else:
-                    # assume role into account
-                    credentials = get_assume_role_credentials(
-                      session, account_id, account_spec['org_access_role'])
-                    cf_client = session.client(
+                    cf_client = get_client_for_assumed_role(
                       'cloudformation',
-                      aws_access_key_id = credentials['AccessKeyId'],
-                      aws_secret_access_key = credentials['SecretAccessKey'],
-                      aws_session_token = credentials['SessionToken'],
-                      region_name=account_spec['region_name'])
+                      session, account_id,
+                      account_spec['org_access_role'],
+                      account_spec['region_name'])
+                    #credentials = get_assume_role_credentials(
+                    #  session, account_id, account_spec['org_access_role'])
+                    #cf_client = session.client(
+                    #  'cloudformation',
+                    #  aws_access_key_id = credentials['AccessKeyId'],
+                    #  aws_secret_access_key = credentials['SecretAccessKey'],
+                    #  aws_session_token = credentials['SessionToken'],
+                    #  region_name=account_spec['region_name'])
                 # build specified stacks
                 for stack in account_spec['cloudformation_stacks']:
                     template_file = '/'.join(
@@ -287,7 +293,8 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
 
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    session = boto3.Session(profile_name=args['--profile'])
+    aws_profile = get_profile(args['--profile'])
+    session = get_session(aws_profile)
     org_client = session.client('organizations')
     root_id = get_root_id(org_client)
     log = []

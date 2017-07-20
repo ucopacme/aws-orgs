@@ -3,6 +3,38 @@ import os
 import boto3
 
 
+# also in aws_shelltools
+def get_profile(profile_name=None):
+    """Determine and return the AWS profile.  Check in order:
+      the value of 'profile_name',
+      the user's shell environment,
+      the 'default'.
+    """
+    if profile_name:
+        aws_profile = profile_name
+    elif os.environ.get('AWS_PROFILE'):
+        aws_profile = os.environ.get('AWS_PROFILE')
+    else:
+        aws_profile = 'default'
+    return aws_profile
+
+
+# also in aws_shelltools
+def get_session(profile_name):
+    """
+    Return boto3 session object for a given profile.  Try to 
+    obtain client credentials from shell environment.  This should
+    capture MFA credential if present in user's shell env.
+    """
+    return boto3.Session(
+            profile_name=profile_name,
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', ''),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
+            aws_session_token=os.environ.get('AWS_SESSION_TOKEN', ''))
+
+
+
+
 def ensure_absent(spec):
     """
     test if an 'Ensure' key is set to absent in dictionary 'spec'
@@ -70,21 +102,22 @@ def validate_master_id(org_client, spec):
     return
 
 
-def get_assume_role_credentials(session, account_id, role_name):
-    """
-    Get temporary sts assume_role credentials for account.
-    """
-    role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
-    role_session_name = account_id + '-' + role_name
-    sts_client = session.client('sts')
-    credentials = sts_client.assume_role(
-      RoleArn=role_arn,
-      RoleSessionName=role_session_name
-      )['Credentials']
-    return credentials
+#def get_assume_role_credentials(session, account_id, role_name):
+#    """
+#    Get temporary sts assume_role credentials for account.
+#    """
+#    role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
+#    role_session_name = account_id + '-' + role_name
+#    sts_client = session.client('sts')
+#    credentials = sts_client.assume_role(
+#      RoleArn=role_arn,
+#      RoleSessionName=role_session_name
+#      )['Credentials']
+#    return credentials
 
 
-def get_client_for_assumed_role(service_name, session, account_id, role):
+def get_client_for_assumed_role(service_name, session, account_id,
+        role, region=None):
     """
     Get temporary sts assume_role credentials for account.
     Return boto3 client object with assumed role credentials attached.
@@ -101,3 +134,7 @@ def get_client_for_assumed_role(service_name, session, account_id, role):
             aws_access_key_id = credentials['AccessKeyId'],
             aws_secret_access_key = credentials['SecretAccessKey'],
             aws_session_token = credentials['SessionToken'])
+
+
+
+
