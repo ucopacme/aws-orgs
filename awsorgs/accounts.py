@@ -45,12 +45,8 @@ from awsorgs import (
         ensure_absent,
         get_root_id,
         validate_master_id,
-        get_client_for_assumed_role,
-)
-from awsorgs.orgs import (
-        scan_deployed_accounts,
-)
-
+        get_client_for_assumed_role)
+from awsorgs.orgs import scan_deployed_accounts
 
 
 def validate_account_spec_file(args):
@@ -94,21 +90,21 @@ def validate_account_spec_file(args):
             raise RuntimeError(msg)
         if not 'Name' in cf_spec:
             msg = ("%s: missing 'Name' key near: '%s'" %
-              (err_prefix, str(cf_spec)))
+                    (err_prefix, str(cf_spec)))
             raise RuntimeError(msg)
         if not ensure_absent(cf_spec):
             required_keys = ['Template', 'Tags']
             for key in required_keys:
                 if not key in cf_spec:
                     msg = ("%s: stack '%s': missing required param '%s'" %
-                      (err_prefix, cf_spec['Name'], key))
+                            (err_prefix, cf_spec['Name'], key))
                     raise RuntimeError(msg)
             list_keys = ['Capabilities', 'Parameters', 'Tags']
             for key in list_keys:
                 if key in cf_spec and cf_spec[key]:
                     if not isinstance(cf_spec[key], list):
                         msg = ("%s: stack '%s': value of '%s' must be a list." %
-                          (err_prefix, cf_spec['Name'], key))
+                                (err_prefix, cf_spec['Name'], key))
                         raise RuntimeError(msg)
     # all done!
     return spec
@@ -119,13 +115,11 @@ def scan_created_accounts(org_client):
     Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
     Returns a list of dictionary.
     """
-    status = org_client.list_create_account_status(
-      States=['SUCCEEDED'])
+    status = org_client.list_create_account_status(States=['SUCCEEDED'])
     created_accounts = status['CreateAccountStatuses']
     while 'NextToken' in status and status['NextToken']:
-        status = org_client.list_create_account_status(
-          States=['SUCCEEDED'],
-          NextToken=status['NextToken'])
+        status = org_client.list_create_account_status(States=['SUCCEEDED'],
+                NextToken=status['NextToken'])
         created_accounts += status['CreateAccountStatuses']
     return created_accounts
 
@@ -140,15 +134,14 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
             # check if it is still being provisioned
             created_accounts = scan_created_accounts(org_client)
             if lookup(created_accounts, 'AccountName', a_spec['Name']):
-                logger(log,
-                  "Notice: new account '%s' is not yet available." %
-                  a_spec['Name'])
+                logger(log, "New account '%s' is not yet available." %
+                        a_spec['Name'])
                 break
             # create a new account
             logger(log, "creating account '%s'" % (a_spec['Name']))
             if args['--exec']:
                 new_account = org_client.create_account(
-                  AccountName=a_spec['Name'], Email=a_spec['Email'])
+                        AccountName=a_spec['Name'], Email=a_spec['Email'])
                 create_id = new_account['CreateAccountStatus']['Id']
                 logger(log, "CreateAccountStatus Id: %s" % (create_id))
                 # validate creation status
@@ -156,8 +149,7 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                 maxtries = 5
                 while counter < maxtries:
                     creation = org_client.describe_create_account_status(
-                      CreateAccountRequestId=create_id
-                      )['CreateAccountStatus']
+                            CreateAccountRequestId=create_id)['CreateAccountStatus']
                     if creation['State'] == 'IN_PROGRESS':
                         time.sleep(5)
                     elif creation['State'] == 'SUCCEEDED':
@@ -165,7 +157,7 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                         break
                     elif creation['State'] == 'FAILED':
                         logger(log, "Account creation failed! %s" %
-                          creation['FailureReason'])
+                                creation['FailureReason'])
                         break
                     counter += 1
                 if counter == maxtries and creation['State'] == 'IN_PROGRESS':
@@ -193,8 +185,8 @@ def create_stack(cf_client, args, log, account_name, stack_kwargs):
     # test if stack already exists and set ChangeSetType accourdingly
     try:
         stack_status = cf_client.describe_stack_events(
-          StackName=stack_kwargs['StackName']
-          )['StackEvents'][0]['ResourceStatus']
+                StackName=stack_kwargs['StackName']
+                )['StackEvents'][0]['ResourceStatus']
         # edge case: a change set exists, but no stack yet
         if stack_status == 'REVIEW_IN_PROGRESS':
             stack_kwargs['ChangeSetType'] = 'CREATE'
@@ -214,26 +206,24 @@ def create_stack(cf_client, args, log, account_name, stack_kwargs):
     counter = 0
     while counter < 5:
         change_sets = cf_client.list_change_sets(
-          StackName=stack_kwargs['StackName'])['Summaries']
-        change_set = lookup(
-          change_sets, 'ChangeSetName', stack_kwargs['ChangeSetName'])
+                StackName=stack_kwargs['StackName'])['Summaries']
+        change_set = lookup(change_sets, 'ChangeSetName',
+                stack_kwargs['ChangeSetName'])
         if change_set['Status'] == 'CREATE_PENDING':
             time.sleep(5)
         elif change_set['Status'] == 'FAILED':
-            cf_client.delete_change_set(
-              StackName=stack_kwargs['StackName'],
-              ChangeSetName=stack_kwargs['ChangeSetName'])
+            cf_client.delete_change_set( StackName=stack_kwargs['StackName'],
+                    ChangeSetName=stack_kwargs['ChangeSetName'])
             break
         elif (change_set['Status'] == 'CREATE_COMPLETE'
-              and change_set['ExecutionStatus'] == 'AVAILABLE'):
-            logger(
-              log, "Notice: running %s on stack '%s' in account '%s'." %
-              (stack_kwargs['ChangeSetType'].lower(),
-               stack_kwargs['StackName'], account_name))
+                and change_set['ExecutionStatus'] == 'AVAILABLE'):
+            logger(log, "Running %s on stack '%s' in account '%s'." %
+                    (stack_kwargs['ChangeSetType'].lower(),
+                    stack_kwargs['StackName'], account_name))
             if args['--exec']:
                 cf_client.execute_change_set(
-                  StackName=stack_kwargs['StackName'],
-                  ChangeSetName=stack_kwargs['ChangeSetName'])
+                        StackName=stack_kwargs['StackName'],
+                        ChangeSetName=stack_kwargs['ChangeSetName'])
             break
         counter += 1
 
@@ -244,39 +234,35 @@ def provision_accounts(log, args, deployed_accounts, account_spec):
     """
     for a_spec in account_spec['accounts']:
         if 'Provision' in a_spec and a_spec['Provision']:
-            account_id = lookup(
-              deployed_accounts, 'Name', a_spec['Name'], 'Id')
+            account_id = lookup(deployed_accounts, 'Name', a_spec['Name'], 'Id')
             if not account_id:
                 # check if account is still being built
                 created_accounts = scan_created_accounts(org_client)
                 if lookup(created_accounts, 'AccountName', a_spec['Name']):
-                    logger(
-                      log, "Notice: New account '%s' is not yet available." %
-                      a_spec['Name'])
+                    logger(log,
+                            "New account '%s' is not yet available." %
+                            a_spec['Name'])
             else:
                 if account_id == account_spec['master_account_id']:
-                    cf_client = boto3.client(
-                      'cloudformation',
-                      region_name=account_spec['region_name'])
+                    cf_client = boto3.client( 'cloudformation',
+                            region_name=account_spec['region_name'])
                 else:
-                    cf_client = get_client_for_assumed_role(
-                      'cloudformation',
-                      account_id,
-                      account_spec['org_access_role'],
-                      account_spec['region_name'])
+                    cf_client = get_client_for_assumed_role('cloudformation',
+                            account_id, account_spec['org_access_role'],
+                            account_spec['region_name'])
                 # build specified stacks
                 for stack in account_spec['cloudformation_stacks']:
                     template_file = '/'.join(
-                      [args['--template-dir'], stack['Template']])
+                            [args['--template-dir'], stack['Template']])
                     template_body = open(template_file).read()
                     stack_kwargs = dict(
-                      StackName=stack['Name'],
-                      TemplateBody=template_body,
-                      Capabilities=stack['Capabilities'],
-                      Parameters=stack['Parameters'],
-                      Tags=stack['Tags'],)
-                    create_stack(
-                      cf_client, args, log, a_spec['Name'], stack_kwargs)
+                            StackName=stack['Name'],
+                            TemplateBody=template_body,
+                            Capabilities=stack['Capabilities'],
+                            Parameters=stack['Parameters'],
+                            Tags=stack['Tags'],)
+                    create_stack(cf_client, args, log, a_spec['Name'],
+                            stack_kwargs)
 
 
 def main():
@@ -305,12 +291,11 @@ def main():
         create_accounts(org_client, args, log, deployed_accounts, account_spec)
         # check for unmanaged accounts
         unmanaged= [a
-          for a in map(lambda a: a['Name'], deployed_accounts)
-          if a not in map(lambda a: a['Name'], account_spec['accounts'])]
+                for a in map(lambda a: a['Name'], deployed_accounts)
+                if a not in map(lambda a: a['Name'], account_spec['accounts'])]
         if unmanaged:
-            logger(
-              log, "Warning: unmanaged accounts in Org: %s" %
-              (', '.join(unmanaged)))
+            logger( log, "Warning: unmanaged accounts in Org: %s" %
+                    (', '.join(unmanaged)))
 
     if args['provision']:
         logger(log, "Running AWS account provisioning.")

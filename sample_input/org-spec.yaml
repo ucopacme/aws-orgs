@@ -13,7 +13,6 @@ organizational_unit_spec:
         Accounts:
           - Ashley Gould
           - blee-prod
-          - gorp-prod
           - gorp-dev
       - Name: auth
         Accounts:
@@ -25,20 +24,22 @@ organizational_unit_spec:
           - gorp-poc
           - blee-poc
           - ghost
+          - gorp-prod
         Policies: 
           - dev_service_policy
           - poc_service_policy
       - Name: nonprod
         #Ensure: absent
         Accounts:
-        #  - blee-dev
+          - blee-dev
         Policies: 
-        #  - dev_service_policy
+          - dev_service_policy
         Child_OU:
           - Name: formal
             Accounts:
               - test1
               - test2
+              - test3
           - Name: nice
           - Name: humble
 

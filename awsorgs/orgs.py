@@ -45,14 +45,7 @@ from awsorgs import (
         logger,
         ensure_absent,
         get_root_id,
-        validate_master_id,
-)
-
-
-
-#
-# General functions
-#
+        validate_master_id)
 
 
 def enable_policy_type_in_root(org_client, root_id):
@@ -61,12 +54,12 @@ def enable_policy_type_in_root(org_client, root_id):
     organization root.
     """
     p_type = org_client.describe_organization(
-      )['Organization']['AvailablePolicyTypes'][0]
+            )['Organization']['AvailablePolicyTypes'][0]
     if (p_type['Type'] == 'SERVICE_CONTROL_POLICY'
-      and p_type['Status'] != 'ENABLED'):
+            and p_type['Status'] != 'ENABLED'):
         org_client.enable_policy_type(
-          RootId=root_id,
-          PolicyType='SERVICE_CONTROL_POLICY')
+                RootId=root_id,
+                PolicyType='SERVICE_CONTROL_POLICY')
 
 
 def validate_spec_file(args):
@@ -109,11 +102,11 @@ def validate_spec_file(args):
             for key in required_keys:
                 if not key in p_spec:
                     msg = ("%s '%s': missing required param '%s'" %
-                      (err_prefix, p_spec['Name'], key))
+                            (err_prefix, p_spec['Name'], key))
                     raise RuntimeError(msg)
             if not isinstance(p_spec['Actions'], list):
                 msg = ("%s '%s': 'Actions' must be type list." %
-                  (err_prefix, p_spec['Name']))
+                        (err_prefix, p_spec['Name']))
                 raise RuntimeError(msg)
 
     # recursive function to validate ou_spec are properly formed.
@@ -136,10 +129,8 @@ def validate_spec_file(args):
             for key in optional_keys:
                 if key in ou_spec and ou_spec[key]:
                     if ensure_absent(ou_spec):
-                        msg = (
-                            "%s OU '%s' is 'absent, but '%s' is populated." %
-                            (err_prefix, ou_spec['Name'], key)
-                        )
+                        msg = ("%s OU '%s' is 'absent, but '%s' is populated." %
+                                (err_prefix, ou_spec['Name'], key))
                         raise RuntimeError(msg)
                     if not isinstance(ou_spec[key], list):
                         msg = ("%s OU '%s': value of '%s' must be a list." %
@@ -151,11 +142,9 @@ def validate_spec_file(args):
                 if key == 'Accounts' and key in ou_spec and ou_spec['Accounts']:
                     for account in ou_spec['Accounts']:
                         if account in account_map:
-                            msg = (
-                                "%s account %s set in multiple OU: %s, %s" % (
-                                err_prefix, account,
-                                account_map[account], ou_spec['Name']
-                            ))
+                            msg = ("%s account %s set in multiple OU: %s, %s" %
+                                    ( err_prefix, account,
+                                    account_map[account], ou_spec['Name']))
                             raise  RuntimeError(msg)
                         else:
                             account_map[account] = ou_spec['Name']
@@ -172,16 +161,10 @@ def validate_spec_file(args):
     #   side effect: populate account_map, ou_list.
     validate_ou_spec(org_spec['organizational_unit_spec'])
     org_spec['managed'] = dict(
-        accounts = account_map.keys(),
-        ou       = ou_list,
-        policies = policy_list
-    )
+            accounts = account_map.keys(),
+            ou       = ou_list,
+            policies = policy_list)
     return org_spec
-
-
-#
-# Account functions
-#
 
 
 def scan_deployed_accounts(org_client):
@@ -249,19 +232,18 @@ def manage_account_moves(org_client, args, log, deployed_accounts,
                 source_parent_id = get_parent_id(org_client, account_id)
                 if dest_parent_id != source_parent_id:
                     logger(log, "moving account '%s' to OU '%s'" %
-                        (account, ou_spec['Name'])
-                    )
+                            (account, ou_spec['Name']))
                     if args['--exec']:
                         org_client.move_account(
-                            AccountId=account_id,
-                            SourceParentId=source_parent_id,
-                            DestinationParentId=dest_parent_id
-                        )
+                                AccountId=account_id,
+                                SourceParentId=source_parent_id,
+                                DestinationParentId=dest_parent_id)
 
 
-def place_unmanged_accounts(org_client, args, log, deployed, account_list, dest_parent):
+def place_unmanged_accounts(org_client, args, log, deployed, account_list,
+        dest_parent):
     """
-    in progress
+    Move any unmanaged accounts into the default OU.
     """
     for account in account_list:
         account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
@@ -269,20 +251,13 @@ def place_unmanged_accounts(org_client, args, log, deployed, account_list, dest_
         source_parent_id = get_parent_id(org_client, account_id)
         if dest_parent_id and dest_parent_id != source_parent_id:
             logger(log, "moving unmanged account '%s' to default OU '%s'" %
-                (account, dest_parent)
-            )
+                    (account, dest_parent))
             if args['--exec']:
                 org_client.move_account(
-                    AccountId=account_id,
-                    SourceParentId=source_parent_id,
-                    DestinationParentId=dest_parent_id
-                )
+                        AccountId=account_id,
+                        SourceParentId=source_parent_id,
+                        DestinationParentId=dest_parent_id)
 
-
-
-#
-# Policy functions
-#
 
 def get_policy_content(org_client, policy_id):
     """
@@ -298,9 +273,7 @@ def list_policies_in_ou (org_client, ou_id):
     of policies attached to OrganizationalUnit referenced by 'ou_id'.
     """
     policies_in_ou = org_client.list_policies_for_target(
-        TargetId=ou_id,
-        Filter='SERVICE_CONTROL_POLICY',
-    )['Policies']
+            TargetId=ou_id, Filter='SERVICE_CONTROL_POLICY',)['Policies']
     return sorted(map(lambda ou: ou['Name'], policies_in_ou))
 
 
@@ -345,43 +318,32 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
                     logger(log, "deleting policy '%s'" % (policy_name))
                     # dont delete attached policy
                     if org_client.list_targets_for_policy(
-                        PolicyId=policy_id
-                    )['Targets']:
-                        logger( log,
-                            "Cannot delete policy '%s'. Still attached to OU."
-                            % (policy_name)
-                        )
+                            PolicyId=policy_id)['Targets']:
+                        logger(log, "Cannot delete policy '%s'. Still attached to OU." %
+                                (policy_name))
                     elif args['--exec']:
                         org_client.delete_policy(PolicyId=policy_id)
                 # check for policy updates
                 elif (p_spec['Description'] !=
-                      lookup(deployed_policies,'Id',policy_id,'Description')
-                      or specify_policy_content(p_spec) !=
-                      get_policy_content(org_client, policy_id)):
+                        lookup(deployed_policies,'Id',policy_id,'Description')
+                        or specify_policy_content(p_spec) !=
+                        get_policy_content(org_client, policy_id)):
                     logger(log, "updating policy '%s'" % (policy_name))
                     if args['--exec']:
                         org_client.update_policy(
-                            PolicyId=policy_id,
-                            Content=specify_policy_content(p_spec),
-                            Description=p_spec['Description'],
-                        )
+                                PolicyId=policy_id,
+                                Content=specify_policy_content(p_spec),
+                                Description=p_spec['Description'],)
             # create new policy
             elif not ensure_absent(p_spec):
                 logger(log, "creating policy '%s'" % (policy_name))
                 if args['--exec']:
-                    org_client.create_policy (
-                        Content=specify_policy_content(p_spec),
-                        Description=p_spec['Description'],
-                        Name=p_spec['Name'],
-                        Type='SERVICE_CONTROL_POLICY'
-                    )
+                    org_client.create_policy(
+                            Content=specify_policy_content(p_spec),
+                            Description=p_spec['Description'],
+                            Name=p_spec['Name'],
+                            Type='SERVICE_CONTROL_POLICY')
 
-
-
-
-#
-# OrganizaionalUnit functions
-#
 
 def scan_deployed_ou(org_client, root_id):
     """
@@ -399,19 +361,16 @@ def build_deployed_ou_table(org_client, parent_name, parent_id, deployed_ou):
     lookup table (list of dictionaries).
     """
     child_ou = org_client.list_organizational_units_for_parent(
-        ParentId=parent_id
-    )['OrganizationalUnits']
+            ParentId=parent_id)['OrganizationalUnits']
     accounts = org_client.list_accounts_for_parent(
-        ParentId=parent_id
-    )['Accounts']
+            ParentId=parent_id)['Accounts']
 
     if not deployed_ou:
         deployed_ou.append(dict(
-            Name = parent_name,
-            Id = parent_id,
-            Child_OU = [ou['Name'] for ou in child_ou if 'Name' in ou],
-            Accounts = [acc['Name'] for acc in accounts if 'Name' in acc]
-        ))
+                Name = parent_name,
+                Id = parent_id,
+                Child_OU = [ou['Name'] for ou in child_ou if 'Name' in ou],
+                Accounts = [acc['Name'] for acc in accounts if 'Name' in acc]))
     else:
         for ou in deployed_ou:
             if ou['Name'] == parent_name:
@@ -472,17 +431,15 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
     # attach policies
     for policy_name in policies_to_attach:
         if not lookup(deployed_policies,'Name',policy_name):
-            raise RuntimeError(
-                "spec-file: ou_spec: policy '%s' not defined" % policy_name
-            )
+            raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
+                    policy_name)
         if not ensure_absent(ou_spec):
             logger(log, "attaching policy '%s' to OU '%s'" %
                     (policy_name, ou_spec['Name']))
             if args['--exec']:
                 org_client.attach_policy(
-                    PolicyId=lookup(deployed_policies,'Name',policy_name,'Id'),
-                    TargetId=ou_id
-                )
+                        PolicyId=lookup(deployed_policies,'Name',policy_name,'Id'),
+                        TargetId=ou_id)
     # detach policies
     for policy_name in policies_to_detach:
         logger(log, "detaching policy '%s' from OU '%s'" %
@@ -506,34 +463,28 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
             # check for child_ou. recurse before other tasks.
             if 'Child_OU' in ou_spec:
                 manage_ou(org_client, args, log, deployed,
-                    ou_spec['Child_OU'], ou_spec['Name']
-                )
+                        ou_spec['Child_OU'], ou_spec['Name'])
 
             # check if ou 'absent'
             if ensure_absent(ou_spec):
                 # error if ou contains anything
                 for key in ['Accounts', 'Policies', 'Child_OU']:
                     if key in ou and ou[key]:
-                        msg = (
-                            "Can not delete OU '%s'. deployed '%s' exists." %
-                            (ou_spec['Name'], key)
-                        )
+                        msg = ("Can not delete OU '%s'. deployed '%s' exists." %
+                                (ou_spec['Name'], key))
                         raise RuntimeError(msg)
 
                 # delete ou
                 logger(log, "deleting OU %s" % ou_spec['Name'])
                 if args['--exec']:
                     org_client.delete_organizational_unit(
-                        OrganizationalUnitId=ou['Id']
-                    )
+                            OrganizationalUnitId=ou['Id'])
 
             else:
-                manage_policy_attachments(
-                    org_client, args, log, deployed['policies'], ou_spec, ou['Id']
-                )
-                manage_account_moves(
-                    org_client, args, log, deployed['accounts'], ou_spec, ou['Id']
-                )
+                manage_policy_attachments( org_client, args, log,
+                        deployed['policies'], ou_spec, ou['Id'])
+                manage_account_moves( org_client, args, log,
+                        deployed['accounts'], ou_spec, ou['Id'])
 
         elif not ensure_absent(ou_spec):
             # ou does not exist
@@ -541,26 +492,17 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
                     (ou_spec['Name'], parent_name))
             if args['--exec']:
                 new_ou = org_client.create_organizational_unit(
-                    ParentId=lookup(deployed['ou'], 'Name', parent_name, 'Id'),
-                    Name=ou_spec['Name']
-                )['OrganizationalUnit']
-                manage_policy_attachments(
-                    org_client, args, log, deployed['policies'],
-                    ou_spec, new_ou['Id']
-                )
-                manage_account_moves(
-                    org_client, args, log, deployed['accounts'],
-                    ou_spec, new_ou['Id']
-                )
-                if ('Child_OU' in ou_spec
-                    and isinstance(new_ou, dict)
-                    and 'Id' in new_ou
-                ):
+                        ParentId=lookup(deployed['ou'],'Name',parent_name,'Id'),
+                        Name=ou_spec['Name'])['OrganizationalUnit']
+                manage_policy_attachments(org_client, args, log,
+                        deployed['policies'], ou_spec, new_ou['Id'])
+                manage_account_moves(org_client, args, log,
+                        deployed['accounts'], ou_spec, new_ou['Id'])
+                if ('Child_OU' in ou_spec and isinstance(new_ou, dict)
+                        and 'Id' in new_ou):
                     # recurse
-                    manage_ou(
-                        org_client, args, log, deployed,
-                        ou_spec['Child_OU'], new_ou['Name']
-                    )
+                    manage_ou( org_client, args, log, deployed,
+                            ou_spec['Child_OU'], new_ou['Name'])
 
 
 def main():
@@ -569,16 +511,13 @@ def main():
     root_id = get_root_id(org_client)
     log = []
     deployed = dict(
-        policies = scan_deployed_policies(org_client),
-        accounts = scan_deployed_accounts(org_client),
-        ou       = scan_deployed_ou(org_client, root_id)
-    )
-
+            policies = scan_deployed_policies(org_client),
+            accounts = scan_deployed_accounts(org_client),
+            ou = scan_deployed_ou(org_client, root_id))
 
     if args['--spec-file']:
         org_spec = validate_spec_file(args)
         validate_master_id(org_client, org_spec)
-
 
     if args['report']:
         args['--verbose'] = True
@@ -587,7 +526,6 @@ def main():
         logger(log, "\n%s\n%s" % (overbar, header))
         display_provisioned_ou(org_client, log, deployed['ou'], 'root')
         display_provisioned_policies(org_client, log, deployed['policies'])
-
 
     if args['organization']:
         logger(log, "Running AWS organization management.")
@@ -605,20 +543,16 @@ def main():
 
         # check for unmanaged resources
         for key in org_spec['managed'].keys():
-            unmanaged= [ a for a in map(lambda a: a['Name'], deployed[key])
-                        if a not in org_spec['managed'][key] ]
+            unmanaged= [a for a in map(lambda a: a['Name'], deployed[key])
+                    if a not in org_spec['managed'][key] ]
             # warn about unmanaged org resources
             if unmanaged:
-                logger(
-                    log, "Warning: unmanaged %s in Org: %s" %
-                    (key,', '.join(unmanaged))
-                )
+                logger(log, "Warning: unmanaged %s in Org: %s" %
+                        (key,', '.join(unmanaged)))
                 if key ==  'accounts':
                     # append unmanaged accounts to default_ou
-                    place_unmanged_accounts(
-                        org_client, args, log, deployed, unmanaged,
-                        org_spec['default_ou']
-                    )
+                    place_unmanged_accounts(org_client, args, log, deployed,
+                            unmanaged, org_spec['default_ou'])
 
 
     if args['--verbose']:

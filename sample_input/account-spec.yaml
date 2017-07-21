@@ -28,6 +28,7 @@ accounts:
     Email: management@ucop.edu
   - Name: Security
     Email: ashleyg@ucop.edu
+    Provision: True
   - Name: blee-poc
     Email: blee-poc@blee.red
   - Name: blee-dev

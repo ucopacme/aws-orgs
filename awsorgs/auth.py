@@ -41,12 +41,8 @@ from awsorgs import (
         lookup,
         logger,
         ensure_absent,
-        get_client_for_assumed_role,
-)
-from awsorgs.orgs import (
-        scan_deployed_accounts,
-)
-
+        get_client_for_assumed_role)
+from awsorgs.orgs import scan_deployed_accounts
 
 
 def validate_auth_spec_file(spec_file):
@@ -70,7 +66,6 @@ def validate_auth_spec_file(spec_file):
         if not isinstance(spec[key], list):
             msg = "Invalid spec-file: '%s' must be type 'list'." % key
             raise RuntimeError(msg)
-
     return spec
 
 
@@ -86,18 +81,6 @@ def validate_auth_account_id(spec):
               Is your AWS_PROFILE correct?""" % current_account_id)
         raise RuntimeError(errmsg)
     return
-
-
-def scan_deployed_users():
-    iam_client = boto3.client('iam')
-    deployed_users = iam_client.list_users()['Users']
-    return deployed_users
-
-
-def scan_deployed_groups():
-    iam_client = boto3.client('iam')
-    deployed_groups = iam_client.list_groups()['Groups']
-    return deployed_groups
 
 
 def create_users(args, log, deployed, auth_spec):
@@ -190,10 +173,6 @@ def manage_group_members(args, log, deployed, auth_spec):
                     if username not in current_members]
             remove_users = [username for username in current_members
                     if username not in spec_members]
-            #print current_members
-            #print spec_members
-            #print add_users
-            #print remove_users
             for username in add_users:
                 if lookup(deployed['users'], 'UserName', username):
                     logger(log, "Adding user '%s' to group '%s'." %
@@ -212,6 +191,9 @@ def manage_group_members(args, log, deployed, auth_spec):
 
 
 def create_policy(iam_client, args, logger, p_spec):
+    """
+    under construction
+    """
     # assume name and statement keys exist
     if 'Path' in p_spec and p_spec['Path']:
         path = "/%s/" % p_spec['Path']
@@ -261,9 +243,10 @@ def create_policy(iam_client, args, logger, p_spec):
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
     log = []
+    iam_client = boto3.client('iam')
     deployed = dict(
-            users = scan_deployed_users(),
-            groups = scan_deployed_groups())
+            users = iam_client.list_users()['Users'],
+            groups = iam_client.list_groups()['Groups'])
     #print deployed['users']
     #print deployed['groups']
     #print
@@ -280,8 +263,7 @@ def main():
         manage_group_members(args, log, deployed, auth_spec)
 
     if args['delegation']:
-        org_client = get_client_for_assumed_role(
-                'organizations',
+        org_client = get_client_for_assumed_role('organizations',
                 auth_spec['master_account_id'],
                 auth_spec['auth_access_role'])
         deployed['accounts'] = scan_deployed_accounts(org_client)

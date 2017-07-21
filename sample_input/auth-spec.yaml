@@ -10,7 +10,6 @@ groups:
     Ensure: present
     Path:
     Members:
-      - ericthered
       - ashley
       - authtemp
     Policies:
@@ -31,6 +30,7 @@ groups:
 
 users:
   - Name: authtemp
+  - Name: egburt
   - Name: agould
     Ensure: present
     Path: sysadm
