@@ -4,11 +4,10 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts report [--profile <profile>] [--verbose]
-  awsaccounts create (--spec-file FILE) [--exec]
-                  [--region <region>][--profile <profile>] [--verbose]
+  awsaccounts report
+  awsaccounts create (--spec-file FILE) [--exec] [--region <region>] [--verbose]
   awsaccounts provision (--spec-file FILE) (--template-dir DIR) [--exec]
-                  [--region <region>][--profile <profile>] [--verbose]
+                  [--region <region>] [--verbose]
   awsaccounts (-h | --help)
   awsaccounts --version
 
@@ -20,7 +19,6 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
-  -p, --profile <profile>    AWS credentials profile to use [default: default].
   -r, --region <region>      AWS region to use when creating resources.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   -d DIR, --template-dir DIR  Directory where to search for cloudformation templates.
@@ -45,8 +43,6 @@ from awsorgs import (
         lookup,
         logger,
         ensure_absent,
-        get_profile,
-        get_session,
         get_root_id,
         validate_master_id,
         get_client_for_assumed_role,
@@ -242,7 +238,7 @@ def create_stack(cf_client, args, log, account_name, stack_kwargs):
         counter += 1
 
 
-def provision_accounts(log, session, args, deployed_accounts, account_spec):
+def provision_accounts(log, args, deployed_accounts, account_spec):
     """
     Generate default resources in new accounts using cloudformation.
     """
@@ -259,23 +255,15 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
                       a_spec['Name'])
             else:
                 if account_id == account_spec['master_account_id']:
-                    cf_client = session.client(
+                    cf_client = boto3.client(
                       'cloudformation',
                       region_name=account_spec['region_name'])
                 else:
                     cf_client = get_client_for_assumed_role(
                       'cloudformation',
-                      session, account_id,
+                      account_id,
                       account_spec['org_access_role'],
                       account_spec['region_name'])
-                    #credentials = get_assume_role_credentials(
-                    #  session, account_id, account_spec['org_access_role'])
-                    #cf_client = session.client(
-                    #  'cloudformation',
-                    #  aws_access_key_id = credentials['AccessKeyId'],
-                    #  aws_secret_access_key = credentials['SecretAccessKey'],
-                    #  aws_session_token = credentials['SessionToken'],
-                    #  region_name=account_spec['region_name'])
                 # build specified stacks
                 for stack in account_spec['cloudformation_stacks']:
                     template_file = '/'.join(
@@ -293,9 +281,7 @@ def provision_accounts(log, session, args, deployed_accounts, account_spec):
 
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    aws_profile = get_profile(args['--profile'])
-    session = get_session(aws_profile)
-    org_client = session.client('organizations')
+    org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
     log = []
     deployed_accounts = scan_deployed_accounts(org_client)
@@ -309,6 +295,7 @@ def main():
             account_spec['region_name'] = account_spec['default_region']
 
     if args['report']:
+        args['--verbose'] = True
         display_provisioned_accounts(log, deployed_accounts)
 
     if args['create']:
@@ -329,7 +316,7 @@ def main():
         logger(log, "Running AWS account provisioning.")
         if not args['--exec']:
             logger(log, "This is a dry run!")
-        provision_accounts(log, session, args, deployed_accounts, account_spec)
+        provision_accounts(log, args, deployed_accounts, account_spec)
 
     if args['--verbose']:
         for line in log:

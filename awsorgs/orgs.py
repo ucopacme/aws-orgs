@@ -4,9 +4,9 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs report [--profile <profile>] [--verbose] [--log-target <target>]...
+  awsorgs report [--log-target <target>]...
   awsorgs organization (--spec-file FILE) [--exec]
-             [--profile <profile>] [--verbose] [--log-target <target>]...
+             [--verbose] [--log-target <target>]...
   awsorgs (-h | --help)
   awsorgs --version
 
@@ -17,7 +17,6 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
-  -p, --profile <profile>    AWS credentials profile to use [default: default].
   -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
   --exec                     Execute proposed changes to AWS Org.
   -l, --log-target <target>  Where to send log output.  This option can be
@@ -45,8 +44,6 @@ from awsorgs import (
         lookup,
         logger,
         ensure_absent,
-        get_profile,
-        get_session,
         get_root_id,
         validate_master_id,
 )
@@ -568,9 +565,7 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
 
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    aws_profile = get_profile(args['--profile'])
-    session = get_session(aws_profile)
-    org_client = session.client('organizations')
+    org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
     log = []
     deployed = dict(
@@ -586,6 +581,7 @@ def main():
 
 
     if args['report']:
+        args['--verbose'] = True
         header = 'Provisioned Organizational Units in Org:'
         overbar = '_' * len(header)
         logger(log, "\n%s\n%s" % (overbar, header))

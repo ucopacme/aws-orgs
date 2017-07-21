@@ -4,11 +4,9 @@
 """Manage users, group, and roles for cross account authentication in AWS.
 
 Usage:
-  awsauth report [--profile <profile>] [--verbose]
-  awsauth users (--spec-file FILE) [--exec]
-                  [--region <region>][--profile <profile>] [--verbose]
-  awsauth delegation (--spec-file FILE) [--exec]
-                  [--region <region>][--profile <profile>] [--verbose]
+  awsauth report
+  awsauth users (--spec-file FILE) [--exec] [--region <region>] [--verbose]
+  awsauth delegation (--spec-file FILE) [--exec] [--region <region>] [--verbose]
   awsauth --version
   awsauth --help
 
@@ -21,10 +19,7 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
-  -p, --profile <profile>    AWS credentials profile to use [default: default].
-  -r, --region <region>      AWS region to use when creating resources.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
-  -d DIR, --template-dir DIR  Directory where to search for cloudformation templates.
   --exec                     Execute proposed changes to AWS accounts.
   -v, --verbose              Log to STDOUT as well as log-target.
 
@@ -46,8 +41,6 @@ from awsorgs import (
         lookup,
         logger,
         ensure_absent,
-        get_profile,
-        get_session,
         get_client_for_assumed_role,
 )
 from awsorgs.orgs import (
@@ -81,37 +74,37 @@ def validate_auth_spec_file(spec_file):
     return spec
 
 
-def validate_auth_account_id(session, spec):
+def validate_auth_account_id(spec):
     """
     Don't mangle the wrong account by accident
     """
-    sts_client = session.client('sts')
+    sts_client = boto3.client('sts')
     current_account_id = sts_client.get_caller_identity()['Account']
     if current_account_id != spec['auth_account_id']:
         errmsg = ("""The Account Id '%s' does not
-          match the 'auth_account_id' set in the spec-file.  
-          Is your '--profile' arg correct?""" % current_account_id)
+              match the 'auth_account_id' set in the spec-file.  
+              Is your AWS_PROFILE correct?""" % current_account_id)
         raise RuntimeError(errmsg)
     return
 
 
-def scan_deployed_users(session):
-    iam_client = session.client('iam')
+def scan_deployed_users():
+    iam_client = boto3.client('iam')
     deployed_users = iam_client.list_users()['Users']
     return deployed_users
 
 
-def scan_deployed_groups(session):
-    iam_client = session.client('iam')
+def scan_deployed_groups():
+    iam_client = boto3.client('iam')
     deployed_groups = iam_client.list_groups()['Groups']
     return deployed_groups
 
 
-def create_users(session, args, log, deployed, auth_spec):
+def create_users(args, log, deployed, auth_spec):
     """
     Create IAM users based on user specification
     """
-    iam_client = session.client('iam')
+    iam_client = boto3.client('iam')
     for u_spec in auth_spec['users']:
         # ISSUE: does this belong in validate_spec()?
         if 'Path' in u_spec and u_spec['Path']:
@@ -138,11 +131,11 @@ def create_users(session, args, log, deployed, auth_spec):
                 logger(log, response['User']['Arn'])
 
 
-def create_groups(session, args, log, deployed, auth_spec):
+def create_groups(args, log, deployed, auth_spec):
     """
     Create IAM groups based on group specification
     """
-    iam_client = session.client('iam')
+    iam_client = boto3.client('iam')
     for g_spec in auth_spec['groups']:
         # ISSUE: does this belong in validate_spec()?
         if 'Path' in g_spec and g_spec['Path']:
@@ -177,11 +170,11 @@ def create_groups(session, args, log, deployed, auth_spec):
                 logger(log, response['Group']['Arn'])
 
 
-def manage_group_members(session, args, log, deployed, auth_spec):
+def manage_group_members(args, log, deployed, auth_spec):
     """
     Populate users into groups based on group specification.
     """
-    iam_client = session.client('iam')
+    iam_client = boto3.client('iam')
     for g_spec in auth_spec['groups']:
         if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
                 and not ensure_absent(g_spec)):
@@ -239,8 +232,8 @@ def create_policy(iam_client, args, logger, p_spec):
             Description=desc)
 
 ## Used for testing only
-#def create_policies(session, args, log, deployed, auth_spec):
-#    iam_client = session.client('iam')
+#def create_policies(args, log, deployed, auth_spec):
+#    iam_client = boto3.client('iam')
 #    for p_spec in auth_spec['policies']:
 #        create_policy(iam_client, args, logger, p_spec)
 
@@ -267,37 +260,35 @@ def create_policy(iam_client, args, logger, p_spec):
 
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
-    aws_profile = get_profile(args['--profile'])
-    session = get_session(aws_profile)
     log = []
     deployed = dict(
-            users = scan_deployed_users(session),
-            groups = scan_deployed_groups(session))
+            users = scan_deployed_users(),
+            groups = scan_deployed_groups())
     #print deployed['users']
     #print deployed['groups']
+    #print
 
     if args['--spec-file']:
         auth_spec = validate_auth_spec_file(args['--spec-file'])
-        validate_auth_account_id(session, auth_spec)
-    #print auth_spec
+        validate_auth_account_id(auth_spec)
+        #print auth_spec
 
 
     if args['users']:
-        create_users(session, args, log, deployed, auth_spec)
-        create_groups(session, args, log, deployed, auth_spec)
-        manage_group_members(session, args, log, deployed, auth_spec)
+        create_users(args, log, deployed, auth_spec)
+        create_groups(args, log, deployed, auth_spec)
+        manage_group_members(args, log, deployed, auth_spec)
 
     if args['delegation']:
         org_client = get_client_for_assumed_role(
-                'organizations', session,
+                'organizations',
                 auth_spec['master_account_id'],
                 auth_spec['auth_access_role'])
-
         deployed['accounts'] = scan_deployed_accounts(org_client)
         #print deployed['accounts']
 
         ## # testing only:
-        ##create_policies(session, args, log, deployed, auth_spec)
+        ##create_policies(args, log, deployed, auth_spec)
 
     if args['--verbose']:
         for line in log:
