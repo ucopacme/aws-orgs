@@ -72,6 +72,24 @@ def validate_master_id(org_client, spec):
     return
 
 
+def get_resource_for_assumed_role(service_name, account_id, role_name,
+        region_name=None):
+    """
+    Get temporary sts assume_role credentials for account.
+    Return boto3 resource object with assumed role credentials attached.
+    """
+    role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
+    role_session_name = account_id + '-' + role_name
+    sts_client = boto3.client('sts')
+    credentials = sts_client.assume_role(RoleArn=role_arn,
+            RoleSessionName=role_session_name)['Credentials']
+    return boto3.resource(service_name,
+            aws_access_key_id=credentials['AccessKeyId'],
+            aws_secret_access_key=credentials['SecretAccessKey'],
+            aws_session_token=credentials['SessionToken'],
+            region_name=region_name)
+
+
 def get_client_for_assumed_role(service_name, account_id, role_name,
         region_name=None):
     """
@@ -81,7 +99,7 @@ def get_client_for_assumed_role(service_name, account_id, role_name,
     role_arn = 'arn:aws:iam::' + account_id + ':role/' + role_name
     role_session_name = account_id + '-' + role_name
     sts_client = boto3.client('sts')
-    credentials = sts_client.assume_role( RoleArn=role_arn,
+    credentials = sts_client.assume_role(RoleArn=role_arn,
             RoleSessionName=role_session_name)['Credentials']
     return boto3.client(service_name,
             aws_access_key_id=credentials['AccessKeyId'],
