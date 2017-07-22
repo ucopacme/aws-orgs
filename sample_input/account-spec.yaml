@@ -1,4 +1,4 @@
-master_account_id: '640965621536'
+master_account_id: 'XXXXXXXXXXXXXXXX'
 default_region: us-west-2
 org_access_role: OrganizationAccountAccessRole
 
@@ -11,7 +11,7 @@ cloudformation_stacks:
       - CAPABILITY_NAMED_IAM
     Parameters:
       - ParameterKey: CentralAdminAccount
-        ParameterValue: arn:aws:iam::962936672038:root
+        ParameterValue: arn:aws:iam::XXXXXXXXXXXXXXXX:root
       - ParameterKey: RoamingAdminRoleName
         ParameterValue: AWSAccountsAuthAdminRole
     Tags:
@@ -19,15 +19,14 @@ cloudformation_stacks:
         Value: syseng
 
 accounts:
-  - Name: Ashley Gould
+  - Name: Master
     Provision: True
-  - Name: auth
+  - Name: Auth
     Email: auth@blee.red
-  - Name: Managment
-    #this got misspelled
-    Email: management@ucop.edu
+  - Name: Management
+    Email: management@blee.red
   - Name: Security
-    Email: ashleyg@ucop.edu
+    Email: ashleyg@blee.red
     Provision: True
   - Name: blee-poc
     Email: blee-poc@blee.red

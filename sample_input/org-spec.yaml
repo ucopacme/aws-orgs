@@ -1,6 +1,6 @@
 # AWS Organization Specification
 
-master_account_id: '640965621536'
+master_account_id: 'XXXXXXXXXXXX'
 default_policy: FullAWSAccess
 default_ou: root
 
