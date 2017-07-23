@@ -84,6 +84,12 @@ def validate_auth_account_id(spec):
     return
 
 
+def munge_path(spec):
+    if 'Path' in spec and spec['Path']:
+        return "/%s/" % spec['Path']
+    return '/'
+
+
 def create_users(args, log, deployed, auth_spec):
     """
     Create IAM users based on user specification
@@ -222,11 +228,14 @@ def create_policy(iam_client, args, log, p_spec):
 
 
 def create_delegation_role(iam_client, iam_resource, args, log,
-        trusted_account_id, d_spec):
+        deployed, auth_spec, role_name):
     """
     use mfa by default
     """
     # generate policy document
+    d_spec = lookup(auth_spec['delegations'], 'RoleName', role_name)
+    trusted_account_id = lookup(deployed['accounts'], 'Name',
+            d_spec['TrustedAccount'], 'Id')
     principal = "arn:aws:iam::%s:root" % trusted_account_id
     statement = dict(
             Effect='Allow',
@@ -242,15 +251,14 @@ def create_delegation_role(iam_client, iam_resource, args, log,
             indent=2, separators=(',', ': '))
     #print policy_doc
 
-    # manage existing role
     role = iam_resource.Role(d_spec['RoleName'])
     try:
         role.load()
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchEntity':
             response = iam_client.create_role(
-                    #Description=desc,
-                    #Path=path,
+                    Description=d_spec['Description'],
+                    Path=munge_path(d_spec),
                     RoleName=d_spec['RoleName'],
                     AssumeRolePolicyDocument=policy_doc)
             #print response
@@ -258,42 +266,84 @@ def create_delegation_role(iam_client, iam_resource, args, log,
         role.reload()
     except:
         raise
+
+    # update role
+    print role.assume_role_policy_document
+    print role.description
+    print role.name
+    print role.role_name
+    if role.assume_role_policy_document != policy_doc:
+        response = iam_client.update_assume_role_policy(
+            RoleName=role.role_name,
+            PolicyDocument=policy_doc)
+        print response
+    if role.description != d_spec['Description']:
+        response = iam_client.update_role_description(
+            RoleName=role.role_name,
+            Description=d_spec['Description'])
+        print response
+    print role.assume_role_policy_document
+    print role.description
+
+    # manage policy attachments
     all_policies = iam_client.list_policies()['Policies']
-    attached_policies = [p.arn for p in list(role.attached_policies.all())]
+    attached_policies = [p.policy_name for p
+            in list(role.attached_policies.all())]
+    print attached_policies
+
+    # attach missing policies
     for policy_name in d_spec['Policies']:
-        print policy_name
+        #print policy_name
         policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
-        print policy_arn
-        if not policy_arn in attached_polices:
-            reponse = role.attach_policy(PolicyArn=policy_arn)
-            print reponse
+        if not policy_arn:
+            policy_arn = create_custom_policy(iam_client, args, log,
+                    policy_name, auth_spec)
+        #print policy_arn
+        if not policy_name in attached_policies and policy_arn:
+            role.attach_policy(PolicyArn=policy_arn)
+
+    # datach obsolete policies
+    for policy_name in attached_policies:
+        #print policy_name
+        policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
+        #print policy_arn
+        if not policy_name in d_spec['Policies']:
+            role.detach_policy(PolicyArn=policy_arn)
+        # check if policy still attached to any other roles
+        policy = iam_resource.Policy(policy_arn)
+        if policy.attachment_count == '0':
+            policy.delete()
+
             
+            
+def create_custom_policy(iam_client, args, log, policy_name, auth_spec):
+    p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name) 
+    print p_spec
+    if not p_spec:
+        logger(log, "Custom Policy spec for '%s' not found in auth-spec.")
+        return None
+    if not validate_policy_spec(args, log, p_spec):
+        logger(log, "Can not create policy '%'.")
+        return None
+    policy_doc = json.dumps(
+            dict(Version='2012-10-17', Statement=p_spec['Statement']),
+            indent=2, separators=(',', ': '))
+    print policy_doc
+    response = iam_client.create_policy(
+        PolicyName=p_spec['PolicyName'],
+        Path=munge_path(p_spec),
+        Description=p_spec['Description'],
+        PolicyDocument=policy_doc)
+    print response
 
 
 
-#def create_delegation_role(iam_client, args, log, trusted_account_id, d_spec):
-#    """
-#    use mfa by default
-#    """
-#    principal = "arn:aws:iam::%s:root" % trusted_account_id
-#    statement = dict(
-#            Effect='Allow',
-#            Principal=dict(AWS=principal),
-#            Action='sts:AssumeRole')
-#    mfa = True
-#    if 'RequireMFA' in d_spec and d_spec['RequireMFA'] == False:
-#        mfa = False
-#    if mfa:
-#        statement['Condition'] = {'Bool':{'aws:MultiFactorAuthPresent':'true'}}
-#    policy_doc = json.dumps(
-#            dict(Version='2012-10-17', Statement=statement),
-#            indent=2, separators=(',', ': '))
-#    print policy_doc
-#    iam_client.create_role(
-#            #Description=desc,
-#            #Path=path,
-#            RoleName=d_spec['RoleName'],
-#            AssumeRolePolicyDocument=policy_doc)
+
+def validate_policy_spec(args, log, p_spec):
+    return True
+
+
+
 
 
 def manage_delegations(args, log, deployed, auth_spec):
@@ -304,14 +354,12 @@ def manage_delegations(args, log, deployed, auth_spec):
             print trusting_account
             trusting_account_id = lookup(deployed['accounts'], 'Name',
                     trusting_account, 'Id')
-            trusted_account_id = lookup(deployed['accounts'], 'Name',
-                    d_spec['TrustedAccount'], 'Id')
             iam_client = get_client_for_assumed_role('iam',
                     trusting_account_id, auth_spec['auth_access_role'])
             iam_resource = get_resource_for_assumed_role('iam',
                     trusting_account_id, auth_spec['auth_access_role'])
             create_delegation_role(iam_client, iam_resource, args, log,
-                    trusted_account_id, d_spec)
+                    deployed, auth_spec, d_spec['RoleName'])
             #attach_policy_to_role()
 
 
