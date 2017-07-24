@@ -97,12 +97,26 @@ def munge_path(auth_spec, spec):
 def display_provisioned_users(log, deployed):
     header = "Provisioned IAM Users in Auth Account:"
     overbar = '_' * len(header)
-    logger(log, "\n%s\n%s" % (overbar, header))
+    logger(log, "\n%s\n%s\n" % (overbar, header))
     for name in sorted(map(lambda u: u['UserName'], deployed['users'])):
         arn = lookup(deployed['users'], 'UserName', name, 'Arn')
         spacer = ' ' * (12 - len(name))
         logger(log, "%s%s\t%s" % (name, spacer, arn))
 
+
+def display_provisioned_groups(iam_client, log, deployed):
+    header = "Provisioned IAM Groups in Auth Account:"
+    overbar = '_' * len(header)
+    logger(log, "\n\n%s\n%s" % (overbar, header))
+    for name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
+        arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
+        members = ["  %s" % user['UserName'] for user
+                in iam_client.get_group( GroupName=name)['Users']
+                if 'UserName' in user]
+        logger(log, "\n%s\t%s" % ('Name:', name))
+        logger(log, "%s\t%s" % ('Arn:', arn))
+        logger(log, "Members:")
+        logger(log, "\n".join(members))
 
 
 
@@ -391,7 +405,7 @@ def main():
     if args['report']:
         args['--verbose'] = True
         display_provisioned_users(log, deployed)
-        #display_provisioned_groups(log, deployed)
+        display_provisioned_groups(iam_client, log, deployed)
 
 
     if args['users']:
