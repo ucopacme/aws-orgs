@@ -2,20 +2,22 @@ Thu Jul 13 13:16:44 PDT 2017
 
 TODO:
 validate spec file
-get org root id
+DONE get org root id
 report users, groups, roles
+report roles and policies
 DONE create users
 DONE create groups
 DONE populate users in groups
 validate all path assignments against org 'teams' data spec.
-create custom policies
+DONE create custom policies
 attach policies to groups
-create roles
-populate roles in other org accounts.
+DONE create roles
+DONE populate roles in other org accounts.
 create credentials for new users
 email credentials new users
 
 ISSUES:
+how to ensure againts orphan delegations in accounts?
 how/where do we structure/deploy yaml data for teams specification?
   maybe place it in a db or ldap or redis?
   currently this resides in the spec-file used by accounts.py.

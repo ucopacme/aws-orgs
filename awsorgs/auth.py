@@ -84,10 +84,26 @@ def validate_auth_account_id(spec):
     return
 
 
-def munge_path(spec):
+def munge_path(auth_spec, spec):
+    """
+    Return formated 'Path' attribute for use in iam client calls. 
+    Prepend the 'default_path'.
+    """
     if 'Path' in spec and spec['Path']:
-        return "/%s/" % spec['Path']
-    return '/'
+        return "/%s/%s/" % (auth_spec['default_path'], spec['Path'])
+    return "/%s/" % (auth_spec['default_path'])
+
+
+def display_provisioned_users(log, deployed):
+    header = "Provisioned IAM Users in Auth Account:"
+    overbar = '_' * len(header)
+    logger(log, "\n%s\n%s" % (overbar, header))
+    for name in sorted(map(lambda u: u['UserName'], deployed['users'])):
+        arn = lookup(deployed['users'], 'UserName', name, 'Arn')
+        spacer = ' ' * (12 - len(name))
+        logger(log, "%s%s\t%s" % (name, spacer, arn))
+
+
 
 
 def create_users(args, log, deployed, auth_spec):
@@ -96,11 +112,7 @@ def create_users(args, log, deployed, auth_spec):
     """
     iam_client = boto3.client('iam')
     for u_spec in auth_spec['users']:
-        # ISSUE: does this belong in validate_spec()?
-        if 'Path' in u_spec and u_spec['Path']:
-            path = "/%s/" % u_spec['Path']
-        else:
-            path = '/'
+        path = munge_path(auth_spec, u_spec)
         user = lookup(deployed['users'], 'UserName', u_spec['Name'])
         if user:
             if ensure_absent(u_spec):
@@ -127,11 +139,7 @@ def create_groups(args, log, deployed, auth_spec):
     """
     iam_client = boto3.client('iam')
     for g_spec in auth_spec['groups']:
-        # ISSUE: does this belong in validate_spec()?
-        if 'Path' in g_spec and g_spec['Path']:
-            path = "/%s/" % g_spec['Path']
-        else:
-            path = '/'
+        path = munge_path(auth_spec, g_spec)
         group = lookup(deployed['groups'], 'GroupName', g_spec['Name'])
         if group:
             if ensure_absent(g_spec):
@@ -197,28 +205,29 @@ def manage_group_members(args, log, deployed, auth_spec):
                             UserName=username)
 
 
-def create_policy(iam_client, args, log, p_spec):
-    """
-    under construction
-    """
-    # assume name and statement keys exist
-    if 'Path' in p_spec and p_spec['Path']:
-        path = "/%s/" % p_spec['Path']
-    else:
-        path = '/'
-    if 'Description' in p_spec and p_spec['Description']:
-        desc = p_spec['Description']
-    else:
-        desc = ''
-    policy_doc = json.dumps(
-            dict(Version='2012-10-17', Statement=p_spec['Statement']),
-            indent=2, separators=(',', ': '))
-    #print policy_doc
-    response = iam_client.create_policy(
-            PolicyName=p_spec['Name'],
-            Path=path,
-            PolicyDocument=policy_doc,
-            Description=desc)
+#def create_policy(iam_client, args, log, auth_spec p_spec):
+#    """
+#    under construction
+#    """
+#    # assume name and statement keys exist
+#    path = munge_path(auth_spec, p_spec)
+#    if 'Path' in p_spec and p_spec['Path']:
+#        path = "/%s/" % p_spec['Path']
+#    else:
+#        path = '/'
+#    if 'Description' in p_spec and p_spec['Description']:
+#        desc = p_spec['Description']
+#    else:
+#        desc = ''
+#    policy_doc = json.dumps(
+#            dict(Version='2012-10-17', Statement=p_spec['Statement']),
+#            indent=2, separators=(',', ': '))
+#    #print policy_doc
+#    response = iam_client.create_policy(
+#            PolicyName=p_spec['Name'],
+#            Path=path,
+#            PolicyDocument=policy_doc,
+#            Description=desc)
 
 ## Used for testing only
 #def create_policies(args, log, deployed, auth_spec):
@@ -258,7 +267,7 @@ def create_delegation_role(iam_client, iam_resource, args, log,
         if e.response['Error']['Code'] == 'NoSuchEntity':
             response = iam_client.create_role(
                     Description=d_spec['Description'],
-                    Path=munge_path(d_spec),
+                    Path=munge_path(auth_spec, d_spec),
                     RoleName=d_spec['RoleName'],
                     AssumeRolePolicyDocument=policy_doc)
             #print response
@@ -268,28 +277,28 @@ def create_delegation_role(iam_client, iam_resource, args, log,
         raise
 
     # update role
-    print role.assume_role_policy_document
-    print role.description
-    print role.name
-    print role.role_name
+    #print role.assume_role_policy_document
+    #print role.description
+    #print role.name
+    #print role.role_name
     if role.assume_role_policy_document != policy_doc:
         response = iam_client.update_assume_role_policy(
             RoleName=role.role_name,
             PolicyDocument=policy_doc)
-        print response
+        #print response
     if role.description != d_spec['Description']:
         response = iam_client.update_role_description(
             RoleName=role.role_name,
             Description=d_spec['Description'])
-        print response
-    print role.assume_role_policy_document
-    print role.description
+        #print response
+    #print role.assume_role_policy_document
+    #print role.description
 
     # manage policy attachments
     all_policies = iam_client.list_policies()['Policies']
     attached_policies = [p.policy_name for p
             in list(role.attached_policies.all())]
-    print attached_policies
+    #print attached_policies
 
     # attach missing policies
     for policy_name in d_spec['Policies']:
@@ -318,7 +327,7 @@ def create_delegation_role(iam_client, iam_resource, args, log,
             
 def create_custom_policy(iam_client, args, log, policy_name, auth_spec):
     p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name) 
-    print p_spec
+    #print p_spec
     if not p_spec:
         logger(log, "Custom Policy spec for '%s' not found in auth-spec.")
         return None
@@ -328,13 +337,13 @@ def create_custom_policy(iam_client, args, log, policy_name, auth_spec):
     policy_doc = json.dumps(
             dict(Version='2012-10-17', Statement=p_spec['Statement']),
             indent=2, separators=(',', ': '))
-    print policy_doc
+    #print policy_doc
     response = iam_client.create_policy(
         PolicyName=p_spec['PolicyName'],
-        Path=munge_path(p_spec),
+        Path=munge_path(auth_spec, p_spec),
         Description=p_spec['Description'],
         PolicyDocument=policy_doc)
-    print response
+    #print response
 
 
 
@@ -351,7 +360,7 @@ def manage_delegations(args, log, deployed, auth_spec):
     for d_spec in auth_spec['delegations']:
         #print d_spec
         for trusting_account in d_spec['TrustingAccount']:
-            print trusting_account
+            #print trusting_account
             trusting_account_id = lookup(deployed['accounts'], 'Name',
                     trusting_account, 'Id')
             iam_client = get_client_for_assumed_role('iam',
@@ -378,6 +387,11 @@ def main():
         auth_spec = validate_auth_spec_file(args['--spec-file'])
         validate_auth_account_id(auth_spec)
         #print auth_spec
+
+    if args['report']:
+        args['--verbose'] = True
+        display_provisioned_users(log, deployed)
+        #display_provisioned_groups(log, deployed)
 
 
     if args['users']:
