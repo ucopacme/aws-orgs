@@ -279,12 +279,12 @@ def manage_group_members(args, log, deployed, auth_spec):
 
 
 def manage_delegation_role(iam_client, iam_resource, args, log,
-        deployed, default_path, account_name, d_spec):
+        deployed_accounts, default_path, account_name, d_spec):
     """
     use mfa by default
     """
     # generate policy document
-    trusted_account_id = lookup(deployed['accounts'], 'Name',
+    trusted_account_id = lookup(deployed_accounts, 'Name',
             d_spec['TrustedAccount'], 'Id')
     principal = "arn:aws:iam::%s:root" % trusted_account_id
     statement = dict(
@@ -309,69 +309,72 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
             if args['--exec']:
                 iam_client.create_role(
                         Description=d_spec['Description'],
-                        Path=munge_path(auth_spec['default_path'], d_spec),
+                        Path=munge_path(default_path, d_spec),
                         RoleName=d_spec['RoleName'],
                         AssumeRolePolicyDocument=policy_doc)
+            else:
+                return
+
     try:
         role.reload()
-    except:
-        raise
+    except Exception, e:
+        logger(log, e)
+    else:
+        # update role
+        #print json.dumps(role.assume_role_policy_document)
+        #print policy_doc
+        #print role.description
+        #print role.name
+        #print role.role_name
+        if json.dumps(role.assume_role_policy_document) != policy_doc:
+            logger(log, "Updating policy document in role '%s' in account '%s'." %
+                    (d_spec['RoleName'], account_name))
+            if args['--exec']:
+                iam_client.update_assume_role_policy(
+                    RoleName=role.role_name,
+                    PolicyDocument=policy_doc)
+        if role.description != d_spec['Description']:
+            logger(log, "Updating description in role '%s' in account '%s'." %
+                    (d_spec['RoleName'], account_name))
+            if args['--exec']:
+                iam_client.update_role_description(
+                    RoleName=role.role_name,
+                    Description=d_spec['Description'])
+        #print role.assume_role_policy_document
+        #print role.description
 
-    # update role
-    print json.dumps(role.assume_role_policy_document)
-    print policy_doc
-    #print role.description
-    #print role.name
-    #print role.role_name
-    if json.dumps(role.assume_role_policy_document) != policy_doc:
-        logger(log, "Updating policy document in role '%s' in account '%s'." %
-                (d_spec['RoleName'], account_name))
-        if args['--exec']:
-            iam_client.update_assume_role_policy(
-                RoleName=role.role_name,
-                PolicyDocument=policy_doc)
-    if role.description != d_spec['Description']:
-        logger(log, "Updating description in role '%s' in account '%s'." %
-                (d_spec['RoleName'], account_name))
-        if args['--exec']:
-            iam_client.update_role_description(
-                RoleName=role.role_name,
-                Description=d_spec['Description'])
-    #print role.assume_role_policy_document
-    #print role.description
-
-    # manage policy attachments
-    all_policies = iam_client.list_policies()['Policies']
-    attached_policies = [p.policy_name for p
-            in list(role.attached_policies.all())]
-    #print attached_policies
-    # attach missing policies
-    for policy_name in d_spec['Policies']:
-        #print policy_name
-        policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
-        #print policy_arn
-        if not policy_name in attached_policies and policy_arn:
-            logger(log, "Attaching policy '%s' to role '%s' in account '%s'." %
-                    (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec']:
-                role.attach_policy(PolicyArn=policy_arn)
-    # datach obsolete policies
-    for policy_name in attached_policies:
-        #print policy_name
-        policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
-        #print policy_arn
-        if not policy_name in d_spec['Policies']:
-            logger(log,"Detaching policy '%s' from role '%s' in account '%s'." %
-                    (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec']:
-                role.detach_policy(PolicyArn=policy_arn)
-        # check if policy still attached to any other roles
-        policy = iam_resource.Policy(policy_arn)
-        if policy.attachment_count == '0':
-            logger(log, "Deleting custom policy '%s' from account '%s'." %
-                    (policy_name, account_name))
-            if args['--exec']:
-                policy.delete()
+        # manage policy attachments
+        all_policies = iam_client.list_policies()['Policies']
+        attached_policies = [p.policy_name for p
+                in list(role.attached_policies.all())]
+        #print attached_policies
+        # attach missing policies
+        for policy_name in d_spec['Policies']:
+            #print policy_name
+            policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
+            #print policy_arn
+            if not policy_name in attached_policies and policy_arn:
+                logger(log, "Attaching policy '%s' to role '%s' in account '%s'." %
+                        (policy_name, d_spec['RoleName'], account_name))
+                if args['--exec']:
+                    role.attach_policy(PolicyArn=policy_arn)
+        # datach obsolete policies
+        for policy_name in attached_policies:
+            #print policy_name
+            policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
+            #print policy_arn
+            if not policy_name in d_spec['Policies']:
+                logger(log,"Detaching policy '%s' from role '%s' in account '%s'." %
+                        (policy_name, d_spec['RoleName'], account_name))
+                if args['--exec']:
+                    role.detach_policy(PolicyArn=policy_arn)
+            # check if policy still attached to any other roles
+            policy = iam_resource.Policy(policy_arn)
+            if policy.attachment_count == '0':
+                logger(log, "Deleting custom policy '%s' from account '%s'." %
+                        (policy_name, account_name))
+                if args['--exec']:
+                    policy.delete()
 
             
             
@@ -432,8 +435,8 @@ def manage_delegations(args, log, deployed, auth_spec):
                             policy_name, auth_spec)
             # manage role
             manage_delegation_role(iam_client, iam_resource, args, log,
-                    deployed, auth_spec['default_path'], trusting_account,
-                    d_spec)
+                    deployed['accounts'], auth_spec['default_path'],
+                    trusting_account, d_spec)
             # create group sts.assume role policies
             # in progress
 

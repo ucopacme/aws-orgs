@@ -5,9 +5,8 @@
 
 Usage:
   awsaccounts report
-  awsaccounts create (--spec-file FILE) [--exec] [--region <region>] [--verbose]
-  awsaccounts provision (--spec-file FILE) (--template-dir DIR) [--exec]
-                  [--region <region>] [--verbose]
+  awsaccounts create (--spec-file FILE) [--exec] [--verbose]
+  awsaccounts provision (--spec-file FILE) [--exec] [--verbose]
   awsaccounts (-h | --help)
   awsaccounts --version
 
@@ -19,7 +18,6 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
-  -r, --region <region>      AWS region to use when creating resources.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   -d DIR, --template-dir DIR  Directory where to search for cloudformation templates.
   --exec                     Execute proposed changes to AWS accounts.
@@ -45,8 +43,10 @@ from awsorgs import (
         ensure_absent,
         get_root_id,
         validate_master_id,
+        get_resource_for_assumed_role,
         get_client_for_assumed_role)
 from awsorgs.orgs import scan_deployed_accounts
+from awsorgs.auth import munge_path, manage_delegation_role
 
 
 def validate_account_spec_file(args):
@@ -54,7 +54,7 @@ def validate_account_spec_file(args):
     Validate spec-file is properly formed.
     """
     spec = yaml.load(open(args['--spec-file']).read())
-    string_keys = ['master_account_id', 'default_region', 'org_access_role']
+    string_keys = ['master_account_id', 'org_access_role', 'default_path']
     for key in string_keys:
         if not key in spec:
             msg = "Invalid spec-file: missing required param '%s'." % key
@@ -178,91 +178,121 @@ def display_provisioned_accounts(log, deployed_accounts):
         logger(log, "%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
 
 
-def create_stack(cf_client, args, log, account_name, stack_kwargs):
-    """
-    Create or update a cloudformation stack using change sets.
-    """
-    # test if stack already exists and set ChangeSetType accourdingly
-    try:
-        stack_status = cf_client.describe_stack_events(
-                StackName=stack_kwargs['StackName']
-                )['StackEvents'][0]['ResourceStatus']
-        # edge case: a change set exists, but no stack yet
-        if stack_status == 'REVIEW_IN_PROGRESS':
-            stack_kwargs['ChangeSetType'] = 'CREATE'
-        else:
-            stack_kwargs['ChangeSetType'] = 'UPDATE'
-    except ClientError as e:
-        if not e.response['Error']['Code'] == 'ValidationError':
-            raise e
-        else:
-            stack_kwargs['ChangeSetType'] = 'CREATE'
-    except:
-        raise
-    # create a change set
-    stack_kwargs['ChangeSetName'] = stack_kwargs['StackName'] + '-changeset'
-    cf_client.create_change_set(**stack_kwargs)
-    # check change_set status. loop if CREATE_PENDING.
-    counter = 0
-    while counter < 5:
-        change_sets = cf_client.list_change_sets(
-                StackName=stack_kwargs['StackName'])['Summaries']
-        change_set = lookup(change_sets, 'ChangeSetName',
-                stack_kwargs['ChangeSetName'])
-        if change_set['Status'] == 'CREATE_PENDING':
-            time.sleep(5)
-        elif change_set['Status'] == 'FAILED':
-            cf_client.delete_change_set( StackName=stack_kwargs['StackName'],
-                    ChangeSetName=stack_kwargs['ChangeSetName'])
-            break
-        elif (change_set['Status'] == 'CREATE_COMPLETE'
-                and change_set['ExecutionStatus'] == 'AVAILABLE'):
-            logger(log, "Running %s on stack '%s' in account '%s'." %
-                    (stack_kwargs['ChangeSetType'].lower(),
-                    stack_kwargs['StackName'], account_name))
-            if args['--exec']:
-                cf_client.execute_change_set(
-                        StackName=stack_kwargs['StackName'],
-                        ChangeSetName=stack_kwargs['ChangeSetName'])
-            break
-        counter += 1
+#def create_stack(cf_client, args, log, account_name, stack_kwargs):
+#    """
+#    Create or update a cloudformation stack using change sets.
+#    """
+#    # test if stack already exists and set ChangeSetType accourdingly
+#    try:
+#        stack_status = cf_client.describe_stack_events(
+#                StackName=stack_kwargs['StackName']
+#                )['StackEvents'][0]['ResourceStatus']
+#        # edge case: a change set exists, but no stack yet
+#        if stack_status == 'REVIEW_IN_PROGRESS':
+#            stack_kwargs['ChangeSetType'] = 'CREATE'
+#        else:
+#            stack_kwargs['ChangeSetType'] = 'UPDATE'
+#    except ClientError as e:
+#        if not e.response['Error']['Code'] == 'ValidationError':
+#            raise e
+#        else:
+#            stack_kwargs['ChangeSetType'] = 'CREATE'
+#    except:
+#        raise
+#    # create a change set
+#    stack_kwargs['ChangeSetName'] = stack_kwargs['StackName'] + '-changeset'
+#    cf_client.create_change_set(**stack_kwargs)
+#    # check change_set status. loop if CREATE_PENDING.
+#    counter = 0
+#    while counter < 5:
+#        change_sets = cf_client.list_change_sets(
+#                StackName=stack_kwargs['StackName'])['Summaries']
+#        change_set = lookup(change_sets, 'ChangeSetName',
+#                stack_kwargs['ChangeSetName'])
+#        if change_set['Status'] == 'CREATE_PENDING':
+#            time.sleep(5)
+#        elif change_set['Status'] == 'FAILED':
+#            cf_client.delete_change_set( StackName=stack_kwargs['StackName'],
+#                    ChangeSetName=stack_kwargs['ChangeSetName'])
+#            break
+#        elif (change_set['Status'] == 'CREATE_COMPLETE'
+#                and change_set['ExecutionStatus'] == 'AVAILABLE'):
+#            logger(log, "Running %s on stack '%s' in account '%s'." %
+#                    (stack_kwargs['ChangeSetType'].lower(),
+#                    stack_kwargs['StackName'], account_name))
+#            if args['--exec']:
+#                cf_client.execute_change_set(
+#                        StackName=stack_kwargs['StackName'],
+#                        ChangeSetName=stack_kwargs['ChangeSetName'])
+#            break
+#        counter += 1
 
 
-def provision_accounts(log, args, deployed_accounts, account_spec):
+#def provision_accounts_in_cloudformation(log, args, deployed_accounts,
+#        account_spec):
+#    """
+#    Generate default resources in new accounts using cloudformation.
+#    """
+#    for a_spec in account_spec['accounts']:
+#        if 'Provision' in a_spec and a_spec['Provision']:
+#            account_id = lookup(deployed_accounts, 'Name', a_spec['Name'], 'Id')
+#            if not account_id:
+#                # check if account is still being built
+#                created_accounts = scan_created_accounts(org_client)
+#                if lookup(created_accounts, 'AccountName', a_spec['Name']):
+#                    logger(log,
+#                            "New account '%s' is not yet available." %
+#                            a_spec['Name'])
+#            else:
+#                if account_id == account_spec['master_account_id']:
+#                    cf_client = boto3.client( 'cloudformation',
+#                            region_name=account_spec['region_name'])
+#                else:
+#                    cf_client = get_client_for_assumed_role('cloudformation',
+#                            account_id, account_spec['org_access_role'],
+#                            account_spec['region_name'])
+#                # build specified stacks
+#                for stack in account_spec['cloudformation_stacks']:
+#                    template_file = '/'.join(
+#                            [args['--template-dir'], stack['Template']])
+#                    template_body = open(template_file).read()
+#                    stack_kwargs = dict(
+#                            StackName=stack['Name'],
+#                            TemplateBody=template_body,
+#                            Capabilities=stack['Capabilities'],
+#                            Parameters=stack['Parameters'],
+#                            Tags=stack['Tags'],)
+#                    create_stack(cf_client, args, log, a_spec['Name'],
+#                            stack_kwargs)
+
+
+def provision_accounts(org_client, log, args, deployed_accounts, account_spec):
     """
     Generate default resources in new accounts using cloudformation.
     """
     for a_spec in account_spec['accounts']:
-        if 'Provision' in a_spec and a_spec['Provision']:
-            account_id = lookup(deployed_accounts, 'Name', a_spec['Name'], 'Id')
-            if not account_id:
-                # check if account is still being built
-                created_accounts = scan_created_accounts(org_client)
-                if lookup(created_accounts, 'AccountName', a_spec['Name']):
-                    logger(log,
-                            "New account '%s' is not yet available." %
-                            a_spec['Name'])
+        account_id = lookup(deployed_accounts, 'Name', a_spec['Name'], 'Id')
+        if not account_id:
+            # check if account is still being built
+            created_accounts = scan_created_accounts(org_client)
+            if lookup(created_accounts, 'AccountName', a_spec['Name']):
+                logger(log,
+                        "New account '%s' is not yet available." %
+                        a_spec['Name'])
+        else:
+            if account_id == account_spec['master_account_id']:
+                iam_client = boto3.client('iam')
+                iam_resource = boto3.resource('iam')
             else:
-                if account_id == account_spec['master_account_id']:
-                    cf_client = boto3.client( 'cloudformation',
-                            region_name=account_spec['region_name'])
-                else:
-                    cf_client = get_client_for_assumed_role('cloudformation',
-                            account_id, account_spec['org_access_role'],
-                            account_spec['region_name'])
-                # build specified stacks
-                for stack in account_spec['cloudformation_stacks']:
-                    template_file = '/'.join(
-                            [args['--template-dir'], stack['Template']])
-                    template_body = open(template_file).read()
-                    stack_kwargs = dict(
-                            StackName=stack['Name'],
-                            TemplateBody=template_body,
-                            Capabilities=stack['Capabilities'],
-                            Parameters=stack['Parameters'],
-                            Tags=stack['Tags'],)
-                    create_stack(cf_client, args, log, a_spec['Name'],
-                            stack_kwargs)
+                iam_client = get_client_for_assumed_role('iam',
+                        account_id, account_spec['org_access_role'])
+                iam_resource = get_resource_for_assumed_role('iam',
+                        account_id, account_spec['org_access_role'])
+            # create delegation
+            for d_spec in account_spec['delegations']:
+                manage_delegation_role(iam_client, iam_resource, args, log,
+                        deployed_accounts, account_spec['default_path'],
+                        a_spec['Name'], d_spec)
 
 
 def main():
@@ -275,10 +305,6 @@ def main():
     if args['--spec-file']:
         account_spec = validate_account_spec_file(args)
         validate_master_id(org_client, account_spec)
-        if args['--region']:
-            account_spec['region_name'] = args['--region']
-        else:
-            account_spec['region_name'] = account_spec['default_region']
 
     if args['report']:
         args['--verbose'] = True
@@ -301,7 +327,7 @@ def main():
         logger(log, "Running AWS account provisioning.")
         if not args['--exec']:
             logger(log, "This is a dry run!")
-        provision_accounts(log, args, deployed_accounts, account_spec)
+        provision_accounts(org_client, log, args, deployed_accounts, account_spec)
 
     if args['--verbose']:
         for line in log:
