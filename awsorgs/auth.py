@@ -4,7 +4,7 @@
 """Manage users, group, and roles for cross account authentication in AWS.
 
 Usage:
-  awsauth report
+  awsauth report (--spec-file FILE)
   awsauth users (--spec-file FILE) [--exec] [--region <region>] [--verbose]
   awsauth delegation (--spec-file FILE) [--exec] [--region <region>] [--verbose]
   awsauth --version
@@ -51,7 +51,13 @@ def validate_auth_spec_file(spec_file):
     Validate spec-file is properly formed.
     """
     spec = yaml.load(open(spec_file).read())
-    string_keys = ['auth_account_id', 'default_region']
+    string_keys = [
+            'auth_account_id',
+            'master_account_id',
+            'auth_access_role',
+            'default_region',
+            'default_group',
+            'default_path',]
     for key in string_keys:
         if not key in spec:
             msg = "Invalid spec-file: missing required param '%s'." % key
@@ -59,7 +65,7 @@ def validate_auth_spec_file(spec_file):
         if not isinstance(spec[key], str):
             msg = "Invalid spec-file: '%s' must be type 'str'." % key
             raise RuntimeError(msg)
-    list_keys = ['users', 'groups']
+    list_keys = ['users', 'groups', 'delegations', 'custom_policies']
     for key in list_keys:
         if not key in spec:
             msg = "Invalid spec-file: missing required param '%s'." % key
@@ -118,6 +124,29 @@ def display_provisioned_groups(iam_client, log, deployed):
         logger(log, "Members:")
         logger(log, "\n".join(members))
 
+
+def display_roles_in_accounts(args, log, deployed, auth_spec):
+    header = "Provisioned IAM Roles in all Org Accounts:"
+    overbar = '_' * len(header)
+    logger(log, "\n\n%s\n%s" % (overbar, header))
+    # Not working yet
+    #for account in deployed['accounts']:
+    # temp hack for testing
+    for account in [lookup(deployed['accounts'], 'Name', 'test1'),
+                    lookup(deployed['accounts'], 'Name', 'test2'),
+                    ]:
+        iam_client = get_client_for_assumed_role('iam',
+             account['Id'], auth_spec['auth_access_role'])
+        all_roles = iam_client.list_roles()['Roles']
+        custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+        logger(log, "\nAccount:\t%s" % account['Name'])
+        logger(log, "Roles:")
+        for role in all_roles:
+            logger(log, "  %s" % role['Arn'])
+        logger(log, "Custom Policies:")
+        for policy in custom_policies:
+            logger(log, "  %s" % policy['Arn'])
+        logger(log, '')
 
 
 def create_users(args, log, deployed, auth_spec):
@@ -397,15 +426,18 @@ def main():
     #print deployed['groups']
     #print
 
-    if args['--spec-file']:
-        auth_spec = validate_auth_spec_file(args['--spec-file'])
-        validate_auth_account_id(auth_spec)
-        #print auth_spec
+    auth_spec = validate_auth_spec_file(args['--spec-file'])
+    validate_auth_account_id(auth_spec)
+    org_client = get_client_for_assumed_role('organizations',
+            auth_spec['master_account_id'],
+            auth_spec['auth_access_role'])
+    deployed['accounts'] = scan_deployed_accounts(org_client)
 
     if args['report']:
         args['--verbose'] = True
         display_provisioned_users(log, deployed)
         display_provisioned_groups(iam_client, log, deployed)
+        display_roles_in_accounts(args, log, deployed, auth_spec)
 
 
     if args['users']:
@@ -414,10 +446,6 @@ def main():
         manage_group_members(args, log, deployed, auth_spec)
 
     if args['delegation']:
-        org_client = get_client_for_assumed_role('organizations',
-                auth_spec['master_account_id'],
-                auth_spec['auth_access_role'])
-        deployed['accounts'] = scan_deployed_accounts(org_client)
         #print deployed['accounts']
         manage_delegations(args, log, deployed, auth_spec)
 
