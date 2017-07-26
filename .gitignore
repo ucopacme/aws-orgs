@@ -1,4 +1,4 @@
 *.swp
 *.pyc
-scratch/*
+
 aws_orgs.egg-info

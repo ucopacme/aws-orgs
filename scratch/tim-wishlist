@@ -1,0 +1,42 @@
+Via Orgs, can you stage policy for our legacy DC account (linked
+account 074589347111):
+
+1)      Enable only the following services:
+
+a.       EC2
+
+b.       S3
+
+c.       VPC
+
+d.       CloudFront (?)
+
+e.       CloudTrail
+
+f.        CloudWatch
+
+g.       CloudFormation
+
+h.       IAM
+
+i.         Directory Service
+
+j.         WAF &amp; Shield
+
+k.       Route 53
+
+l.         RDS
+
+m.     Lambda
+
+n.       EFS
+
+o.       Glacier
+
+p.       Storage Gateway(?)
+
+q.       CodeCommit
+
+r.        Server Migration
+
+
