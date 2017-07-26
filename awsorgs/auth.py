@@ -194,6 +194,12 @@ def create_groups(args, log, deployed, auth_spec):
                 else:
                     logger(log, "deleting group '%s'" % g_spec['Name'])
                     if args['--exec']:
+                        # delete group policies
+                        for policy_name in iam_client.list_group_policies(
+                                GroupName=g_spec['Name'])['PolicyNames']:
+                            iam_client.delete_group_policy(
+                                    GroupName=g_spec['Name'],
+                                    PolicyName=policy_name)
                         iam_client.delete_group(GroupName=g_spec['Name'])
             elif group['Path'] != path:
                 # update group
@@ -283,17 +289,9 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
     """
     use mfa by default
     """
-    # put sts.assumerole into groups
-    # arn:aws:iam::962936672038:group/awsauth/authadmin
-    ## policy for group in trusted accoiunt to assume given role in trusting account.
-    #{
-    #  "Version": "2012-10-17",
-    #  "Statement": {
-    #    "Effect": "Allow",
-    #    "Action": "sts:AssumeRole",
-    #    "Resource": "arn:aws:iam::ACCOUNT-ID-WITHOUT-HYPHENS:role/PATH/ROLENAME"
-    #  }
-    #}
+
+    # build group policies in trusting account
+    print d_spec['TrustedGroup']
     iam = boto3.resource('iam')
     group = iam.Group(d_spec['TrustedGroup'])
     try:
@@ -306,9 +304,7 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
             logger(log, e)
         return
 
-    group_policies = [p.policy_name for p in list(group.policies.all())]
-    print group_policies
-
+    # assemble policy document for group policy
     trusting_account_id = lookup(deployed_accounts, 'Name', account_name, 'Id')
     statement = dict(
             Effect='Allow',
@@ -317,18 +313,23 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
                      munge_path(default_path, d_spec), d_spec['RoleName'])) 
     policy_doc = json.dumps(dict(Version='2012-10-17', Statement=[statement]))
 
+    # create or update group policy
+    policy_name="%s-%s" % (d_spec['RoleName'], trusting_account_id)
+    if not policy_name in [p.policy_name for p in list(group.policies.all())]:
+        logger(log, "Creating group policy '%s' for group '%s' in account '%s'."
+                % (policy_name, d_spec['TrustedGroup'], account_name))
+        if args['--exec']:
+            group.create_policy(
+                    PolicyName=policy_name,
+                    PolicyDocument=policy_doc)
+    elif json.dumps(group.Policy(policy_name).policy_document) != policy_doc:
+        logger(log, "Updating group policy '%s' for group '%s' in account '%s'."                % (policy_name, d_spec['TrustedGroup'], account_name))
+        if args['--exec']:
+            group.Policy(policy_name).put(PolicyDocument=policy_doc)
 
-    result = group.create_policy(
-        PolicyName="%s-%s" % (d_spec['RoleName'], trusting_account_id),
-        PolicyDocument=policy_doc
-    )
-    #print result
-    
-    return
 
-
-
-    # generate policy document for delegation role
+    # assemble assume role policy document for delegation role
+    print d_spec['RoleName']
     trusted_account_id = lookup(deployed_accounts, 'Name',
             d_spec['TrustedAccount'], 'Id')
     principal = "arn:aws:iam::%s:root" % trusted_account_id
