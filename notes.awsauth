@@ -3,11 +3,12 @@ Thu Jul 13 13:16:44 PDT 2017
 TODO:
 validate spec file
 DONE get org root id
-report users, groups, roles
-report roles and policies
+DONE report users, groups, roles
+IN PROGRESS report roles and policies
 DONE create users
 DONE create groups
 DONE populate users in groups
+warn when a user does not exist when populating groups
 validate all path assignments against org 'teams' data spec.
 DONE create custom policies
 attach policies to groups
