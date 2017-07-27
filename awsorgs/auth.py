@@ -145,15 +145,25 @@ def display_roles_in_accounts(args, log, deployed, auth_spec):
                     ]:
         iam_client = get_client_for_assumed_role('iam',
              account['Id'], auth_spec['auth_access_role'])
-        all_roles = iam_client.list_roles()['Roles']
+        #all_roles = iam_client.list_roles()['Roles']
+        role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
         custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+
+        iam_resource = get_resource_for_assumed_role('iam',
+             account['Id'], auth_spec['auth_access_role'])
         logger(log, "\nAccount:\t%s" % account['Name'])
         logger(log, "Roles:")
-        for role in all_roles:
-            logger(log, "  %s" % role['Arn'])
+        for name in role_names:
+            role = iam_resource.Role(name)
+            logger(log, "  Arn:\t\t%s" % role.arn)
+            logger(log, "  Principal:\t%s" % 
+                    role.assume_role_policy_document['Statement'][0]['Principal']['AWS'])
+            logger(log, "  Policies:\t%s" % ' '.join(
+                    [p.policy_name for p 
+                     in list(role.attached_policies.all())]))
         logger(log, "Custom Policies:")
         for policy in custom_policies:
-            logger(log, "  %s" % policy['Arn'])
+            logger(log, "  %s" % policy['PolicyName'])
         logger(log, '')
 
 
