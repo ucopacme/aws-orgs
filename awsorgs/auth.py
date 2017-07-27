@@ -115,13 +115,22 @@ def display_provisioned_groups(iam_client, log, deployed):
     logger(log, "\n\n%s\n%s" % (overbar, header))
     for name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
         arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
-        members = ["  %s" % user['UserName'] for user
-                in iam_client.get_group( GroupName=name)['Users']
-                if 'UserName' in user]
+        members = iam_client.get_group(GroupName=name)['Users']
+        group_policies =  iam_client.list_group_policies(GroupName=name)['PolicyNames']
+        assume_role_profiles = []
+        for policy_name in group_policies:
+            doc = iam_client.get_group_policy( GroupName=name,
+                    PolicyName=policy_name)['PolicyDocument']
+            if doc['Statement'][0]['Action'] == 'sts:AssumeRole':
+                assume_role_profiles.append(doc['Statement'][0]['Resource'])
         logger(log, "\n%s\t%s" % ('Name:', name))
         logger(log, "%s\t%s" % ('Arn:', arn))
         logger(log, "Members:")
-        logger(log, "\n".join(members))
+        logger(log, "\n".join(["  %s" % user['UserName'] for user in members]))
+        logger(log, "Policies:")
+        logger(log, "\n".join(["  %s" % p for p in group_policies]))
+        logger(log, "Assume role profiles:")
+        logger(log, "\n".join(["  %s" % p for p in assume_role_profiles]))
 
 
 def display_roles_in_accounts(args, log, deployed, auth_spec):
@@ -253,37 +262,6 @@ def manage_group_members(args, log, deployed, auth_spec):
                             UserName=username)
 
 
-#def create_policy(iam_client, args, log, auth_spec p_spec):
-#    """
-#    under construction
-#    """
-#    # assume name and statement keys exist
-#    path = munge_path(auth_spec['default_path'], p_spec)
-#    if 'Path' in p_spec and p_spec['Path']:
-#        path = "/%s/" % p_spec['Path']
-#    else:
-#        path = '/'
-#    if 'Description' in p_spec and p_spec['Description']:
-#        desc = p_spec['Description']
-#    else:
-#        desc = ''
-#    policy_doc = json.dumps(
-#            dict(Version='2012-10-17', Statement=p_spec['Statement']),
-#            indent=2, separators=(',', ': '))
-#    #print policy_doc
-#    response = iam_client.create_policy(
-#            PolicyName=p_spec['Name'],
-#            Path=path,
-#            PolicyDocument=policy_doc,
-#            Description=desc)
-
-## Used for testing only
-#def create_policies(args, log, deployed, auth_spec):
-#    iam_client = boto3.client('iam')
-#    for p_spec in auth_spec['policies']:
-#        create_policy(iam_client, args, log, p_spec)
-
-
 def manage_delegation_role(iam_client, iam_resource, args, log,
         deployed_accounts, default_path, account_name, d_spec):
     """
@@ -344,7 +322,7 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
         statement['Condition'] = {'Bool':{'aws:MultiFactorAuthPresent':'true'}}
     policy_doc = json.dumps(dict(Version='2012-10-17', Statement=[statement]))
 
-    # create role object
+    # create role if it doesn't yet exist
     role = iam_resource.Role(d_spec['RoleName'])
     try:
         role.load()
@@ -361,7 +339,7 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
             else:
                 return
 
-    # make sure role exists
+    # double check role exists (may not be necessary)
     try:
         role.reload()
     except Exception, e:
@@ -410,7 +388,7 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
                 if args['--exec']:
                     role.detach_policy(PolicyArn=policy_arn)
             # delete unused custom policies
-            # TODO: be sure this policy is one we actually manage first
+            # TODO: be sure this policy is one we actually manage first.  How??
             #policy = iam_resource.Policy(policy_arn)
             #if policy.attachment_count == '0':
             #    logger(log, "Deleting custom policy '%s' from account '%s'." %
@@ -493,9 +471,6 @@ def main():
     deployed = dict(
             users = iam_client.list_users()['Users'],
             groups = iam_client.list_groups()['Groups'])
-    #print deployed['users']
-    #print deployed['groups']
-    #print
 
     if args['--spec-file']:
         auth_spec = validate_auth_spec_file(args['--spec-file'])
@@ -512,18 +487,13 @@ def main():
         if args['--spec-file']:
             display_roles_in_accounts(args, log, deployed, auth_spec)
 
-
     if args['users']:
         create_users(args, log, deployed, auth_spec)
         create_groups(args, log, deployed, auth_spec)
         manage_group_members(args, log, deployed, auth_spec)
 
     if args['delegation']:
-        #print deployed['accounts']
         manage_delegations(args, log, deployed, auth_spec)
-
-        ## # testing only:
-        ##create_policies(args, log, deployed, auth_spec)
 
     if args['--verbose']:
         for line in log:
