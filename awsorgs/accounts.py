@@ -6,20 +6,17 @@
 Usage:
   awsaccounts report
   awsaccounts create (--spec-file FILE) [--exec] [--verbose]
-  awsaccounts provision (--spec-file FILE) [--exec] [--verbose]
   awsaccounts (-h | --help)
   awsaccounts --version
 
 Modes of operation:
   report         Display organization status report only.
   create         Create new accounts in AWS Org per specifation.
-  provision      Manage default resources in Org accounts per specifation.
 
 Options:
   -h, --help                 Show this help message and exit.
   --version                  Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
-  -d DIR, --template-dir DIR  Directory where to search for cloudformation templates.
   --exec                     Execute proposed changes to AWS accounts.
   -v, --verbose              Log activity to STDOUT.
 
@@ -43,10 +40,8 @@ from awsorgs import (
         ensure_absent,
         get_root_id,
         validate_master_id,
-        get_resource_for_assumed_role,
-        get_client_for_assumed_role)
+)
 from awsorgs.orgs import scan_deployed_accounts
-from awsorgs.auth import munge_path, manage_delegation_role
 
 
 def validate_account_spec_file(args):
@@ -154,33 +149,33 @@ def display_provisioned_accounts(log, deployed_accounts):
         logger(log, "%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
 
 
-def provision_accounts(org_client, log, args, deployed_accounts, account_spec):
-    """
-    Generate default resources in new accounts using cloudformation.
-    """
-    for a_spec in account_spec['accounts']:
-        account_id = lookup(deployed_accounts, 'Name', a_spec['Name'], 'Id')
-        if not account_id:
-            # check if account is still being built
-            created_accounts = scan_created_accounts(org_client)
-            if lookup(created_accounts, 'AccountName', a_spec['Name']):
-                logger(log,
-                        "New account '%s' is not yet available." %
-                        a_spec['Name'])
-        else:
-            if account_id == account_spec['master_account_id']:
-                iam_client = boto3.client('iam')
-                iam_resource = boto3.resource('iam')
-            else:
-                iam_client = get_client_for_assumed_role('iam',
-                        account_id, account_spec['org_access_role'])
-                iam_resource = get_resource_for_assumed_role('iam',
-                        account_id, account_spec['org_access_role'])
-            # create delegation
-            for d_spec in account_spec['delegations']:
-                manage_delegation_role(iam_client, iam_resource, args, log,
-                        deployed_accounts, account_spec['default_path'],
-                        a_spec['Name'], d_spec)
+#def provision_accounts(org_client, log, args, deployed_accounts, account_spec):
+#    """
+#    Generate default resources in new accounts using cloudformation.
+#    """
+#    for a_spec in account_spec['accounts']:
+#        account_id = lookup(deployed_accounts, 'Name', a_spec['Name'], 'Id')
+#        if not account_id:
+#            # check if account is still being built
+#            created_accounts = scan_created_accounts(org_client)
+#            if lookup(created_accounts, 'AccountName', a_spec['Name']):
+#                logger(log,
+#                        "New account '%s' is not yet available." %
+#                        a_spec['Name'])
+#        else:
+#            if account_id == account_spec['master_account_id']:
+#                iam_client = boto3.client('iam')
+#                iam_resource = boto3.resource('iam')
+#            else:
+#                iam_client = get_client_for_assumed_role('iam',
+#                        account_id, account_spec['org_access_role'])
+#                iam_resource = get_resource_for_assumed_role('iam',
+#                        account_id, account_spec['org_access_role'])
+#            # create delegation
+#            for d_spec in account_spec['delegations']:
+#                manage_delegation_role(iam_client, iam_resource, args, log,
+#                        deployed_accounts, account_spec['default_path'],
+#                        a_spec['Name'], d_spec)
 
 
 def main():
@@ -211,11 +206,11 @@ def main():
             logger( log, "Warning: unmanaged accounts in Org: %s" %
                     (', '.join(unmanaged)))
 
-    if args['provision']:
-        logger(log, "Running AWS account provisioning.")
-        if not args['--exec']:
-            logger(log, "This is a dry run!")
-        provision_accounts(org_client, log, args, deployed_accounts, account_spec)
+    #if args['provision']:
+    #    logger(log, "Running AWS account provisioning.")
+    #    if not args['--exec']:
+    #        logger(log, "This is a dry run!")
+    #    provision_accounts(org_client, log, args, deployed_accounts, account_spec)
 
     if args['--verbose']:
         for line in log:
