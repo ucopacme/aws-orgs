@@ -1,17 +1,27 @@
-Thu Jul 13 13:16:44 PDT 2017
+Tue Aug  1 08:11:05 PDT 2017
 
 TODO:
-validate spec file
+add debug option
+document all functions
+distinguish local only functions
+delete unused custom policies
+replace functions get_{client/resource}_for_assumed_role()
+validate delegation specs
+validate policy specs
+insert account name when reporting assume role policies
+add options for reporting:
+  allow separate reports for users, groups, delegations
+  allow for multiple levels of detail in delegation reports
 DONE get org root id
 DONE report users, groups, roles
-IN PROGRESS report roles and policies
+DONE report roles and policies
 DONE create users
 DONE create groups
 DONE populate users in groups
 warn when a user does not exist when populating groups
 validate all path assignments against org 'teams' data spec.
 DONE create custom policies
-attach policies to groups
+DONE attach policies to groups
 DONE create roles
 DONE populate roles in other org accounts.
 create credentials for new users
@@ -23,6 +33,19 @@ how/where do we structure/deploy yaml data for teams specification?
   maybe place it in a db or ldap or redis?
   currently this resides in the spec-file used by accounts.py.
 
+
+
+
+
+
+    # delete unused custom policies
+    # TODO: be sure this policy is one we actually manage first.  How??
+    #policy = iam_resource.Policy(policy_arn)
+    #if policy.attachment_count == '0':
+    #    logger(log, "Deleting custom policy '%s' from account '%s'." %
+    #            (policy_name, account_name))
+    #    if args['--exec']:
+    #        policy.delete()
 
 # policy for group in trusted accoiunt to assume given role in trusting account.
 {
