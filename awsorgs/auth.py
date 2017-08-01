@@ -369,7 +369,8 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
                             AssumeRolePolicyDocument=policy_doc)
                     if 'Policies' in d_spec and d_spec['Policies']:
                         role.load()
-                        attach_role_policies(iam_client, args, log, role,d_spec)
+                        attach_role_policies(iam_client, args, log,
+                                account_name, role, d_spec)
                     return
                 else:
                     return
@@ -398,11 +399,12 @@ def manage_delegation_role(iam_client, iam_resource, args, log,
                     RoleName=role.role_name,
                     Description=d_spec['Description'])
         # manage policy attachments
-        attach_role_policies(iam_client, args, log, role, d_spec)
+        attach_role_policies(iam_client, args, log, account_name, role, d_spec)
 
 
 
-def attach_role_policies(iam_client, args, log, role, d_spec):
+def attach_role_policies(iam_client, args, log, account_name, role, d_spec):
+
     # manage policy attachments
     all_policies = iam_client.list_policies()['Policies']
     attached_policies = [p.policy_name for p
