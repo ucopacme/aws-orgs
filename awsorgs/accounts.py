@@ -62,7 +62,7 @@ def validate_account_spec_file(args):
         if not isinstance(spec[key], str):
             msg = "Invalid spec-file: '%s' must be type 'str'." % key
             raise RuntimeError(msg)
-    list_keys = ['cloudformation_stacks', 'accounts']
+    list_keys = ['delegations', 'accounts']
     for key in list_keys:
         if not key in spec:
             msg = "Invalid spec-file: missing required param '%s'." % key
@@ -82,30 +82,6 @@ def validate_account_spec_file(args):
               (err_prefix, str(a_spec)))
             raise RuntimeError(msg)
 
-    # validate cloudformation_stacks spec
-    err_prefix = "Malformed cloudformation spec in spec-file"
-    for cf_spec in spec['cloudformation_stacks']:
-        if not isinstance(cf_spec, dict):
-            msg = "%s: not a dictionary: '%s'" % (err_prefix, str(cf_spec))
-            raise RuntimeError(msg)
-        if not 'Name' in cf_spec:
-            msg = ("%s: missing 'Name' key near: '%s'" %
-                    (err_prefix, str(cf_spec)))
-            raise RuntimeError(msg)
-        if not ensure_absent(cf_spec):
-            required_keys = ['Template', 'Tags']
-            for key in required_keys:
-                if not key in cf_spec:
-                    msg = ("%s: stack '%s': missing required param '%s'" %
-                            (err_prefix, cf_spec['Name'], key))
-                    raise RuntimeError(msg)
-            list_keys = ['Capabilities', 'Parameters', 'Tags']
-            for key in list_keys:
-                if key in cf_spec and cf_spec[key]:
-                    if not isinstance(cf_spec[key], list):
-                        msg = ("%s: stack '%s': value of '%s' must be a list." %
-                                (err_prefix, cf_spec['Name'], key))
-                        raise RuntimeError(msg)
     # all done!
     return spec
 
