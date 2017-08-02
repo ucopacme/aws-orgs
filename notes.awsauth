@@ -5,13 +5,17 @@ add debug option
 document all functions
 distinguish local only functions
 delete unused custom policies
-replace functions get_{client/resource}_for_assumed_role()
+DONE replace functions get_{client/resource}_for_assumed_role()
 validate delegation specs
 validate policy specs
 insert account name when reporting assume role policies
 add options for reporting:
   allow separate reports for users, groups, delegations
   allow for multiple levels of detail in delegation reports
+prevent deletion of org_access_role
+report unmanaged iam resources in all accounts
+handle assigning group policies in auth account itself.  not just delegations.
+check for custom policy updates
 DONE get org root id
 DONE report users, groups, roles
 DONE report roles and policies
