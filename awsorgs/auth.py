@@ -288,7 +288,7 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
     for g_spec in auth_spec['groups']:
-        if ('Policies' and g_spec['Policies']
+        if ('Policies' in g_spec and g_spec['Policies']
                 and not ensure_absent(g_spec)
                 and lookup(deployed['groups'], 'GroupName', g_spec['Name'])):
             group = iam_resource.Group(g_spec['Name'])
@@ -305,6 +305,9 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                             auth_spec['auth_account']))
                     if args['--exec']:
                         group.attach_policy(PolicyArn=policy_arn)
+                elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
+                    policy_arn = get_policy_arn(iam_client, policy_name, args,
+                            log, auth_spec)
             # datach obsolete policies
             for policy_name in attached_policies:
                 if not policy_name in g_spec['Policies']:
@@ -319,7 +322,8 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
 
 
 def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
-    aws_policies = iam_client.list_policies(Scope='AWS')['Policies']
+    aws_policies = iam_client.list_policies(Scope='AWS',
+            MaxItems=500)['Policies']
     policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
     if policy_arn:
         return policy_arn
@@ -337,10 +341,9 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
         policy_doc = json.dumps(dict(
                 Version='2012-10-17',
                 Statement=p_spec['Statement']))
-        #print policy_doc
         custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-        policy = lookup(custom_policies, 'PolicyName', policy_name, 'Arn')
-        if not policy['Arn']:
+        policy = lookup(custom_policies, 'PolicyName', policy_name)
+        if not policy:
             logger(log, "Creating custom policy '%s'." % policy_name)
             if args['--exec']:
                 return iam_client.create_policy(
@@ -350,9 +353,10 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
                     PolicyDocument=policy_doc)['Policy']['Arn']
             return None
         else:
-            current_doc = client.get_policy_version(
+            current_doc = iam_client.get_policy_version(
                     PolicyArn=policy['Arn'],
-                    VersionId=policy['Version'])['Document']
+                    VersionId=policy['DefaultVersionId']
+                    )['PolicyVersion']['Document']
             if json.dumps(current_doc) != policy_doc:
                 logger(log, "Updating custom policy '%s'." % policy_name)
                 if args['--exec']:
@@ -517,6 +521,9 @@ def attach_role_policies(iam_client, args, log, account_name, role, d_spec):
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
                 role.attach_policy(PolicyArn=policy_arn)
+        elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
+            policy_arn = get_policy_arn(iam_client, policy_name, args,
+                    log, auth_spec)
     # datach obsolete policies
     for policy_name in attached_policies:
         if not policy_name in d_spec['Policies']:
@@ -625,6 +632,7 @@ def main():
         create_users(iam_client, args, log, deployed, auth_spec)
         create_groups(iam_client, args, log, deployed, auth_spec)
         manage_group_members(iam_client, args, log, deployed, auth_spec)
+        manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['delegation']:
         manage_delegations(args, log, deployed, auth_spec)
