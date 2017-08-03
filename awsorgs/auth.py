@@ -382,10 +382,8 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
             auth_spec['org_access_role'])
     iam_resource = boto3.resource('iam', **credentials)
     for trusting_account in d_spec['TrustingAccount']:
-        print trusting_account
 
         # build group policies in trusted account
-        print d_spec['TrustedGroup']
         group = iam_resource.Group(d_spec['TrustedGroup'])
         try:
             group.load()
@@ -413,7 +411,6 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
 
         # manage group policy
         policy_name="%s-%s" % (d_spec['RoleName'], trusting_account_id)
-        print policy_name
         group_policies = [p.policy_name for p in list(group.policies.all())]
         if ensure_absent(d_spec): 
             if policy_name in group_policies:
@@ -451,7 +448,6 @@ def manage_delegation_role(credentials, args, log, deployed,
     iam_resource = boto3.resource('iam', **credentials)
 
     # assemble assume role policy document for delegation role
-    print d_spec['RoleName']
     trusted_account_id = lookup(deployed['accounts'], 'Name',
             d_spec['TrustedAccount'], 'Id')
     principal = "arn:aws:iam::%s:root" % trusted_account_id
