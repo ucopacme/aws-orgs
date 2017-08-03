@@ -14,8 +14,9 @@ add options for reporting:
   allow for multiple levels of detail in delegation reports
 prevent deletion of org_access_role
 report unmanaged iam resources in all accounts
-handle assigning group policies in auth account itself.  not just delegations.
-check for custom policy updates
+recreate role,policy if path changes
+DONE handle assigning group policies in auth account itself.  not just delegations.
+DONE check for custom policy updates
 DONE get org root id
 DONE report users, groups, roles
 DONE report roles and policies
