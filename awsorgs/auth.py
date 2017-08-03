@@ -281,6 +281,88 @@ def manage_group_members(iam_client, args, log, deployed, auth_spec):
                             UserName=username)
 
 
+def manage_group_policies(credentials, args, log, deployed, auth_spec):
+    """
+    Attach managed policies to groups based on group specification
+    """
+    iam_client = boto3.client('iam', **credentials)
+    iam_resource = boto3.resource('iam', **credentials)
+    for g_spec in auth_spec['groups']:
+        if ('Policies' and g_spec['Policies']
+                and not ensure_absent(g_spec)
+                and lookup(deployed['groups'], 'GroupName', g_spec['Name'])):
+            group = iam_resource.Group(g_spec['Name'])
+            attached_policies = [p.policy_name for p
+                    in list(group.attached_policies.all())]
+            # attach missing policies
+            for policy_name in g_spec['Policies']:
+                if not policy_name in attached_policies:
+                    policy_arn = get_policy_arn(iam_client, policy_name, args,
+                            log, auth_spec)
+                    logger(log,
+                            "Attaching policy '%s' to group '%s' in account '%s'."
+                            % (policy_name, g_spec['Name'],
+                            auth_spec['auth_account']))
+                    if args['--exec']:
+                        group.attach_policy(PolicyArn=policy_arn)
+            # datach obsolete policies
+            for policy_name in attached_policies:
+                if not policy_name in g_spec['Policies']:
+                    policy_arn = get_policy_arn(iam_client, policy_name, args,
+                            log, auth_spec)
+                    logger(log,
+                            "Detaching policy '%s' from group '%s' in account '%s'."
+                            % (policy_name, g_spec['Name'],
+                            auth_spec['auth_account']))
+                    if args['--exec']:
+                        group.detach_policy(PolicyArn=policy_arn)
+
+
+def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
+    aws_policies = iam_client.list_policies(Scope='AWS')['Policies']
+    policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
+    if policy_arn:
+        return policy_arn
+    else:
+        p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
+        if not p_spec:
+            logger(log, "Custom Policy spec for '%s' not found in auth-spec." %
+                    policy_name)
+            logger(log, "Policy creation failed.")
+            return None
+        if not validate_policy_spec(args, log, p_spec):
+            logger(log, "Custom Policy spec for '%' invalid." % policy_name)
+            logger(log, "Policy creation failed.")
+            return None
+        policy_doc = json.dumps(dict(
+                Version='2012-10-17',
+                Statement=p_spec['Statement']))
+        #print policy_doc
+        custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+        policy = lookup(custom_policies, 'PolicyName', policy_name, 'Arn')
+        if not policy['Arn']:
+            logger(log, "Creating custom policy '%s'." % policy_name)
+            if args['--exec']:
+                return iam_client.create_policy(
+                    PolicyName=p_spec['PolicyName'],
+                    Path=munge_path(auth_spec['default_path'], p_spec),
+                    Description=p_spec['Description'],
+                    PolicyDocument=policy_doc)['Policy']['Arn']
+            return None
+        else:
+            current_doc = client.get_policy_version(
+                    PolicyArn=policy['Arn'],
+                    VersionId=policy['Version'])['Document']
+            if json.dumps(current_doc) != policy_doc:
+                logger(log, "Updating custom policy '%s'." % policy_name)
+                if args['--exec']:
+                    iam_client.create_policy_version(
+                            PolicyArn=policy['Arn'],
+                            PolicyDocument=policy_doc,
+                            SetAsDefault=True)
+            return policy['Arn']
+
+
 def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
 
     credentials = get_assume_role_credentials(
@@ -309,8 +391,6 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
         statement = dict(
                 Effect='Allow',
                 Action='sts:AssumeRole',
-                #Resource="arn:aws:iam::%s:role/%s" % (trusting_account_id,
-                #         d_spec['RoleName']))
                 Resource="arn:aws:iam::%s:role%s%s" % (
                         trusting_account_id,
                         munge_path(auth_spec['default_path'], d_spec),
@@ -327,14 +407,16 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
             if policy_name in group_policies:
                 logger(log,
                         "Deleting policy '%s' from group '%s' in account '%s'."
-                        % (policy_name, d_spec['TrustedGroup'], trusting_account))
+                        % (policy_name, d_spec['TrustedGroup'],
+                        trusting_account))
                 if args['--exec']:
                     group.Policy(policy_name).delete()
         else:
             if not policy_name in group_policies:
                 logger(log,
                         "Creating group policy '%s' for group '%s' in account '%s'."
-                        % (policy_name, d_spec['TrustedGroup'], auth_spec['auth_account']))
+                        % (policy_name, d_spec['TrustedGroup'],
+                        auth_spec['auth_account']))
                 if args['--exec']:
                     group.create_policy(
                             PolicyName=policy_name,
@@ -342,7 +424,8 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
             elif json.dumps(group.Policy(policy_name).policy_document) != policy_doc:
                 logger(log,
                         "Updating policy '%s' for group '%s' in account '%s'."
-                        % (policy_name, d_spec['TrustedGroup'], trusting_account))
+                        % (policy_name, d_spec['TrustedGroup'],
+                        trusting_account))
                 if args['--exec']:
                     group.Policy(policy_name).put(PolicyDocument=policy_doc)
 
@@ -424,53 +507,50 @@ def manage_delegation_role(credentials, args, log, deployed,
 
 def attach_role_policies(iam_client, args, log, account_name, role, d_spec):
     # manage policy attachments
-    all_policies = iam_client.list_policies()['Policies']
     attached_policies = [p.policy_name for p
             in list(role.attached_policies.all())]
     # attach missing policies
     for policy_name in d_spec['Policies']:
-        policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
-        if not policy_name in attached_policies and policy_arn:
-            logger(log,
-                    "Attaching policy '%s' to role '%s' in account '%s'."
-                    % (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec']:
+        if not policy_name in attached_policies:
+            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
+            logger(log, "Attaching policy '%s' to role '%s' in account '%s'." %
+                    (policy_name, d_spec['RoleName'], account_name))
+            if args['--exec'] and policy_arn:
                 role.attach_policy(PolicyArn=policy_arn)
     # datach obsolete policies
     for policy_name in attached_policies:
-        policy_arn = lookup(all_policies, 'PolicyName', policy_name, 'Arn')
         if not policy_name in d_spec['Policies']:
-            logger(log,
-                    "Detaching policy '%s' from role '%s' in account '%s'."
+            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
+            logger(log, "Detaching policy '%s' from role '%s' in account '%s'."
                     % (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec']:
+            if args['--exec'] and policy_arn:
                 role.detach_policy(PolicyArn=policy_arn)
 
             
-def create_custom_policy(credentials, args, log, policy_name, auth_spec):
-    iam_client = boto3.client('iam', **credentials)
-    iam_resource = boto3.resource('iam', **credentials)
-    p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name) 
-    #print p_spec
-    if not p_spec:
-        logger(log, "Custom Policy spec for '%s' not found in auth-spec." %
-                policy_name)
-        logger(log, "Policy creation failed.")
-        return
-    if not validate_policy_spec(args, log, p_spec):
-        logger(log, "Policy spec for '%' invalid." % policy_name)
-        logger(log, "Policy creation failed.")
-        return
-    policy_doc = json.dumps(
-            dict(Version='2012-10-17', Statement=p_spec['Statement']),
-            indent=2, separators=(',', ': '))
-    #print policy_doc
-    if args['--exec']:
-        iam_client.create_policy(
-            PolicyName=p_spec['PolicyName'],
-            Path=munge_path(auth_spec['default_path'], p_spec),
-            Description=p_spec['Description'],
-            PolicyDocument=policy_doc)
+#def create_custom_policy(credentials, args, log, policy_name, auth_spec):
+#    iam_client = boto3.client('iam', **credentials)
+#    iam_resource = boto3.resource('iam', **credentials)
+#    p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name) 
+#    #print p_spec
+#    if not p_spec:
+#        logger(log, "Custom Policy spec for '%s' not found in auth-spec." %
+#                policy_name)
+#        logger(log, "Policy creation failed.")
+#        return
+#    if not validate_policy_spec(args, log, p_spec):
+#        logger(log, "Policy spec for '%' invalid." % policy_name)
+#        logger(log, "Policy creation failed.")
+#        return
+#    policy_doc = json.dumps(
+#            dict(Version='2012-10-17', Statement=p_spec['Statement']),
+#            indent=2, separators=(',', ': '))
+#    #print policy_doc
+#    if args['--exec']:
+#        iam_client.create_policy(
+#            PolicyName=p_spec['PolicyName'],
+#            Path=munge_path(auth_spec['default_path'], p_spec),
+#            Description=p_spec['Description'],
+#            PolicyDocument=policy_doc)
 
 
 
@@ -502,18 +582,18 @@ def manage_delegations(args, log, deployed, auth_spec):
                         trusting_account_id,
                         auth_spec['org_access_role'])
 
-                # check for custom policies in trusting account
-                #TODO: check for policy updates
-                for policy_name in d_spec['Policies']:
-                    #manage_custom_policy(...)
-                    iam_client = boto3.client('iam', **credentials)
-                    all_policies = iam_client.list_policies()['Policies']
-                    if not lookup(all_policies, 'PolicyName', policy_name):
-                        logger(log,
-                                "Creating custom policy '%s' in account '%s'." %
-                                (policy_name, d_spec['TrustingAccount']))
-                        create_custom_policy(credentials, args, log,
-                                policy_name, auth_spec)
+                ## check for custom policies in trusting account
+                ##TODO: check for policy updates
+                #for policy_name in d_spec['Policies']:
+                #    #manage_custom_policy(...)
+                #    iam_client = boto3.client('iam', **credentials)
+                #    all_policies = iam_client.list_policies()['Policies']
+                #    if not lookup(all_policies, 'PolicyName', policy_name):
+                #        logger(log,
+                #                "Creating custom policy '%s' in account '%s'." %
+                #                (policy_name, d_spec['TrustingAccount']))
+                #        create_custom_policy(credentials, args, log,
+                #                policy_name, auth_spec)
 
                 # manage role in trusting account
                 manage_delegation_role(credentials, args, log,
