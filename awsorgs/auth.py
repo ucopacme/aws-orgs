@@ -152,12 +152,15 @@ def display_provisioned_groups(iam_client, log, deployed):
                 assume_role_profiles.append(doc['Statement'][0]['Resource'])
         log.info("\n%s\t%s" % ('Name:', name))
         log.info("%s\t%s" % ('Arn:', arn))
-        log.info("Members:")
-        log.info("\n".join(["  %s" % user['UserName'] for user in members]))
-        log.info("Policies:")
-        log.info("\n".join(["  %s" % p for p in group_policies]))
-        log.info("Assume role profiles:")
-        log.info("\n".join(["  %s" % p for p in assume_role_profiles]))
+        if members:
+            log.info("Members:")
+            log.info("\n".join(["  %s" % user['UserName'] for user in members]))
+        if group_policies:
+            log.info("Policies:")
+            log.info("\n".join(["  %s" % p for p in group_policies]))
+        if assume_role_profiles:
+            log.info("Assume role profiles:")
+            log.info("\n".join(["  %s" % p for p in assume_role_profiles]))
 
 
 def display_roles_in_accounts(log, deployed, auth_spec):
@@ -172,19 +175,23 @@ def display_roles_in_accounts(log, deployed, auth_spec):
         role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
         custom_policies = iam_client.list_policies(Scope='Local')['Policies']
         log.info("\nAccount:\t%s" % account['Name'])
+        if custom_policies:
+            log.info("Custom Policies:")
+            for policy in custom_policies:
+                log.info("  %s" % policy['PolicyName'])
         log.info("Roles:")
         for name in role_names:
             role = iam_resource.Role(name)
-            log.info("  Arn:\t\t%s" % role.arn)
-            log.info("  Principal:\t%s" % 
+            log.info("  %s" % name)
+            log.info("    Arn:\t%s" % role.arn)
+            log.info("    Principal:\t%s" % 
                     role.assume_role_policy_document['Statement'][0]['Principal']['AWS'])
-            log.info("  Policies:\t%s" % ' '.join(
-                    [p.policy_name for p 
-                     in list(role.attached_policies.all())]))
-        log.info("Custom Policies:")
-        for policy in custom_policies:
-            log.info("  %s" % policy['PolicyName'])
-        log.info('')
+            attached = [p.policy_name for p 
+                     in list(role.attached_policies.all())]
+            if attached:
+                log.info("    Attached Policies:")
+                for policy in attached:
+                    log.info("      %s" % policy)
 
 
 def create_users(iam_client, args, log, deployed, auth_spec):
@@ -196,17 +203,17 @@ def create_users(iam_client, args, log, deployed, auth_spec):
         user = lookup(deployed['users'], 'UserName', u_spec['Name'])
         if user:
             if ensure_absent(u_spec):
-                log.info("deleting user '%s'" % u_spec['Name'])
+                log.info("Deleting user '%s'" % u_spec['Name'])
                 if args['--exec']:
                     iam_client.delete_user( UserName=u_spec['Name'])
                     log.info(response['User']['Arn'])
             elif user['Path'] != path:
-                log.info("updating path on user '%s'" % u_spec['Name'])
+                log.info("Updating path on user '%s'" % u_spec['Name'])
                 if args['--exec']:
                     iam_client.update_user(
                             UserName=u_spec['Name'], NewPath=path)
         elif not ensure_absent(u_spec):
-            log.info("creating user '%s'" % u_spec['Name'])
+            log.info("Creating user '%s'" % u_spec['Name'])
             if args['--exec']:
                 response = iam_client.create_user(
                         UserName=u_spec['Name'], Path=path)
@@ -224,12 +231,11 @@ def create_groups(iam_client, args, log, deployed, auth_spec):
             if ensure_absent(g_spec):
                 # check if group has users
                 if iam_client.get_group(GroupName=g_spec['Name'])['Users']:
-                    log.info(
-                      "Warning: group '%s' still has users.  Can't delete." %
-                      g_spec['Name'])
+                    log.error("Group '%s' still has users.  "
+                             "Can't delete." % g_spec['Name'])
                 # delete group
                 else:
-                    log.info("deleting group '%s'" % g_spec['Name'])
+                    log.info("Deleting group '%s'" % g_spec['Name'])
                     if args['--exec']:
                         # delete group policies
                         for policy_name in iam_client.list_group_policies(
@@ -240,13 +246,13 @@ def create_groups(iam_client, args, log, deployed, auth_spec):
                         iam_client.delete_group(GroupName=g_spec['Name'])
             elif group['Path'] != path:
                 # update group
-                log.info("updating path on group '%s'" % g_spec['Name'])
+                log.info("Updating path on group '%s'" % g_spec['Name'])
                 if args['--exec']:
                     iam_client.update_group(
                             GroupName=g_spec['Name'], NewPath=path)
         elif not ensure_absent(g_spec):
             # create group
-            log.info("creating group '%s'" % g_spec['Name'])
+            log.info("Creating group '%s'" % g_spec['Name'])
             if args['--exec']:
                 response = iam_client.create_group(
                         GroupName=g_spec['Name'], Path=path)
@@ -308,13 +314,13 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                 if not policy_name in attached_policies:
                     policy_arn = get_policy_arn(iam_client, policy_name, args,
                             log, auth_spec)
-                    log.info(
-                            "Attaching policy '%s' to group '%s' in account '%s'."
-                            % (policy_name, g_spec['Name'],
+                    log.info("Attaching policy '%s' to group '%s' in "
+                            "account '%s'." % (policy_name, g_spec['Name'],
                             auth_spec['auth_account']))
                     if args['--exec']:
                         group.attach_policy(PolicyArn=policy_arn)
-                elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
+                elif lookup(auth_spec['custom_policies'], 'PolicyName',
+                        policy_name):
                     policy_arn = get_policy_arn(iam_client, policy_name, args,
                             log, auth_spec)
             # datach obsolete policies
@@ -322,9 +328,8 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                 if not policy_name in g_spec['Policies']:
                     policy_arn = get_policy_arn(iam_client, policy_name, args,
                             log, auth_spec)
-                    log.info(
-                            "Detaching policy '%s' from group '%s' in account '%s'."
-                            % (policy_name, g_spec['Name'],
+                    log.info("Detaching policy '%s' from group '%s' in "
+                            "account '%s'." % (policy_name, g_spec['Name'],
                             auth_spec['auth_account']))
                     if args['--exec']:
                         group.detach_policy(PolicyArn=policy_arn)
@@ -339,13 +344,13 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
     else:
         p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
         if not p_spec:
-            log.info("Custom Policy spec for '%s' not found in auth-spec." %
+            log.error("Custom Policy spec for '%s' not found in auth-spec." %
                     policy_name)
-            log.info("Policy creation failed.")
+            log.error("Policy creation failed.")
             return None
         if not validate_policy_spec(args, log, p_spec):
-            log.info("Custom Policy spec for '%' invalid." % policy_name)
-            log.info("Policy creation failed.")
+            log.error("Custom Policy spec for '%' invalid." % policy_name)
+            log.error("Policy creation failed.")
             return None
         policy_doc = json.dumps(dict(
                 Version='2012-10-17',
@@ -390,7 +395,7 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
             group.load()
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchEntity':
-                log.info("Group '%s' not found in account '%s'." %
+                log.error("Group '%s' not found in account '%s'." %
                         (d_spec['TrustedGroup'], d_spec['TrustedAccount']))
             else:
                 log.info(e)
@@ -415,26 +420,23 @@ def set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec):
         group_policies = [p.policy_name for p in list(group.policies.all())]
         if ensure_absent(d_spec): 
             if policy_name in group_policies:
-                log.info(
-                        "Deleting policy '%s' from group '%s' in account '%s'."
-                        % (policy_name, d_spec['TrustedGroup'],
+                log.info("Deleting policy '%s' from group '%s' in "
+                        "account '%s'." % (policy_name, d_spec['TrustedGroup'],
                         trusting_account))
                 if args['--exec']:
                     group.Policy(policy_name).delete()
         else:
             if not policy_name in group_policies:
-                log.info(
-                        "Creating group policy '%s' for group '%s' in account '%s'."
-                        % (policy_name, d_spec['TrustedGroup'],
+                log.info("Creating group policy '%s' for group '%s' in "
+                        "account '%s'." % (policy_name, d_spec['TrustedGroup'],
                         auth_spec['auth_account']))
                 if args['--exec']:
                     group.create_policy(
                             PolicyName=policy_name,
                             PolicyDocument=policy_doc)
             elif json.dumps(group.Policy(policy_name).policy_document) != policy_doc:
-                log.info(
-                        "Updating policy '%s' for group '%s' in account '%s'."
-                        % (policy_name, d_spec['TrustedGroup'],
+                log.info("Updating policy '%s' for group '%s' in "
+                        "account '%s'." % (policy_name, d_spec['TrustedGroup'],
                         trusting_account))
                 if args['--exec']:
                     group.Policy(policy_name).put(PolicyDocument=policy_doc)
@@ -545,14 +547,14 @@ def manage_delegations(args, log, deployed, auth_spec):
     for d_spec in auth_spec['delegations']:
         if not validate_delegation_spec(args, log, d_spec):
             log.error("Delegation spec for '%s' invalid." % d_spec['RoleName'])
-            log.error( "Delegation creation failed.")
+            log.error("Delegation creation failed.")
             return
         set_group_assume_role_policies(d_spec, args, log, deployed, auth_spec)
         for trusting_account in d_spec['TrustingAccount']:
             trusting_account_id = lookup(deployed['accounts'], 'Name',
                     trusting_account, 'Id')
             if not trusting_account_id:
-                log.error( "Cant find account %s" % trusting_account)
+                log.error("Cant find account %s" % trusting_account)
             else:
                 credentials = get_assume_role_credentials(
                         trusting_account_id,
@@ -574,7 +576,7 @@ def main():
     elif args['--exec']:
         log_format = '%(name)s: %(levelname)-8s%(message)s'
     else:
-        log_format = '%(name)s: %(levelname)-8s[dryrun]%(message)s'
+        log_format = '%(name)s: %(levelname)-8s[dryrun] %(message)s'
     if not args['--boto-log']:
         logging.getLogger('botocore').propagate = False
         logging.getLogger('boto3').propagate = False
