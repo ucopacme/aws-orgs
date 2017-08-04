@@ -125,20 +125,20 @@ def get_assume_role_credentials(account_id, role_name, path=None,
                 region_name=region_name)
 
 
-def display_provisioned_users(report, deployed):
+def display_provisioned_users(log, deployed):
     header = "Provisioned IAM Users in Auth Account:"
     overbar = '_' * len(header)
-    report.info("\n%s\n%s\n" % (overbar, header))
+    log.info("\n%s\n%s\n" % (overbar, header))
     for name in sorted([u['UserName'] for u in deployed['users']]):
         arn = lookup(deployed['users'], 'UserName', name, 'Arn')
         spacer = ' ' * (12 - len(name))
-        report.info("%s%s\t%s" % (name, spacer, arn))
+        log.info("%s%s\t%s" % (name, spacer, arn))
 
 
-def display_provisioned_groups(iam_client, report, deployed):
+def display_provisioned_groups(iam_client, log, deployed):
     header = "Provisioned IAM Groups in Auth Account:"
     overbar = '_' * len(header)
-    report.info("\n\n%s\n%s" % (overbar, header))
+    log.info("\n\n%s\n%s" % (overbar, header))
     for name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
         arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
         members = iam_client.get_group(GroupName=name)['Users']
@@ -150,20 +150,20 @@ def display_provisioned_groups(iam_client, report, deployed):
                     PolicyName=policy_name)['PolicyDocument']
             if doc['Statement'][0]['Action'] == 'sts:AssumeRole':
                 assume_role_profiles.append(doc['Statement'][0]['Resource'])
-        report.info("\n%s\t%s" % ('Name:', name))
-        report.info("%s\t%s" % ('Arn:', arn))
-        report.info("Members:")
-        report.info("\n".join(["  %s" % user['UserName'] for user in members]))
-        report.info("Policies:")
-        report.info("\n".join(["  %s" % p for p in group_policies]))
-        report.info("Assume role profiles:")
-        report.info("\n".join(["  %s" % p for p in assume_role_profiles]))
+        log.info("\n%s\t%s" % ('Name:', name))
+        log.info("%s\t%s" % ('Arn:', arn))
+        log.info("Members:")
+        log.info("\n".join(["  %s" % user['UserName'] for user in members]))
+        log.info("Policies:")
+        log.info("\n".join(["  %s" % p for p in group_policies]))
+        log.info("Assume role profiles:")
+        log.info("\n".join(["  %s" % p for p in assume_role_profiles]))
 
 
-def display_roles_in_accounts(report, deployed, auth_spec):
+def display_roles_in_accounts(log, deployed, auth_spec):
     header = "Provisioned IAM Roles in all Org Accounts:"
     overbar = '_' * len(header)
-    report.info("\n\n%s\n%s" % (overbar, header))
+    log.info("\n\n%s\n%s" % (overbar, header))
     for account in deployed['accounts']:
         credentials = get_assume_role_credentials( account['Id'],
                 auth_spec['org_access_role'])
@@ -171,20 +171,20 @@ def display_roles_in_accounts(report, deployed, auth_spec):
         iam_resource = boto3.resource('iam', **credentials)
         role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
         custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-        report.info("\nAccount:\t%s" % account['Name'])
-        report.info("Roles:")
+        log.info("\nAccount:\t%s" % account['Name'])
+        log.info("Roles:")
         for name in role_names:
             role = iam_resource.Role(name)
-            report.info("  Arn:\t\t%s" % role.arn)
-            report.info("  Principal:\t%s" % 
+            log.info("  Arn:\t\t%s" % role.arn)
+            log.info("  Principal:\t%s" % 
                     role.assume_role_policy_document['Statement'][0]['Principal']['AWS'])
-            report.info("  Policies:\t%s" % ' '.join(
+            log.info("  Policies:\t%s" % ' '.join(
                     [p.policy_name for p 
                      in list(role.attached_policies.all())]))
-        report.info("Custom Policies:")
+        log.info("Custom Policies:")
         for policy in custom_policies:
-            report.info("  %s" % policy['PolicyName'])
-        report.info('')
+            log.info("  %s" % policy['PolicyName'])
+        log.info('')
 
 
 def create_users(iam_client, args, log, deployed, auth_spec):
@@ -565,11 +565,13 @@ def main():
     args = docopt(__doc__)
 
     log_level = logging.CRITICAL
-    if args['--verbose']:
+    if args['--verbose'] or args['report'] or args['--boto-log']:
         log_level = logging.INFO
     if args['--debug']:
         log_level = logging.DEBUG
-    if args['--exec']:
+    if args['report']:
+        log_format = '%(message)s'
+    elif args['--exec']:
         log_format = '%(name)s: %(levelname)-8s%(message)s'
     else:
         log_format = '%(name)s: %(levelname)-8s[dryrun]%(message)s'
@@ -592,17 +594,9 @@ def main():
             accounts = scan_deployed_accounts(org_client))
 
     if args['report']:
-        logging.getLogger(__name__).propagate = False
-        report_handler = logging.StreamHandler()
-        report_format = logging.Formatter('%(message)s')
-        report_handler.setLevel(logging.INFO)
-        report_handler.setFormatter(report_format)
-        report = logging.getLogger('report')
-        report.info('I;m here!')
-        report.addHandler(report_handler)
-        display_provisioned_users(report, deployed)
-        display_provisioned_groups(iam_client, report, deployed)
-        #display_roles_in_accounts(report, deployed, auth_spec)
+        display_provisioned_users(log, deployed)
+        display_provisioned_groups(iam_client, log, deployed)
+        display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
         create_users(iam_client, args, log, deployed, auth_spec)
