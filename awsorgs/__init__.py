@@ -1,6 +1,7 @@
 
 import os
 import boto3
+import logging
 
 
 def lookup(dlist, lkey, lvalue, rkey=None):
@@ -37,6 +38,30 @@ def ensure_absent(spec):
     """
     if 'Ensure' in spec and spec['Ensure'] == 'absent': return True
     return False
+
+
+def get_logger(args):
+    """
+    Setup logging.basicConfig from args.
+    Return logging.Logger object.
+    """
+    log_level = logging.CRITICAL
+    if args['--verbose'] or args['report'] or args['--boto-log']:
+        log_level = logging.INFO
+    if args['--debug']:
+        log_level = logging.DEBUG
+    if args['report']:
+        log_format = '%(message)s'
+    elif args['--exec']:
+        log_format = '%(name)s: %(levelname)-8s%(message)s'
+    else:
+        log_format = '%(name)s: %(levelname)-8s[dryrun] %(message)s'
+    if not args['--boto-log']:
+        logging.getLogger('botocore').propagate = False
+        logging.getLogger('boto3').propagate = False
+    logging.basicConfig(format=log_format, level=log_level)
+    log = logging.getLogger(__name__)
+    return log
 
 
 def logger(log, message):

@@ -1,7 +1,8 @@
 #!/usr/bin/python
 
 
-"""Manage users, group, and roles for cross account authentication in AWS.
+"""Manage users, group, and roles for cross account authentication in an
+AWS Organization.
 
 Usage:
   awsauth report (--spec-file FILE) [-d] [--boto-log]
@@ -20,7 +21,7 @@ Options:
   --version                  Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   --exec                     Execute proposed changes to AWS accounts.
-  -v, --verbose              Log to STDOUT as well as log-target.
+  -v, --verbose              Log to activity to STDOUT at log level INFO.
   -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log                 Include botocore and boto3 logs in log stream.
 
@@ -30,7 +31,6 @@ import os
 import sys
 import yaml
 import json
-import logging
 
 import boto3
 import botocore.exceptions
@@ -42,6 +42,7 @@ import awsorgs
 from awsorgs import (
         lookup,
         ensure_absent,
+        get_logger,
         validate_master_id,
 )
 from awsorgs.orgs import scan_deployed_accounts
@@ -569,23 +570,7 @@ def manage_delegations(args, log, deployed, auth_spec):
 
 def main():
     args = docopt(__doc__)
-
-    log_level = logging.CRITICAL
-    if args['--verbose'] or args['report'] or args['--boto-log']:
-        log_level = logging.INFO
-    if args['--debug']:
-        log_level = logging.DEBUG
-    if args['report']:
-        log_format = '%(message)s'
-    elif args['--exec']:
-        log_format = '%(name)s: %(levelname)-8s%(message)s'
-    else:
-        log_format = '%(name)s: %(levelname)-8s[dryrun] %(message)s'
-    if not args['--boto-log']:
-        logging.getLogger('botocore').propagate = False
-        logging.getLogger('boto3').propagate = False
-    logging.basicConfig(format=log_format, level=log_level)
-    log = logging.getLogger(__name__)
+    log = get_logger(args)
 
     auth_spec = validate_auth_spec_file(args['--spec-file'])
     org_client = boto3.client('organizations')
