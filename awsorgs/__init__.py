@@ -64,15 +64,6 @@ def get_logger(args):
     return log
 
 
-def logger(log, message):
-    """
-    Collect log messages into a list.
-    """
-    if message:
-        log.append(message)
-    return
-
-
 def get_root_id(org_client):
     """
     Query deployed AWS Organization for its Root ID.

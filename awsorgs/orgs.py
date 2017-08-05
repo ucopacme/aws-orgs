@@ -4,11 +4,10 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs report [--log-target <target>]...
-  awsorgs organization (--spec-file FILE) [--exec]
-             [--verbose] [--log-target <target>]...
-  awsorgs (-h | --help)
+  awsorgs report [-d] [--boto-log]
+  awsorgs organization (--spec-file FILE) [--exec] [-vd] [--boto-log]
   awsorgs --version
+  awsorgs --help
 
 Modes of operation:
   report         Display organization status report only.
@@ -19,15 +18,9 @@ Options:
   --version                  Display version info and exit.
   -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
   --exec                     Execute proposed changes to AWS Org.
-  -l, --log-target <target>  Where to send log output.  This option can be
-                             repeated to specicy multiple targets.
-  -v, --verbose              Log to STDOUT as well as log-target.
-
-Supported log targets:
-  local file:       /var/log/orgs.out
-  email addresses:  agould@blee.red
-  AWS sns stream:   ??syntax??
-  
+  -v, --verbose              Log to activity to STDOUT at log level INFO.
+  -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
+  --boto-log                 Include botocore and boto3 logs in log stream.
 
 """
 
@@ -42,7 +35,7 @@ from docopt import docopt
 import awsorgs
 from awsorgs import (
         lookup,
-        logger,
+        get_logger,
         ensure_absent,
         get_root_id,
         validate_master_id)
@@ -227,11 +220,11 @@ def manage_account_moves(org_client, args, log, deployed_accounts,
         for account in ou_spec['Accounts']:
             account_id = lookup(deployed_accounts, 'Name', account, 'Id')
             if not account_id:
-                logger(log,"Warning: account '%s' not yet in Org." % account)
+                log.warn("Account '%s' not yet in Org" % account)
             else:
                 source_parent_id = get_parent_id(org_client, account_id)
                 if dest_parent_id != source_parent_id:
-                    logger(log, "moving account '%s' to OU '%s'" %
+                    log.info("Moving account '%s' to OU '%s'" %
                             (account, ou_spec['Name']))
                     if args['--exec']:
                         org_client.move_account(
@@ -250,7 +243,7 @@ def place_unmanged_accounts(org_client, args, log, deployed, account_list,
         dest_parent_id   = lookup(deployed['ou'], 'Name', dest_parent, 'Id')
         source_parent_id = get_parent_id(org_client, account_id)
         if dest_parent_id and dest_parent_id != source_parent_id:
-            logger(log, "moving unmanged account '%s' to default OU '%s'" %
+            log.info("Moving unmanged account '%s' to default OU '%s'" %
                     (account, dest_parent))
             if args['--exec']:
                 org_client.move_account(
@@ -292,11 +285,11 @@ def display_provisioned_policies(org_client, log, deployed_policies):
     """
     header = "Provisioned Service Control Policies:"
     overbar = '_' * len(header)
-    logger(log, "\n%s\n%s" % (overbar, header))
+    log.info("\n%s\n%s" % (overbar, header))
     for policy in deployed_policies:
-        logger(log, "Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" %
+        log.info("Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" %
                 (policy['Name'], policy['Description'], policy['Id']))
-        logger(log, "Content:\t%s\n" %
+        log.info("Content:\t%s\n" %
                 get_policy_content(org_client, policy['Id']))
 
 
@@ -315,11 +308,11 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
             if policy_id:
                 # check if we need to delete policy
                 if ensure_absent(p_spec):
-                    logger(log, "deleting policy '%s'" % (policy_name))
+                    log.info("Deleting policy '%s'" % (policy_name))
                     # dont delete attached policy
                     if org_client.list_targets_for_policy(
                             PolicyId=policy_id)['Targets']:
-                        logger(log, "Cannot delete policy '%s'. Still attached to OU." %
+                        log.error("Cannot delete policy '%s'. Still attached to OU" %
                                 (policy_name))
                     elif args['--exec']:
                         org_client.delete_policy(PolicyId=policy_id)
@@ -328,7 +321,7 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
                         lookup(deployed_policies,'Id',policy_id,'Description')
                         or specify_policy_content(p_spec) !=
                         get_policy_content(org_client, policy_id)):
-                    logger(log, "updating policy '%s'" % (policy_name))
+                    log.info("Updating policy '%s'" % (policy_name))
                     if args['--exec']:
                         org_client.update_policy(
                                 PolicyId=policy_id,
@@ -336,7 +329,7 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
                                 Description=p_spec['Description'],)
             # create new policy
             elif not ensure_absent(p_spec):
-                logger(log, "creating policy '%s'" % (policy_name))
+                log.info("Creating policy '%s'" % (policy_name))
                 if args['--exec']:
                     org_client.create_policy(
                             Content=specify_policy_content(p_spec),
@@ -393,18 +386,18 @@ def display_provisioned_ou(org_client, log, deployed_ou, parent_name,
     child_accounts = lookup(deployed_ou, 'Name', parent_name, 'Accounts')
     # display parent ou name
     tab = '  '
-    logger(log, tab*indent + parent_name + ':')
+    log.info(tab*indent + parent_name + ':')
     # look for policies
     policy_names = list_policies_in_ou(org_client, parent_id)
     if len(policy_names) > 0:
-        logger(log, tab*indent + tab + 'Policies: ' + ', '.join(policy_names))
+        log.info(tab*indent + tab + 'Policies: ' + ', '.join(policy_names))
     # look for accounts
     account_list = sorted(child_accounts)
     if len(account_list) > 0:
-        logger(log, tab*indent + tab + 'Accounts: ' + ', '.join(account_list))
+        log.info(tab*indent + tab + 'Accounts: ' + ', '.join(account_list))
     # look for child OUs
     if child_ou_list:
-        logger(log, tab*indent + tab + 'Child_OU:')
+        log.info(tab*indent + tab + 'Child_OU:')
         indent+=2
         for ou_name in child_ou_list:
             # recurse
@@ -434,15 +427,16 @@ def manage_policy_attachments(org_client, args, log, deployed_policies,
             raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
                     policy_name)
         if not ensure_absent(ou_spec):
-            logger(log, "attaching policy '%s' to OU '%s'" %
+            log.info("Attaching policy '%s' to OU '%s'" %
                     (policy_name, ou_spec['Name']))
             if args['--exec']:
                 org_client.attach_policy(
-                        PolicyId=lookup(deployed_policies,'Name',policy_name,'Id'),
+                        PolicyId=lookup(
+                                deployed_policies, 'Name', policy_name, 'Id'),
                         TargetId=ou_id)
     # detach policies
     for policy_name in policies_to_detach:
-        logger(log, "detaching policy '%s' from OU '%s'" %
+        log.info("Detaching policy '%s' from OU '%s'" %
                 (policy_name, ou_spec['Name']))
         if args['--exec']:
             org_client.detach_policy(PolicyId=lookup(deployed_policies,
@@ -475,7 +469,7 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
                         raise RuntimeError(msg)
 
                 # delete ou
-                logger(log, "deleting OU %s" % ou_spec['Name'])
+                log.info("Deleting OU %s" % ou_spec['Name'])
                 if args['--exec']:
                     org_client.delete_organizational_unit(
                             OrganizationalUnitId=ou['Id'])
@@ -488,7 +482,7 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
 
         elif not ensure_absent(ou_spec):
             # ou does not exist
-            logger(log, "creating new OU '%s' under parent '%s'" %
+            log.info("Creating new OU '%s' under parent '%s'" %
                     (ou_spec['Name'], parent_name))
             if args['--exec']:
                 new_ou = org_client.create_organizational_unit(
@@ -507,9 +501,9 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
 
 def main():
     args = docopt(__doc__, version='awsorgs 0.0.0')
+    log = get_logger(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
-    log = []
     deployed = dict(
             policies = scan_deployed_policies(org_client),
             accounts = scan_deployed_accounts(org_client),
@@ -520,17 +514,13 @@ def main():
         validate_master_id(org_client, org_spec)
 
     if args['report']:
-        args['--verbose'] = True
         header = 'Provisioned Organizational Units in Org:'
         overbar = '_' * len(header)
-        logger(log, "\n%s\n%s" % (overbar, header))
+        log.info("\n%s\n%s" % (overbar, header))
         display_provisioned_ou(org_client, log, deployed['ou'], 'root')
         display_provisioned_policies(org_client, log, deployed['policies'])
 
     if args['organization']:
-        logger(log, "Running AWS organization management.")
-        if not args['--exec']:
-            logger(log, "This is a dry run!\n")
         enable_policy_type_in_root(org_client, root_id)
         args['default_policy'] = org_spec['default_policy']
 
@@ -547,17 +537,13 @@ def main():
                     if a not in org_spec['managed'][key] ]
             # warn about unmanaged org resources
             if unmanaged:
-                logger(log, "Warning: unmanaged %s in Org: %s" %
+                log.warn("Unmanaged %s in Org: %s" %
                         (key,', '.join(unmanaged)))
                 if key ==  'accounts':
                     # append unmanaged accounts to default_ou
                     place_unmanged_accounts(org_client, args, log, deployed,
                             unmanaged, org_spec['default_ou'])
 
-
-    if args['--verbose']:
-        for line in log:
-            print line
 
 if __name__ == "__main__":
     main()
