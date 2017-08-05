@@ -16,10 +16,10 @@ devise workflow for using this in real service context:
 __________________
 TODO awsorgs.py:
 
-have exeptions write to logger. how?
-in logger: prepend timestamp to messages
+NA have exeptions write to logger. how?
+NA in logger: prepend timestamp to messages
 add unit testing
-make logger write to different url
+NA make logger write to different url
 scan_deployed_accounts: fix 'NextToken' logic.
 
 DONE make master_id check a function. import into accounts.
@@ -45,11 +45,6 @@ NO divide into sub modules.  how would that look?
 
 __________________
 TODO accounts.py:
-support cf templates from s3
-display_provisioned_accounts(): add option to print .aws/config file
-parse account names for compliance
-account-spec details allowed values for name components
-
 DONE import more functions from awsorgs
 DONE account creation
 DONE fill out validate_account_spec_file()
@@ -59,6 +54,8 @@ DONE in scan_deployed_accounts:
 
 CONSIDER:
 YES should account spec be separate file?
+parse account names for compliance
+account-spec details allowed values for name components
 
 
 
