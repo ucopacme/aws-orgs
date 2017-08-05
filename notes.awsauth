@@ -1,21 +1,18 @@
 Tue Aug  1 08:11:05 PDT 2017
 
 TODO:
-add debug option
 document all functions
 distinguish local only functions
 delete unused custom policies
-DONE replace functions get_{client/resource}_for_assumed_role()
 validate delegation specs
 validate policy specs
-insert account name when reporting assume role policies
-add options for reporting:
-  allow separate reports for users, groups, delegations
-  allow for multiple levels of detail in delegation reports
 prevent deletion of org_access_role
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes
-DONE handle assigning group policies in auth account itself.  not just delegations.
+warn when a user does not exist when populating groups
+DONE insert account name when reporting assume role policies
+DONE add debug option
+DONE handle assigning group policies in auth account.
 DONE check for custom policy updates
 DONE get org root id
 DONE report users, groups, roles
@@ -23,14 +20,11 @@ DONE report roles and policies
 DONE create users
 DONE create groups
 DONE populate users in groups
-warn when a user does not exist when populating groups
-validate all path assignments against org 'teams' data spec.
 DONE create custom policies
 DONE attach policies to groups
 DONE create roles
 DONE populate roles in other org accounts.
-create credentials for new users
-email credentials new users
+DONE replace functions get_{client/resource}_for_assumed_role()
 
 ISSUES:
 how to ensure againts orphan delegations in accounts?
@@ -38,6 +32,13 @@ how/where do we structure/deploy yaml data for teams specification?
   maybe place it in a db or ldap or redis?
   currently this resides in the spec-file used by accounts.py.
 
+CONSIDER:
+create credentials for new users
+email credentials new users
+add options for reporting:
+  allow separate reports for users, groups, delegations
+  allow for multiple levels of detail in delegation reports
+validate all path assignments against org 'teams' data spec.
 
 
 

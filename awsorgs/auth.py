@@ -135,32 +135,36 @@ def display_provisioned_users(log, deployed):
         log.info("%s%s\t%s" % (name, spacer, arn))
 
 
-def display_provisioned_groups(iam_client, log, deployed):
+def display_provisioned_groups(credentials, log, deployed):
+    iam_resource = boto3.resource('iam', **credentials)
     header = "Provisioned IAM Groups in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
     for name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
-        arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
-        members = iam_client.get_group(GroupName=name)['Users']
-        group_policies = iam_client.list_group_policies(
-                GroupName=name)['PolicyNames']
-        assume_role_profiles = []
-        for policy_name in group_policies:
-            doc = iam_client.get_group_policy( GroupName=name,
-                    PolicyName=policy_name)['PolicyDocument']
-            if doc['Statement'][0]['Action'] == 'sts:AssumeRole':
-                assume_role_profiles.append(doc['Statement'][0]['Resource'])
+        group = iam_resource.Group(name)
+        members = list(group.users.all())
+        attached_policies = list(group.attached_policies.all())
+        assume_role_resources = [p.policy_document['Statement'][0]['Resource']
+                for p in list(group.policies.all()) if
+                p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
         log.info("\n%s\t%s" % ('Name:', name))
-        log.info("%s\t%s" % ('Arn:', arn))
+        log.info("%s\t%s" % ('Arn:', group.arn))
         if members:
             log.info("Members:")
-            log.info("\n".join(["  %s" % user['UserName'] for user in members]))
-        if group_policies:
+            log.info("\n".join(["  %s" % u.name for u in members]))
+        if attached_policies:
             log.info("Policies:")
-            log.info("\n".join(["  %s" % p for p in group_policies]))
-        if assume_role_profiles:
+            log.info("\n".join(["  %s" % p.arn for p in attached_policies]))
+        if assume_role_resources:
             log.info("Assume role profiles:")
-            log.info("\n".join(["  %s" % p for p in assume_role_profiles]))
+            log.info("  Account\tRole ARN")
+            profiles = {}
+            for role_arn in assume_role_resources:
+                account_name = lookup(deployed['accounts'], 'Id',
+                        role_arn.split(':')[4], 'Name')
+                profiles[account_name] =  role_arn
+            for account_name in sorted(profiles.keys()):
+                log.info("  %s:\t%s" % (account_name, profiles[account_name]))
 
 
 def display_roles_in_accounts(log, deployed, auth_spec):
@@ -597,7 +601,7 @@ def main():
 
     if args['report']:
         display_provisioned_users(log, deployed)
-        display_provisioned_groups(iam_client, log, deployed)
+        display_provisioned_groups(credentials, log, deployed)
         display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
