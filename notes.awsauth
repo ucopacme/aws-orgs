@@ -1,15 +1,16 @@
 Tue Aug  1 08:11:05 PDT 2017
 
 TODO:
-document all functions
-distinguish local only functions
-delete unused custom policies
+DONE document all functions
 validate delegation specs
 validate policy specs
+handle 'ALL' special value in delegations[trusting_accounts]
+DONE warn when a user does not exist when populating groups
 prevent deletion of org_access_role
+delete unused custom policies
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes
-warn when a user does not exist when populating groups
+distinguish local only functions
 DONE insert account name when reporting assume role policies
 DONE add debug option
 DONE handle assigning group policies in auth account.
