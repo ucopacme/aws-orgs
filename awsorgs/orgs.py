@@ -285,12 +285,16 @@ def display_provisioned_policies(org_client, log, deployed_policies):
     """
     header = "Provisioned Service Control Policies:"
     overbar = '_' * len(header)
-    log.info("\n%s\n%s" % (overbar, header))
+    log.info("\n\n%s\n%s" % (overbar, header))
     for policy in deployed_policies:
-        log.info("Name:\t\t%s\nDescription:\t%s\nId:\t\t%s" %
-                (policy['Name'], policy['Description'], policy['Id']))
-        log.info("Content:\t%s\n" %
-                get_policy_content(org_client, policy['Id']))
+        log.info("\nName:\t\t%s" % policy['Name'])
+        log.info("Description:\t%s" % policy['Description'])
+        log.info("Id:\t%s" % policy['Id'])
+        log.info("Content:")
+        log.info(json.dumps(json.loads(org_client.describe_policy(
+                PolicyId=policy['Id'])['Policy']['Content']),
+                indent=2,
+                separators=(',', ': ')))
 
 
 def manage_policies(org_client, args, log, deployed_policies, policy_spec):
