@@ -11,6 +11,7 @@ delete unused custom policies
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes
 distinguish local only functions
+incorporate theading
 DONE insert account name when reporting assume role policies
 DONE add debug option
 DONE handle assigning group policies in auth account.
