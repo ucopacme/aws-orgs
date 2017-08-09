@@ -1,60 +1,69 @@
-master_account_id: 'XXXXXXXXXXXXXXXX'
-default_region: us-west-2
-org_access_role: OrganizationAccountAccessRole
+# AWS Accounts Specification
 
-cloudformation_stacks:
-  - Name: role-central-admin
-    Ensure: present
-    Template: role-central-admin.yaml
-    Capabilities:
-      - CAPABILITY_IAM
-      - CAPABILITY_NAMED_IAM
-    Parameters:
-      - ParameterKey: CentralAdminAccount
-        ParameterValue: arn:aws:iam::XXXXXXXXXXXXXXXX:root
-      - ParameterKey: RoamingAdminRoleName
-        ParameterValue: AWSAccountsAuthAdminRole
-    Tags:
-      - Key: team
-        Value: syseng
+# AWS account Id for the Organization master account.  This must be in quotes.
+master_account_id: 'XXXXXXXXXXXX'
 
+# Email domain to use for account creation if the accounts['Email'] field
+# is not explicitly specified.
+default_email_domain: example.com
+
+# Accounts Specification.  List of managed AWS accounts in the Organization.
+# Each account has 3 attributes all of type 'str':
+#   Name:   The name of the account - required.
+#   Email:  The email address used when creating a new account.  This
+#           address must be unique in all AWS (for crying out load).  If
+#           omitted, we combine the account name and the default_email_domain.
+#   Team:   A label for tracking folks within your organization associated
+#           with a this account.
+#
 accounts:
   - Name: Master
-    Provision: True
+    Team: systems
   - Name: Auth
-    Email: auth@blee.red
+    Email: auth@example.com
+    Team: systems
   - Name: Management
-    Email: management@blee.red
+    Email: management@example.com
+    Team: systems
   - Name: Security
-    Email: ashleyg@blee.red
-    Provision: True
+    Email: security@example.com
+    Team: systems
   - Name: blee-poc
-    Email: blee-poc@blee.red
-  - Name: blee-dev
-    Email: blee-dev@blee.red
+    Email: blee-poc@example.com
+    Team: blee
   - Name: blee-prod
-    Email: blee-prod@blee.red
+    Email: blee-prod@example.com
+    Team: blee
   - Name: gorp-poc
-    Email: gorp-pod@blee.red
-  - Name: gorp-dev
-    Email: gorp-dev@blee.red
+    Email: gorp-pod@example.com
+    Team: gorp
   - Name: gorp-prod
-    Email: gorp-prod@blee.red
-  - Name: test0
-    Email: test0@blee.red
-    Provision: True
-  - Name: test1
-    Email: test1@blee.red
-    Provision: True
-  - Name: test2
-    Email: test2@blee.red
-    Provision: True
-  - Name: test3
-    Email: test3@blee.red
-    Provision: True
-  - Name: test4
-    Email: test4@blee.red
-    Provision: True
-  - Name: test5
-    Email: test5@blee.red
-    Provision: True
+    Email: gorp-prod@example.com
+    Team: gorp
+
+
+# Teams Specication.  This provides a labeling system for tracking folks within
+# your organization who are responsible for managed accounts and users.
+# (I'm not yet clear if this can be useful.)
+#
+teams:
+  - Name: systems
+    Contacts:
+      Business:
+        - ghzuza@example.com
+      Technical:
+        - mhumphey@example.com
+  - Name: blee
+    Contacts:
+      Business:
+        - hwait@example.com
+      Technical:
+        - lcohen@example.com
+  - Name: gorp
+    Contacts:
+      Business:
+        - nbpage@example.com
+      Technical:
+        - dscarlatti@example.com
+
+

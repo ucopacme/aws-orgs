@@ -8,6 +8,8 @@ validate policy specs
 DONE handle 'ALL' special value in delegations[trusting_accounts]
 DONE warn when a user does not exist when populating groups
 DONE prevent deletion of org_access_role
+put all users in default group
+add Exclude attribute to groups and delegations for when 'ALL' is specified
 delete unused custom policies
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes

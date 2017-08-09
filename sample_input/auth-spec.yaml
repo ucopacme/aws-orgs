@@ -1,20 +1,34 @@
-auth_account_id: 'XXXXXXXXXXXX'
-master_account_id: 'XXXXXXXXXXXX'
-default_region: us-west-2
+master_account_id: '640965621536'
+auth_account: Managment
+auth_account_id: '962936672038'
+org_access_role: OrganizationAccountAccessRole
 default_group: all-users
-auth_access_role: AWSAccountsAuthAdminRole
+default_path: awsauth
 
 groups:
   - Name: all-users
+    Members:
+      - mary
+      - jethro
+      - agould
+      - bernice
+    Policies:
+      - UserSelfService
+  - Name: authadmin
+    Ensure: present
+    Path:
+    Members:
+      - agould
+      - authtemp
   - Name: admins
     Ensure: present
     Path:
     Members:
-      - ashley
+      - agould
       - authtemp
     Policies:
-      Mangaged:
-        - AdministratorAccess
+      #- AdministratorAccess
+      - PowerUserAccess
   - Name: eas-users
     Ensure: present
     Path: eas
@@ -26,7 +40,7 @@ groups:
     Ensure: absent
     Path: was
     Members:
-      - quincey
+      #- quincey
 
 users:
   - Name: authtemp
@@ -35,7 +49,7 @@ users:
     Ensure: present
     Path: sysadm
     Tags:
-      Email: agould@blee.red
+      Email: agould@ucop.edu
   - Name: ericthered
     #Ensure: absent
     Path: astro
@@ -50,33 +64,109 @@ users:
 
 
 delegations:
-  #- RoleName: AWSAuthListAccounts
-  #  Ensure: present
-  #  TrustingAccount: Ashley Gould
-  #  TrustedAccount: Managment
+  #- RoleName: OrganizationAccountAccessRole
+  #  Ensure: absent
+  #  TrustingAccount: ALL
   #  TrustedGroup: admins
-  #  Policies:
-  #    - AWSAuthListAccountsInOrganization
+  - RoleName: AWSAccountsAuthAdminRole
+    Ensure: absent
+    TrustingAccount: ALL
+    TrustedGroup: admins
+  - RoleName: AWSAuthIAMFullAccess
+    Ensure: present
+    Description: Allow auth admins full access to IAM
+    TrustingAccount: ALL
+    TrustedGroup: authadmin
+    RequireMFA: True
+    Policies:
+      - IAMFullAccess
+      - AWSAuthListAccountsInOrganization
+  - RoleName: AWSAuthListAccounts
+    Ensure: absent
+    TrustingAccount: ALL
+    TrustedGroup: admins
+    Policies:
+      - AWSAuthListAccountsInOrganization
   - RoleName: AWSAuthFullAdmin
     Ensure: present
-    TrustingAccount:
-      - test1
-      - test2
-      - test3
-    TrustedAccount: Managment
+    Description: Allow admins full access to all services
+    Path:
+    TrustingAccount: ALL
     TrustedGroup: admins
     RequireMFA: True
     Policies:
       - AdministratorAccess
 
 custom_policies:
-  - Name: AWSAuthListAccountsInOrganization
+  - PolicyName: AWSAuthListAccountsInOrganization
     Description: Allow Users to list accounts in an Organization
+    Path:
     Statement:
       - Effect: Allow
         Action:
           - organizations:ListAccounts
         Resource: '*'
+
+  - PolicyName: UserSelfService
+    Description: Allow users to manage thier own account and credentials
+    Statement:
+      - Sid: AllowAllUsersToListAccounts
+        Effect: Allow
+        Action:
+          - iam:ListAccountAliases
+          - iam:ListUsers
+          - iam:GetAccountSummary
+        Resource: "*"
+      - Sid: AllowIndividualUserToSeeAndManageTheirOwnAccountInformation
+        Effect: Allow
+        Action:
+          - iam:ChangePassword
+          - iam:CreateAccessKey
+          - iam:CreateLoginProfile
+          - iam:DeleteAccessKey
+          - iam:DeleteLoginProfile
+          - iam:GetAccountPasswordPolicy
+          - iam:GetLoginProfile
+          - iam:ListAccessKeys
+          - iam:UpdateAccessKey
+          - iam:UpdateLoginProfile
+          - iam:ListSigningCertificates
+          - iam:DeleteSigningCertificate
+          - iam:UpdateSigningCertificate
+          - iam:UploadSigningCertificate
+          - iam:ListSSHPublicKeys
+          - iam:GetSSHPublicKey
+          - iam:DeleteSSHPublicKey
+          - iam:UpdateSSHPublicKey
+          - iam:UploadSSHPublicKey
+        Resource: arn:aws:iam::*:user/*/${aws:username}
+      - Sid: AllowIndividualUserToListTheirOwnMFA
+        Effect: Allow
+        Action:
+          - iam:ListVirtualMFADevices
+          - iam:ListMFADevices
+        Resource:
+          - arn:aws:iam::*:mfa/*
+          - arn:aws:iam::*:user/*/${aws:username}
+      - Sid: AllowIndividualUserToManageTheirOwnMFA
+        Effect: Allow
+        Action:
+          - iam:CreateVirtualMFADevice
+          - iam:DeactivateMFADevice
+          - iam:DeleteVirtualMFADevice
+          - iam:RequestSmsMfaRegistration
+          - iam:FinalizeSmsMfaRegistration
+          - iam:EnableMFADevice
+          - iam:ResyncMFADevice
+        Resource:
+          - arn:aws:iam::*:mfa/${aws:username}
+          - arn:aws:iam::*:user/*/${aws:username}
+      - Sid: BlockAnyAccessOtherThanAboveUnlessSignedInWithMFA
+        Effect: Deny
+        NotAction:
+          - iam:*
+        Resource: "*"
         Condition:
-          Bool:
-            aws:MultiFactorAuthPresent: true 
+          BoolIfExists:
+            aws:MultiFactorAuthPresent: 'false'
+

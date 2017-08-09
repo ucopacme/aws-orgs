@@ -1,51 +1,64 @@
 # AWS Organization Specification
 
+# AWS account Id for the Organization master account.  This must be in quotes.
 master_account_id: 'XXXXXXXXXXXX'
+
+# Default Organization Service Control Policy.  This is managed by AWS and
+# should not be modified or deleted.  This is attached to all Organizational
+# Units.
 default_policy: FullAWSAccess
+
+# Default Organizational Unit.  Any accounts in the Organization not
+# explicitly assigned to an Organizational Unit are placed here.
 default_ou: root
 
+# Organizational Unit Specification.  This maps the Organization's
+# structure and assigns policies and accounts to organizational units.
+# Each Organizational Unit (OU) has 5 possible attributes:
+#   Name:         Type string.  The name of the OU (required)
+#   Ensure:       Type string.  One of 'present' (default) or 'absent'.
+#                 Setting to 'absent' will cause the OU to be deleted but
+#                 only if no accounts are still assigned to the OU.
+#   Accounts:     Type list.  List of account names assigned to this OU.
+#   Policies:     Type list.  List of Service Control Policies attached to
+#                 this OU.
+#   Child_OU:     Type list.  List of child Organizational Units.
+#
 organizational_unit_spec:
+  # the root OU must be defined
   - Name: root
-    Accounts:
     Child_OU:
       - Name: prod
         Policies: 
+          - prod-service-policy
         Accounts:
-          - Ashley Gould
           - blee-prod
-          - gorp-dev
+          - gorp-prod
+      - Name: poc
+        Accounts:
+          - gorp-poc
+          - blee-poc
+        Policies: 
+          - poc_service_policy
       - Name: auth
         Accounts:
           - auth
         Policies:
           - auth-only
-      - Name: poc
-        Accounts:
-          - gorp-poc
-          - blee-poc
-          - ghost
-          - gorp-prod
-        Policies: 
-          - dev_service_policy
-          - poc_service_policy
-      - Name: nonprod
-        #Ensure: absent
-        Accounts:
-          - blee-dev
-        Policies: 
-          - dev_service_policy
-        Child_OU:
-          - Name: formal
-            Accounts:
-              - test1
-              - test2
-              - test3
-          - Name: nice
-          - Name: humble
 
 
+# Service Control Policy Specification.  Defines custom Service Control
+# Policies which can then be attached to Organizational Units. Each
+# SCPolicy has 5 possible attributes:
+#   Name:         Type string.  The name of the SCPolicy (required)
+#   Ensure:       Type string.  One of 'present' (default) or 'absent'.
+#                 Setting to 'absent' will cause the SCPolicy to be deleted but
+#                 only if no longer attached to any Organizational Units.
+#   Description:  Type string.  The policy SID.
+#   Effect:       Type string.  Either 'Allow' or 'Deny'.
+#   Actions:      Type list.  List of AWS services controlled by the policy.
 policy_spec:
-  - Name: FullAWSAccess
+  - Name: FullAWSAccess         # default SCPolicy managed by AWS
   - Name: poc_service_policy
     Ensure: present
     Description: POC Accounts
@@ -59,9 +72,9 @@ policy_spec:
       - sts:*
       - sns:*
       - cloudwatch:*
-  - Name: dev_service_policy
+  - Name: prod_service_policy
     Ensure: present
-    Description: Development Accounts
+    Description: Production Accounts
     Effect: Allow
     Actions:
       - ec2:*
@@ -74,26 +87,18 @@ policy_spec:
       - sts:*
       - sns:*
       - cloudwatch:*
+  - Name: auth-only
+    Ensure: present
+    Description: Utility policy for configuring IAM user access.
+    Effect: Allow
+    Actions:
+      - iam:*
+      - cloudformation:*
+      - cloudtrail:*
   - Name: no-services
     Ensure: absent
     Description: Deny access to all AWS services
     Effect: Deny
     Actions:
       - '*'
-  - Name: auth-only
-    Ensure: present
-    Description: Utility account for configuring IAM user access.
-    Effect: Allow
-    Actions:
-      - iam:*
-      - cloudformation:*
-      - cloudtrail:*
-  - Name: test-policy
-    Ensure: present
-    Description: Utility account for configuring IAM user access.
-    Effect: Allow
-    Actions:
-      - iam:*
-      - cloudformation:*
-      - cloudtrail:*
 
