@@ -44,7 +44,8 @@ accounts:
 
 # Teams Specication.  This provides a labeling system for tracking folks within
 # your organization who are responsible for managed accounts and users.
-# (I'm not yet clear if this can be useful.)
+#
+# NOTE: not required in current version
 #
 teams:
   - Name: systems
@@ -52,18 +53,18 @@ teams:
       Business:
         - ghzuza@example.com
       Technical:
-        - mhumphey@example.com
+        - ashely@example.com
   - Name: blee
     Contacts:
       Business:
         - hwait@example.com
       Technical:
-        - lcohen@example.com
+        - jethro@example.com
   - Name: gorp
     Contacts:
       Business:
         - nbpage@example.com
       Technical:
-        - dscarlatti@example.com
+        - mary@example.com
 
 

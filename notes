@@ -1,11 +1,17 @@
 
-
-
 __________________
 TODO project:
 
-add README file, document spec-file structure
+finish README file
+document spec-file structure
 DONE create setup.py and package project
+
+CONSIDER:
+a single interface executible with operation modes for all tasks:
+  organization, accounts, users, delegation
+a single spec file awsorgs.conf which includes all the verious spec files
+create a class to store args, logger, specs and 'deployed' dict for passing
+  to functions
 devise workflow for using this in real service context:
   change mgmt process
   data in git/s3
@@ -38,22 +44,21 @@ DONE in manage_policy_attachments raise error when:
     DONE attaching to an absent ou
 DONE in manage_policies: dont delete a policy attached to an ou
 
-CONSIDER:
-NO divide into sub modules.  how would that look?
 
 
 
 __________________
 TODO accounts.py:
+
 DONE import more functions from awsorgs
 DONE account creation
 DONE fill out validate_account_spec_file()
-DONE provision default resources with cloudformation 
 DONE in scan_deployed_accounts:
   DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
 
 CONSIDER:
-YES should account spec be separate file?
+add spec param 'require_team' as boolean:
+  enforce use of Team attribute on managed accounts
 parse account names for compliance
 account-spec details allowed values for name components
 
@@ -61,7 +66,89 @@ account-spec details allowed values for name components
 
 
 
+__________________
+TODO auth.py:
 
+document spec structures
+validate delegation specs
+validate policy specs
+handle 'ALL' special value in users[members]
+add Exclude attribute to groups and delegations for when 'ALL' is specified
+delete unused custom policies
+in delegation report list accounts in alphabetical order
+report unmanaged iam resources in all accounts
+recreate role,policy if path changes
+incorporate theading
+reconsider spec param auth_account:
+  derive from auth_account_id?
+  if not, crosscheck againts auth_account_id
+in munge_path() check if default_path is defined or not
+
+DONE handle 'ALL' special value in delegations[trusting_accounts]
+DONE warn when a user does not exist when populating groups
+DONE prevent deletion of org_access_role
+DONE document all functions
+DONE delete orphan delegations in accounts and groups
+DONE insert account name when reporting assume role policies
+DONE add debug option
+DONE handle assigning group policies in auth account.
+DONE check for custom policy updates
+DONE get org root id
+DONE report users, groups, roles
+DONE report roles and policies
+DONE create users
+DONE create groups
+DONE populate users in groups
+DONE create custom policies
+DONE attach policies to groups
+DONE create roles
+DONE populate roles in other org accounts.
+DONE replace functions get_{client/resource}_for_assumed_role()
+
+ISSUES:
+how/where do we structure/deploy yaml data for teams specification?
+  maybe place it in a db or ldap or redis?
+  currently this resides in the spec-file used by accounts.py.
+
+CONSIDER:
+distinguish local only functions
+create credentials for new users
+email credentials new users
+  requires an ses resource?
+add options for reporting:
+  allow separate reports for users, groups, delegations
+  allow for multiple levels of detail in delegation reports
+add spec param 'use_team_path' as boolean:
+  require Team attribute for users
+  append Path after team in munge_path()
+
+
+
+
+
+    # delete unused custom policies
+    # TODO: be sure this policy is one we actually manage first.  How??
+    #policy = iam_resource.Policy(policy_arn)
+    #if policy.attachment_count == '0':
+    #    logger(log, "Deleting custom policy '%s' from account '%s'." %
+    #            (policy_name, account_name))
+    #    if args['--exec']:
+    #        policy.delete()
+
+# policy for group in trusted accoiunt to assume given role in trusting account.
+{
+  "Version": "2012-10-17",
+  "Statement": {
+    "Effect": "Allow",
+    "Action": "sts:AssumeRole",
+    "Resource": "arn:aws:iam::ACCOUNT-ID-WITHOUT-HYPHENS:role/PATH/ROLENAME"
+  }
+}
+
+
+
+One liners:
+aws iam list-policies| grep PolicyName| sort |less
 
 
 

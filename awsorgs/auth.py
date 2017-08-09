@@ -56,9 +56,7 @@ def validate_auth_spec_file(spec_file):
     string_keys = [
             'master_account_id',
             'auth_account_id',
-            'auth_account',
             'org_access_role',
-            'default_group',
             'default_path']
     for key in string_keys:
         if not key in spec:
@@ -322,6 +320,7 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
     """
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
+    auth_account = lookup(deployed, 'Id' auth_spec['auth_account_id'], 'Name')
     for g_spec in auth_spec['groups']:
         if ('Policies' in g_spec and g_spec['Policies']
                 and not ensure_absent(g_spec)
@@ -336,7 +335,7 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                             log, auth_spec)
                     log.info("Attaching policy '%s' to group '%s' in "
                             "account '%s'." % (policy_name, g_spec['Name'],
-                            auth_spec['auth_account']))
+                            auth_account))
                     if args['--exec']:
                         group.attach_policy(PolicyArn=policy_arn)
                 elif lookup(auth_spec['custom_policies'], 'PolicyName',
@@ -350,7 +349,7 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                             log, auth_spec)
                     log.info("Detaching policy '%s' from group '%s' in "
                             "account '%s'." % (policy_name, g_spec['Name'],
-                            auth_spec['auth_account']))
+                            auth_account))
                     if args['--exec']:
                         group.detach_policy(PolicyArn=policy_arn)
 
@@ -425,12 +424,13 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
             auth_spec['org_access_role'])
     iam_resource = boto3.resource('iam', **credentials)
     group = iam_resource.Group(d_spec['TrustedGroup'])
+    auth_account = lookup(deployed, 'Id' auth_spec['auth_account_id'], 'Name')
     try:
         group.load()
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchEntity':
             log.error("Group '%s' not found in account '%s'" %
-                    (d_spec['TrustedGroup'], auth_spec['auth_account']))
+                    (d_spec['TrustedGroup'], auth_account))
             log.error("Can not create group assume role policy for "
                     "delegation '%s'" % d_spec['RoleName'])
             return
@@ -450,7 +450,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
             log.info("Deleting assume role group policy '%s' for 'absent' "
                     "delegation from group '%s'" %
                     (policy_name, d_spec['TrustedGroup'],
-                    auth_spec['auth_account']))
+                    auth_account))
             if args['--exec']:
                 group.Policy(policy_name).delete()
         return
@@ -483,7 +483,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
         if not policy_name in group_policies_for_role:
             log.info("Creating assume role policy '%s' for group '%s' in "
                     "account '%s'." % (policy_name, d_spec['TrustedGroup'],
-                    auth_spec['auth_account']))
+                    auth_account))
             if args['--exec']:
                 group.create_policy(
                         PolicyName=policy_name,
@@ -491,7 +491,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
         elif json.dumps(group.Policy(policy_name).policy_document) != policy_doc:
             log.info("Updating assume role policy '%s' for group '%s' in "
                     "account '%s'." % (policy_name, d_spec['TrustedGroup'],
-                    auth_spec['auth_account']))
+                    auth_account))
             if args['--exec']:
                 group.Policy(policy_name).put(PolicyDocument=policy_doc)
 
@@ -500,7 +500,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
         if p not in managed_policies:
             log.info("Deleting obsolete policy '%s' from group '%s' in "
                     "account '%s'." % (policy_name, d_spec['TrustedGroup'],
-                    auth_spec['auth_account']))
+                    auth_account))
 
 
 def manage_delegation_role(credentials, args, log, deployed,
@@ -536,9 +536,7 @@ def manage_delegation_role(credentials, args, log, deployed,
         return
 
     # assemble assume role policy document for delegation role
-    trusted_account_id = lookup(deployed['accounts'], 'Name',
-            auth_spec['auth_account'], 'Id')
-    principal = "arn:aws:iam::%s:root" % trusted_account_id
+    principal = "arn:aws:iam::%s:root" % auth_spec['auth_account_id']
     statement = dict(
             Effect='Allow',
             Principal=dict(AWS=principal),

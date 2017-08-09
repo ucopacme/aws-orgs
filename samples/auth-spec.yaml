@@ -1,78 +1,80 @@
+# AWS Auth Specification
+
+# AWS account Id for the Organization master account.  This must be in quotes.
 master_account_id: '640965621536'
-auth_account: Managment
+
+# AWS account Id for the Central Auth account.  This must be in quotes.
 auth_account_id: '962936672038'
+
+# Role to use when managing resources in account.  This must not itself
+# be a managed delegation role.
 org_access_role: OrganizationAccountAccessRole
-default_group: all-users
+
+# If defined, this string is prepended to all IAM resource 'path' attributes.
 default_path: awsauth
+
+
+users:
+  - Name: ashely
+    Email: agould@example.com
+    Team: systems
+    Path: orgadmin
+  - Name: eric
+    Email: eric@example.com
+    Team: systems
+  - Name: dave
+    Email: dave@example.com
+    Team: systems
+  - Name: jethro
+    Email: eric@example.com
+    Team: blee
+    Path: dev
+  - Name: mary
+    Email: eric@example.com
+    Team: gorp
+    Path: dev
+  - Name: quincey
+    Ensure: absent
 
 groups:
   - Name: all-users
-    Members:
-      - mary
-      - jethro
-      - agould
-      - bernice
+    Members: ALL
     Policies:
       - UserSelfService
-  - Name: authadmin
-    Ensure: present
-    Path:
-    Members:
-      - agould
-      - authtemp
   - Name: admins
     Ensure: present
-    Path:
     Members:
-      - agould
-      - authtemp
+      - ashely
+      - dave
+      - eric
     Policies:
-      #- AdministratorAccess
       - PowerUserAccess
-  - Name: eas-users
-    Ensure: present
-    Path: eas
+  - Name: orgadmins
+    Members:
+      - ashely
+  - Name: authadmins
+    Members:
+      - dave
+      - eric
+  - Name: blee-users
+    Path: blee
+    Members:
+      - jethro
+  - Name: gorp-users
+    Path: gorp
     Members:
       - mary
-      - jethro
-      - agould
-  - Name: was-users
+  - Name: lurkers
     Ensure: absent
-    Path: was
-    Members:
       #- quincey
-
-users:
-  - Name: authtemp
-  - Name: egburt
-  - Name: agould
-    Ensure: present
-    Path: sysadm
-    Tags:
-      Email: agould@ucop.edu
-  - Name: ericthered
-    #Ensure: absent
-    Path: astro
-    Tags:
-      Email: ericthered@blee.red
-  - Name: jethro
-    #Ensure: absent
-    #Path: astro
-  - Name: mary
-  - Name: quincey
-
 
 
 delegations:
-  #- RoleName: OrganizationAccountAccessRole
-  #  Ensure: absent
-  #  TrustingAccount: ALL
-  #  TrustedGroup: admins
-  - RoleName: AWSAccountsAuthAdminRole
+  - RoleName: LurkerRole
     Ensure: absent
     TrustingAccount: ALL
-    TrustedGroup: admins
-  - RoleName: AWSAuthIAMFullAccess
+    TrustedGroup: lurkers
+  - RoleName: AuthAdminRole
     Ensure: present
     Description: Allow auth admins full access to IAM
     TrustingAccount: ALL
@@ -80,27 +82,39 @@ delegations:
     RequireMFA: True
     Policies:
       - IAMFullAccess
-      - AWSAuthListAccountsInOrganization
-  - RoleName: AWSAuthListAccounts
-    Ensure: absent
-    TrustingAccount: ALL
-    TrustedGroup: admins
-    Policies:
-      - AWSAuthListAccountsInOrganization
-  - RoleName: AWSAuthFullAdmin
+      - ListAccountsInOrganization
+  - RoleName: AccountAdminitratorRole
     Ensure: present
     Description: Allow admins full access to all services
-    Path:
     TrustingAccount: ALL
     TrustedGroup: admins
     RequireMFA: True
     Policies:
       - AdministratorAccess
+  - RoleName: BleeAccessRole
+    Description: Allow developers access to blee account
+    TrustingAccount:
+      - blee-poc
+      - blee-prod
+    TrustedGroup: blee-users
+    RequireMFA: True
+    Policies:
+      - PowerUserAccess
+  - RoleName: GorpAccessRole
+    Description: Allow developers access to gorp account
+    TrustingAccount:
+      - gorp-poc
+      - gorp-prod
+    TrustedGroup: gorp-users
+    RequireMFA: True
+    Policies:
+      - PowerUserAccess
+
+
 
 custom_policies:
-  - PolicyName: AWSAuthListAccountsInOrganization
+  - PolicyName: ListAccountsInOrganization
     Description: Allow Users to list accounts in an Organization
-    Path:
     Statement:
       - Effect: Allow
         Action:
