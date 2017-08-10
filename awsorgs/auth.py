@@ -320,7 +320,8 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
     """
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
-    auth_account = lookup(deployed, 'Id' auth_spec['auth_account_id'], 'Name')
+    auth_account = lookup(deployed['accounts'], 'Id',
+            auth_spec['auth_account_id'], 'Name')
     for g_spec in auth_spec['groups']:
         if ('Policies' in g_spec and g_spec['Policies']
                 and not ensure_absent(g_spec)
@@ -424,7 +425,8 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
             auth_spec['org_access_role'])
     iam_resource = boto3.resource('iam', **credentials)
     group = iam_resource.Group(d_spec['TrustedGroup'])
-    auth_account = lookup(deployed, 'Id' auth_spec['auth_account_id'], 'Name')
+    auth_account = lookup(deployed['accounts'], 'Id',
+            auth_spec['auth_account_id'], 'Name')
     try:
         group.load()
     except ClientError as e:
@@ -442,7 +444,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
     # make list of existing group policies which match this role name
     group_policies_for_role = [p.policy_name
             for p in list(group.policies.all())
-            if p.policy_name.split('-')[0] == d_spec['RoleName']]
+            if d_spec['RoleName'] in p.policy_name.split('-')]
 
     # test if delegation should be deleted
     if ensure_absent(d_spec): 
@@ -464,7 +466,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
     managed_policies = []
     for account in trusting_accounts:
         account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
-        policy_name = "%s-%s" % (d_spec['RoleName'], account_id)
+        policy_name = "%s-%s" % (account, d_spec['RoleName'])
         managed_policies.append(policy_name)
 
         # assemble assume role policy document
@@ -496,11 +498,13 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
                 group.Policy(policy_name).put(PolicyDocument=policy_doc)
 
     # purge any policies for this role that are no longer being managed
-    for p in group_policies_for_role:
-        if p not in managed_policies:
+    for policy_name in group_policies_for_role:
+        if policy_name not in managed_policies:
             log.info("Deleting obsolete policy '%s' from group '%s' in "
                     "account '%s'." % (policy_name, d_spec['TrustedGroup'],
                     auth_account))
+            if args['--exec']:
+                group.Policy(policy_name).delete()
 
 
 def manage_delegation_role(credentials, args, log, deployed,
@@ -672,7 +676,7 @@ def main():
     if args['report']:
         display_provisioned_users(log, deployed)
         display_provisioned_groups(credentials, log, deployed)
-        display_roles_in_accounts(log, deployed, auth_spec)
+        #display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
         create_users(iam_client, args, log, deployed, auth_spec)
