@@ -449,10 +449,9 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
     # test if delegation should be deleted
     if ensure_absent(d_spec): 
         for policy_name in group_policies_for_role:
-            log.info("Deleting assume role group policy '%s' for 'absent' "
-                    "delegation from group '%s'" %
-                    (policy_name, d_spec['TrustedGroup'],
-                    auth_account))
+            log.info("Deleting assume role group policy '%s' from group '%s' "
+                    "in account '%s'" %
+                    (policy_name, d_spec['TrustedGroup'], auth_account))
             if args['--exec']:
                 group.Policy(policy_name).delete()
         return
@@ -676,7 +675,7 @@ def main():
     if args['report']:
         display_provisioned_users(log, deployed)
         display_provisioned_groups(credentials, log, deployed)
-        #display_roles_in_accounts(log, deployed, auth_spec)
+        display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
         create_users(iam_client, args, log, deployed, auth_spec)
