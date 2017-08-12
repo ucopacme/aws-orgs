@@ -7,6 +7,33 @@ master_account_id: 'XXXXXXXXXXXX'
 # is not explicitly specified.
 default_email_domain: example.com
 
+
+# Teams Specication.  This provides a labeling system for tracking folks within
+# your organization who are responsible for managed accounts and users.
+#
+# NOTE: not required in current version
+#
+teams:
+  - Name: systems
+    Contacts:
+      Business:
+        - ghzuza@example.com
+      Technical:
+        - ashely@example.com
+  - Name: blee
+    Contacts:
+      Business:
+        - hwait@example.com
+      Technical:
+        - jethro@example.com
+  - Name: gorp
+    Contacts:
+      Business:
+        - nbpage@example.com
+      Technical:
+        - mary@example.com
+
+
 # Accounts Specification.  List of managed AWS accounts in the Organization.
 # Each account has 3 attributes all of type 'str':
 #   Name:   The name of the account - required.
@@ -40,31 +67,3 @@ accounts:
   - Name: gorp-prod
     Email: gorp-prod@example.com
     Team: gorp
-
-
-# Teams Specication.  This provides a labeling system for tracking folks within
-# your organization who are responsible for managed accounts and users.
-#
-# NOTE: not required in current version
-#
-teams:
-  - Name: systems
-    Contacts:
-      Business:
-        - ghzuza@example.com
-      Technical:
-        - ashely@example.com
-  - Name: blee
-    Contacts:
-      Business:
-        - hwait@example.com
-      Technical:
-        - jethro@example.com
-  - Name: gorp
-    Contacts:
-      Business:
-        - nbpage@example.com
-      Technical:
-        - mary@example.com
-
-

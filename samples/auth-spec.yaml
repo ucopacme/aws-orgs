@@ -1,10 +1,10 @@
 # AWS Auth Specification
 
 # AWS account Id for the Organization master account.  This must be in quotes.
-master_account_id: '640965621536'
+master_account_id: 'XXXXXXXXXXXX'
 
 # AWS account Id for the Central Auth account.  This must be in quotes.
-auth_account_id: '962936672038'
+auth_account_id: 'XXXXXXXXXXXX'
 
 # Role to use when managing resources in account.  This must not itself
 # be a managed delegation role.
@@ -35,6 +35,7 @@ users:
     Path: dev
   - Name: quincey
     Ensure: absent
+
 
 groups:
   - Name: all-users
