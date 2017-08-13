@@ -32,8 +32,8 @@ import time
 import boto3
 from docopt import docopt
 
-import awsorgs
-from awsorgs import (
+import awsorgs.utils
+from awsorgs.utils import (
         lookup,
         get_logger,
         ensure_absent,

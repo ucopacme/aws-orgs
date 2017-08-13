@@ -38,13 +38,13 @@ from botocore.exceptions import ClientError
 import docopt
 from docopt import docopt
 
-import awsorgs
-from awsorgs import (
+import awsorgs.utils
+from awsorgs.utils import (
         lookup,
         ensure_absent,
         get_logger,
-        validate_master_id,
-)
+        validate_master_id)
+import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
 
