@@ -1,0 +1,37 @@
+
+delegations:
+  RoleName:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+        default: present
+  Description:
+    required: False
+    atype: str
+  TrustingAccount:
+    required: True
+    atype: 
+      str:
+        values:
+          - ALL
+      list:
+  TrustedGroup:
+    required: True
+    atype: str
+  RequireMFA:
+    required: False
+    atype:
+      bool:
+        default: True
+  Policies:
+    required: False
+    atype: list
+  Path:
+    required: False
+    atype: str
