@@ -252,9 +252,7 @@ def create_users(credentials, args, log, deployed, auth_spec):
                 log.info(response['User']['Arn'])
                 deployed['users'].append(response['User'])
 
-# ISSUE: use boto group resourse
-# ISSUE: after deleting a group, remove it from deployed['groups']
-# QUESTION: should group get deleted even if it still has users?
+
 def create_groups(iam_client, args, log, deployed, auth_spec):
     """
     Manage IAM groups based on group specification

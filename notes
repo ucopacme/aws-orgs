@@ -2,9 +2,10 @@
 __________________
 TODO project:
 
-finish README file
-document spec-file structure
+DONE finish README file
+DONE document spec-file structure
 DONE create setup.py and package project
+DONE pull functions out of __init__ into new module
 
 CONSIDER:
 a single interface executible with operation modes for all tasks:
@@ -69,10 +70,12 @@ account-spec details allowed values for name components
 __________________
 TODO auth.py:
 
-document spec structures
+create_groups: use boto group resourse
+create_groups: after deleting a group, remove it from deployed['groups']
+DONE document spec structures
 validate delegation specs
 validate policy specs
-handle 'ALL' special value in users[members]
+DONE handle 'ALL' special value in users[members]
 add Exclude attribute to groups and delegations for when 'ALL' is specified
 delete unused custom policies
 in delegation report list accounts in alphabetical order
@@ -111,6 +114,7 @@ how/where do we structure/deploy yaml data for teams specification?
   currently this resides in the spec-file used by accounts.py.
 
 CONSIDER:
+should group get deleted even if it still has users?
 distinguish local only functions
 create credentials for new users
 email credentials new users
