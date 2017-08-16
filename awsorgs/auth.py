@@ -253,38 +253,39 @@ def create_users(credentials, args, log, deployed, auth_spec):
                 deployed['users'].append(response['User'])
 
 
-def create_groups(iam_client, args, log, deployed, auth_spec):
+def create_groups(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM groups based on group specification
     """
+    iam_client = boto3.client('iam', **credentials)
+    iam_resource = boto3.resource('iam', **credentials)
     for g_spec in auth_spec['groups']:
         path = munge_path(auth_spec['default_path'], g_spec)
-        group = lookup(deployed['groups'], 'GroupName', g_spec['Name'])
-        if group:
+        deployed_group = lookup(deployed['groups'], 'GroupName', g_spec['Name'])
+        if deployed_group:
+            group = iam_resource.Group(g_spec['Name'])
+            # delete group?
             if ensure_absent(g_spec):
                 # check if group has users
-                if iam_client.get_group(GroupName=g_spec['Name'])['Users']:
+                if list(group.users.all()):
                     log.error("Can not delete group '%s'. Still contains users"
                              % g_spec['Name'])
-                # delete group
                 else:
                     log.info("Deleting group '%s'" % g_spec['Name'])
                     if args['--exec']:
-                        # delete group policies
-                        for policy_name in iam_client.list_group_policies(
-                                GroupName=g_spec['Name'])['PolicyNames']:
-                            iam_client.delete_group_policy(
-                                    GroupName=g_spec['Name'],
-                                    PolicyName=policy_name)
-                        iam_client.delete_group(GroupName=g_spec['Name'])
-            elif group['Path'] != path:
-                # update group
+                        for policy in group.policies.all():
+                            policy.delete()
+                        for policy in group.attached_policies.all():
+                            policy.detach_group(GroupName=g_spec['Name'])
+                        group.delete()
+                        deployed['groups'].remove(deployed_group)
+            # update group?
+            elif group.path != path:
                 log.info("Updating path on group '%s'" % g_spec['Name'])
                 if args['--exec']:
-                    iam_client.update_group(
-                            GroupName=g_spec['Name'], NewPath=path)
+                    group.update(NewPath=path)
+        # create group
         elif not ensure_absent(g_spec):
-            # create group
             log.info("Creating group '%s'" % g_spec['Name'])
             if args['--exec']:
                 response = iam_client.create_group(
@@ -453,22 +454,15 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
             auth_spec['auth_account_id'],
             auth_spec['org_access_role'])
     iam_resource = boto3.resource('iam', **credentials)
-    group = iam_resource.Group(d_spec['TrustedGroup'])
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
-    try:
-        group.load()
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchEntity':
-            log.error("Group '%s' not found in account '%s'" %
-                    (d_spec['TrustedGroup'], auth_account))
-            log.error("Can not create group assume role policy for "
-                    "delegation '%s'" % d_spec['RoleName'])
-            return
-        else:
-            raise e
-    except:
-        raise
+    if lookup(deployed['groups'], 'GroupName', d_spec['TrustedGroup']):
+        group = iam_resource.Group(d_spec['TrustedGroup'])
+    else:
+        log.error("Can not manage assume role policy for delegation role '%s' "
+                "in group '%s'. Group not found in auth account '%s'" %
+                (d_spec['RoleName'], d_spec['TrustedGroup'], auth_account))
+        return
 
     # make list of existing group policies which match this role name
     group_policies_for_role = [p.policy_name
@@ -708,7 +702,7 @@ def main():
 
     if args['users']:
         create_users(credentials, args, log, deployed, auth_spec)
-        create_groups(iam_client, args, log, deployed, auth_spec)
+        create_groups(credentials, args, log, deployed, auth_spec)
         manage_group_members(credentials, args, log, deployed, auth_spec)
         manage_group_policies(credentials, args, log, deployed, auth_spec)
 
