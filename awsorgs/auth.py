@@ -211,109 +211,139 @@ def display_roles_in_accounts(log, deployed, auth_spec):
                         log.info("      %s" % policy)
 
 
-def create_users(iam_client, args, log, deployed, auth_spec):
+# ISSUE: deleting user: may need to delete user policy and signing keys as well.
+def create_users(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM users based on user specification
     """
+    iam_client = boto3.client('iam', **credentials)
+    iam_resource = boto3.resource('iam', **credentials)
     for u_spec in auth_spec['users']:
         path = munge_path(auth_spec['default_path'], u_spec)
-        user = lookup(deployed['users'], 'UserName', u_spec['Name'])
-        if user:
+        deployed_user = lookup(deployed['users'], 'UserName', u_spec['Name'])
+        if deployed_user:
+            user = iam_resource.User(u_spec['Name'])
+            # delete user
             if ensure_absent(u_spec):
                 log.info("Deleting user '%s'" % u_spec['Name'])
                 if args['--exec']:
-                    iam_client.delete_user( UserName=u_spec['Name'])
-                    log.info(response['User']['Arn'])
-            elif user['Path'] != path:
+                    for group in user.groups.all():
+                        user.remove_group(GroupName=group.name)
+                    for policy in user.attached_policies.all():
+                        policy.detach_user(UserName=u_spec['Name'])
+                    for key in user.access_keys.all():
+                        key.delete()
+                    for mfa in user.mfa_devices.all():
+                        mfa.disassociate()
+                    try:
+                        user.LoginProfile().delete()
+                    except ClientError as e:
+                        if e.response['Error']['Code'] == 'NoSuchEntity':
+                            pass
+                    user.delete()
+            # update user
+            elif user.path != path:
                 log.info("Updating path on user '%s'" % u_spec['Name'])
                 if args['--exec']:
-                    iam_client.update_user(
-                            UserName=u_spec['Name'], NewPath=path)
+                    user.update(NewPath=path)
+        # create new user
         elif not ensure_absent(u_spec):
             log.info("Creating user '%s'" % u_spec['Name'])
             if args['--exec']:
-                response = iam_client.create_user(
-                        UserName=u_spec['Name'], Path=path)
+                response = iam_client.create_user(UserName=u_spec['Name'], Path=path)
                 log.info(response['User']['Arn'])
+                deployed['users'].append(response['User'])
 
 
-def create_groups(iam_client, args, log, deployed, auth_spec):
+def create_groups(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM groups based on group specification
     """
+    iam_client = boto3.client('iam', **credentials)
+    iam_resource = boto3.resource('iam', **credentials)
     for g_spec in auth_spec['groups']:
         path = munge_path(auth_spec['default_path'], g_spec)
-        group = lookup(deployed['groups'], 'GroupName', g_spec['Name'])
-        if group:
+        deployed_group = lookup(deployed['groups'], 'GroupName', g_spec['Name'])
+        if deployed_group:
+            group = iam_resource.Group(g_spec['Name'])
+            # delete group?
             if ensure_absent(g_spec):
                 # check if group has users
-                if iam_client.get_group(GroupName=g_spec['Name'])['Users']:
-                    log.error("Group '%s' still has users.  "
-                             "Can't delete." % g_spec['Name'])
-                # delete group
+                if list(group.users.all()):
+                    log.error("Can not delete group '%s'. Still contains users"
+                             % g_spec['Name'])
                 else:
                     log.info("Deleting group '%s'" % g_spec['Name'])
                     if args['--exec']:
-                        # delete group policies
-                        for policy_name in iam_client.list_group_policies(
-                                GroupName=g_spec['Name'])['PolicyNames']:
-                            iam_client.delete_group_policy(
-                                    GroupName=g_spec['Name'],
-                                    PolicyName=policy_name)
-                        iam_client.delete_group(GroupName=g_spec['Name'])
-            elif group['Path'] != path:
-                # update group
+                        for policy in group.policies.all():
+                            policy.delete()
+                        for policy in group.attached_policies.all():
+                            policy.detach_group(GroupName=g_spec['Name'])
+                        group.delete()
+                        deployed['groups'].remove(deployed_group)
+            # update group?
+            elif group.path != path:
                 log.info("Updating path on group '%s'" % g_spec['Name'])
                 if args['--exec']:
-                    iam_client.update_group(
-                            GroupName=g_spec['Name'], NewPath=path)
+                    group.update(NewPath=path)
+        # create group
         elif not ensure_absent(g_spec):
-            # create group
             log.info("Creating group '%s'" % g_spec['Name'])
             if args['--exec']:
                 response = iam_client.create_group(
                         GroupName=g_spec['Name'], Path=path)
                 log.info(response['Group']['Arn'])
+                deployed['groups'].append(response['Group'])
 
 
-# ISSUE: slightly easier using an iam resource instead of iam_client
-def manage_group_members(iam_client, args, log, deployed, auth_spec):
+def manage_group_members(credentials, args, log, deployed, auth_spec):
     """
     Populate users into groups based on group specification.
     """
+    iam_resource = boto3.resource('iam', **credentials)
     for g_spec in auth_spec['groups']:
-        if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
-                and not ensure_absent(g_spec)):
-            response = iam_client.get_group(
-                    GroupName=g_spec['Name'])['Users']
-            current_members = [user['UserName'] for user in response
-                    if 'UserName' in user]
+        if lookup(deployed['groups'], 'GroupName', g_spec['Name']):
+            group = iam_resource.Group(g_spec['Name'])
+            current_members = [user.name for user in group.users.all()] 
+            # build list of specified group members
+            spec_members = []
             if 'Members' in g_spec and g_spec['Members']:
-                spec_members = g_spec['Members']
-            else:
-                spec_members = []
-            add_users = [username for username in spec_members
-                    if username not in current_members]
-            remove_users = [username for username in current_members
-                    if username not in spec_members]
-            for username in add_users:
-                if lookup(deployed['users'], 'UserName', username):
-                    log.info("Adding user '%s' to group '%s'." %
+                if g_spec['Members'] == 'ALL':
+                    # all managed users except when user ensure: absent
+                    spec_members = [user['Name'] for user in auth_spec['users']
+                            if not ensure_absent(user)]
+                else:
+                    # just specified members
+                    for username in g_spec['Members']:
+                        u_spec = lookup(auth_spec['users'], 'Name', username)
+                        # not a managed user?
+                        if not u_spec:
+                            log.error("User '%s' not in auth_spec['users']. "
+                                    "Can not add user to group '%s'" %
+                                    (username, g_spec['Name']))
+                        # managed but absent?
+                        elif ensure_absent(u_spec):
+                            log.error("User '%s' is specified 'absent' in "
+                                    "auth_spec['users']. Can not add user "
+                                    "to group '%s'" % 
+                                    (username, g_spec['Name']))
+                        else:
+                            spec_members.append(username)
+            # ensure all specified members are in group
+            if not ensure_absent(g_spec):
+                for username in spec_members:
+                    if username not in current_members:
+                        log.info("Adding user '%s' to group '%s'." %
+                                (username, g_spec['Name']))
+                        if args['--exec']:
+                            group.add_user(UserName=username)
+            # ensure no unspecified members are in group
+            for username in current_members:
+                if username not in spec_members:
+                    log.info("Removing user '%s' from group '%s'." %
                             (username, g_spec['Name']))
                     if args['--exec']:
-                        iam_client.add_user_to_group(
-                                GroupName=g_spec['Name'],
-                                UserName=username)
-                else:
-                    log.error("User '%s' not found. Can not add user to "
-                            "group '%s'" % (username, g_spec['Name']))
-            for username in remove_users:
-                log.info("Removig user '%s' from group '%s'." %
-                        (username, g_spec['Name']))
-                if args['--exec']:
-                    iam_client.remove_user_from_group(
-                            GroupName=g_spec['Name'],
-                            UserName=username)
+                        group.remove_user(UserName=username)
 
 
 def manage_group_policies(credentials, args, log, deployed, auth_spec):
@@ -426,22 +456,15 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
             auth_spec['auth_account_id'],
             auth_spec['org_access_role'])
     iam_resource = boto3.resource('iam', **credentials)
-    group = iam_resource.Group(d_spec['TrustedGroup'])
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
-    try:
-        group.load()
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchEntity':
-            log.error("Group '%s' not found in account '%s'" %
-                    (d_spec['TrustedGroup'], auth_account))
-            log.error("Can not create group assume role policy for "
-                    "delegation '%s'" % d_spec['RoleName'])
-            return
-        else:
-            raise e
-    except:
-        raise
+    if lookup(deployed['groups'], 'GroupName', d_spec['TrustedGroup']):
+        group = iam_resource.Group(d_spec['TrustedGroup'])
+    else:
+        log.error("Can not manage assume role policy for delegation role '%s' "
+                "in group '%s'. Group not found in auth account '%s'" %
+                (d_spec['RoleName'], d_spec['TrustedGroup'], auth_account))
+        return
 
     # make list of existing group policies which match this role name
     group_policies_for_role = [p.policy_name
@@ -680,9 +703,9 @@ def main():
         display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
-        create_users(iam_client, args, log, deployed, auth_spec)
-        create_groups(iam_client, args, log, deployed, auth_spec)
-        manage_group_members(iam_client, args, log, deployed, auth_spec)
+        create_users(credentials, args, log, deployed, auth_spec)
+        create_groups(credentials, args, log, deployed, auth_spec)
+        manage_group_members(credentials, args, log, deployed, auth_spec)
         manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['delegation']:
