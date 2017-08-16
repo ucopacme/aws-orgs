@@ -32,6 +32,7 @@ setup(
             'samples/org-spec.yaml',
             'samples/account-spec.yaml',
             'samples/auth-spec.yaml',
+            'data/specification-formats.yaml',
         ],
     },
     entry_points={

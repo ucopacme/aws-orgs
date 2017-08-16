@@ -1,8 +1,12 @@
+"""Utility functions used by the various awsorgs modules"""
 
 import os
-import boto3
-import logging
+import pkg_resources
+import re
 
+import boto3
+import yaml
+import logging
 
 def lookup(dlist, lkey, lvalue, rkey=None):
     """
@@ -88,3 +92,85 @@ def validate_master_id(org_client, spec):
     return
 
 
+def load_spec_patterns():
+    """
+    Return dict of patterns for use when validating specification syntax
+    """
+    filename =  os.path.abspath(pkg_resources.resource_filename(
+            __name__, '../data/specification-formats.yaml'))
+    with open(filename) as f:
+        return yaml.load(f.read())
+
+
+def validate_spec(log, spec_patterns, pattern_name, spec):
+    """
+    Validate syntax of a given 'spec' dictionary against the
+    named spec_pattern.
+    """
+    pattern = spec_patterns[pattern_name]
+    valid_spec = True
+    log.debug("Validating spec against spec pattern '%s'\n Spec content:\n" % 
+            (pattern_name, yaml.dumps(spec)))
+    # test for required attributes
+    required_attributes = [attr for attr in pattern if pattern[attr]['required']]
+    for attr in required_attributes:
+        if attr not in spec:
+            log.debug("Required attributes for pattern '%s' : %s" %
+                    (pattern_name, required_attributes))
+            log.error("Required attribute '%s' not found in '%s' spec" %
+                    (attr, pattern_name))
+            valid_spec = False
+    for attr in spec:
+        log.debug("Considering attribute '%s'" % attr)
+        # test if attribute is permitted
+        if attr not in pattern:
+            #print '  illegal attribute %s' % attr
+            log.error("Attribute '%s' not permitted for spec pattern '%s'" %
+                    (attr, pattern_name))
+            valid_spec = False
+            continue
+        # test attribute type. ignore attr if value is None
+        if spec[attr]:
+            # (surely there must be a better way to extract the data type of
+            # and object as a string)
+            spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
+            #print spec_attr_type
+            #print type(pattern[attr]['atype'])
+            log.debug("Spec attribute type: '%s'" % spec_attr_type)
+            # simple attribute pattern
+            if isinstance(pattern[attr]['atype'], str):
+                log.debug("Pattern attribute type: '%s'" % pattern[attr]['atype'])
+                if spec_attr_type != pattern[attr]['atype']:
+                    #print '  attribute type must be %s' % pattern[attr]['atype']
+                    log.error("Attribute '%s' must be of type '%s'" %
+                            (attr, pattern[attr]['atype']))
+                    valid_spec = False
+                    continue
+            else:
+                # complex attribute pattern
+                valid_types = pattern[attr]['atype'].keys()
+                log.debug("Pattern attribute types: '%s'" % valid_types)
+                #print valid_types
+                if not spec_attr_type in valid_types: 
+                    #print '  attribute type must be %s' % valid_types
+                    log.error("Attribute '%s' must be one of type '%s'" %
+                            (attr, valid_types))
+                    valid_spec = False
+                    continue
+                atype = pattern[attr]['atype'][spec_attr_type]
+                # test attributes values
+                if atype and 'values' in atype:
+                    log.debug("Allowed values for attrubute '%s': %s" %
+                            (attr, atype['values']))
+                    if not spec[attr] in atype['values']:
+                        #print '  attribute value must be in %s' % atype['values']
+                        log.error("Value of attribute '%s' must be one of '%s'"
+                                % (attr, atype['values']))
+                        valid_spec = False
+                        continue
+                    # assign 'default' value
+                    if 'default' in atype and not spec[attr]:
+                        log.debug("Assigning value '%s' to attrubute '%s'" %
+                                (attr, atype['default']))
+                        spec[attr] = atype['default']
+    return valid_spec

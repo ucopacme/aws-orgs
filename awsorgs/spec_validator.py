@@ -1,71 +1,80 @@
 #!/usr/bin/python
 
+# Consider:
+# rename 'formats' -> 'patterns'
+
 import os
 import pkg_resources
 import yaml
 import re
+from awsorgs.utils import *
 
-def load_specification_formats():
-    filename =  os.path.abspath(
-            pkg_resources.resource_filename(
-            __name__, '../data/specification-formats.yaml'))
-    with open(filename) as f:
-        specification_formats = yaml.load(f.read())
-    return specification_formats 
+#def load_spec_patterns():
+#    """
+#    Return dict of patterns for use when validating specification syntax
+#    """
+#    filename =  os.path.abspath(pkg_resources.resource_filename(
+#            __name__, '../data/spec-patterns.yaml'))
+#    with open(filename) as f:
+#        return yaml.load(f.read())
+#
+#
+#def validate_spec(spec_patterns, pattern_name, spec):
+#    """
+#    Validate syntax of a given 'spec' dictionary against the
+#    named spec_pattern.
+#    """
+#    # test for required attributes
+#    required_attributes = [attr for attr in spec_patterns[pattern_name]
+#            if spec_patterns[pattern_name][attr]['required']]
+#    for attr in required_attributes:
+#        if attr not in spec:
+#            print "  required attribute %s not found" % attr
+#    for attr in spec:
+#        #print attr
+#        # test if attribute is permitted
+#        if attr not in spec_patterns[pattern_name]:
+#            print '  illegal attribute %s' % attr
+#            continue
+#        if spec[attr]:
+#            pattern_attr = spec_patterns[pattern_name][attr]
+#            # test attribute type
+#            spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
+#            #print spec_attr_type
+#            #print type(pattern_attr['atype'])
+#            # simple attribute pattern
+#            if isinstance(pattern_attr['atype'], str):
+#                if spec_attr_type != pattern_attr['atype']:
+#                    print '  attribute type must be %s' % pattern_attr['atype']
+#                    continue
+#            else:
+#                # complex attribute pattern
+#                valid_types = pattern_attr['atype'].keys()
+#                #print valid_types
+#                if not spec_attr_type in valid_types: 
+#                    print '  attribute type must be %s' % valid_types
+#                    continue
+#                atype = pattern_attr['atype'][spec_attr_type]
+#                #print atype
+#                if atype:
+#                # test attributes values
+#                    if 'values' in atype and not spec[attr] in atype['values']:
+#                        print '  attribute value must be in %s' % atype['values']
+#                        continue
+#                    # assign 'default' value
+#                    if 'default' in atype and not spec[attr]:
+#                        spec[attr] = atype['default']
+#
 
 
-def validate_spec(specification_formats, format_name, spec):
-    # test for required attributes
-    required_attributes = [attr for attr in specification_formats[format_name]
-            if specification_formats[format_name][attr]['required']]
-    for attr in required_attributes:
-        if attr not in spec:
-            print "  required attribute %s not found" % attr
-    for attr in spec:
-        #print attr
-        # test if attribute is permitted
-        if attr not in specification_formats[format_name]:
-            print '  illegal attribute %s' % attr
-            continue
-        if spec[attr]:
-            format_attr = specification_formats[format_name][attr]
-            # test attribute type
-            spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
-            #print spec_attr_type
-            #print type(format_attr['atype'])
-            # simple attribute format
-            if isinstance(format_attr['atype'], str):
-                if spec_attr_type != format_attr['atype']:
-                    print '  attribute type must be %s' % format_attr['atype']
-                    continue
-            else:
-                # complex attribute format
-                valid_types = format_attr['atype'].keys()
-                #print valid_types
-                if not spec_attr_type in valid_types: 
-                    print '  attribute type must be %s' % valid_types
-                    continue
-                atype = format_attr['atype'][spec_attr_type]
-                #print atype
-                if atype:
-                # test attributes values
-                    if 'values' in atype and not spec[attr] in atype['values']:
-                        print '  attribute value must be in %s' % atype['values']
-                        continue
-                    # assign 'default' value
-                    if 'default' in atype and not spec[attr]:
-                        spec[attr] = atype['default']
-
-
-
-specification_formats = load_specification_formats()
+spec_patterns = load_spec_patterns()
 spec_file = '/home/ashely/aws/spec/auth-spec.yaml'
-format_name = 'delegations'
-specifications = yaml.load(open(spec_file).read())
-for spec in specifications[format_name]:
+pattern_name = 'delegations'
+specs = yaml.load(open(spec_file).read())
+for spec in specs[pattern_name]:
     #print
     #print yaml.dump(spec)
-    validate_spec(specification_formats, format_name, spec)
+    print validate_spec(spec_patterns, pattern_name, spec)
 
 
 
