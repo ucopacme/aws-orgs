@@ -178,6 +178,7 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     """
     Print report of currently deployed delegation roles in each account
     in the Organization.
+    We only care about AWS principals, not Service principals.
     """
     header = "Provisioned IAM Roles in all Org Accounts:"
     overbar = '_' * len(header)
@@ -197,16 +198,17 @@ def display_roles_in_accounts(log, deployed, auth_spec):
         log.info("Roles:")
         for name in role_names:
             role = iam_resource.Role(name)
-            log.info("  %s" % name)
-            log.info("    Arn:\t%s" % role.arn)
-            log.info("    Principal:\t%s" % 
-                    role.assume_role_policy_document['Statement'][0]['Principal']['AWS'])
-            attached = [p.policy_name for p 
-                     in list(role.attached_policies.all())]
-            if attached:
-                log.info("    Attached Policies:")
-                for policy in attached:
-                    log.info("      %s" % policy)
+            principal = role.assume_role_policy_document['Statement'][0]['Principal']
+            if 'AWS' in principal:
+                log.info("  %s" % name)
+                log.info("    Arn:\t%s" % role.arn)
+                log.info("    Principal:\t%s" % principal['AWS'])
+                attached = [p.policy_name for p 
+                         in list(role.attached_policies.all())]
+                if attached:
+                    log.info("    Attached Policies:")
+                    for policy in attached:
+                        log.info("      %s" % policy)
 
 
 def create_users(iam_client, args, log, deployed, auth_spec):
