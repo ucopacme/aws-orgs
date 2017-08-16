@@ -23,6 +23,7 @@ devise workflow for using this in real service context:
 __________________
 TODO awsorgs.py:
 
+change 'policy' to sc_policy everywhere
 NA have exeptions write to logger. how?
 NA in logger: prepend timestamp to messages
 add unit testing
@@ -70,23 +71,22 @@ account-spec details allowed values for name components
 __________________
 TODO auth.py:
 
+when reporting roles, handle service roles as well as 'AWS' roles
 create_groups: use boto group resourse
 create_groups: after deleting a group, remove it from deployed['groups']
-DONE document spec structures
 validate delegation specs
 validate policy specs
-DONE handle 'ALL' special value in users[members]
 add Exclude attribute to groups and delegations for when 'ALL' is specified
 delete unused custom policies
 in delegation report list accounts in alphabetical order
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes
 incorporate theading
-reconsider spec param auth_account:
-  derive from auth_account_id?
-  if not, crosscheck againts auth_account_id
 in munge_path() check if default_path is defined or not
 
+DONE document spec structures
+DONE handle 'ALL' special value in users[members]
+DONE reconsider spec param auth_account
 DONE handle 'ALL' special value in delegations[trusting_accounts]
 DONE warn when a user does not exist when populating groups
 DONE prevent deletion of org_access_role
