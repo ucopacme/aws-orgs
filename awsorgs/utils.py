@@ -49,17 +49,20 @@ def get_logger(args):
     Setup logging.basicConfig from args.
     Return logging.Logger object.
     """
+    # log level
     log_level = logging.CRITICAL
     if args['--verbose'] or args['report'] or args['--boto-log']:
         log_level = logging.INFO
     if args['--debug']:
         log_level = logging.DEBUG
+    # log format
+    log_format = '%(name)s: %(levelname)-8s%(message)s'
     if args['report']:
         log_format = '%(message)s'
-    elif args['--exec']:
-        log_format = '%(name)s: %(levelname)-8s%(message)s'
-    else:
-        log_format = '%(name)s: %(levelname)-8s[dryrun] %(message)s'
+    if args['--debug']:
+        log_format = '%(name)s: %(levelname)-8s%(funcName)s():  %(message)s'
+    if not args['--exec']:
+        log_format = '[dryrun] %s' % log_format
     if not args['--boto-log']:
         logging.getLogger('botocore').propagate = False
         logging.getLogger('boto3').propagate = False
@@ -113,34 +116,33 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
     pattern = spec_patterns[pattern_name]
     valid_spec = True
     caller = 'validate_spec'
-    log.debug("%s(): Validating spec against spec pattern '%s'" % (caller, pattern_name))
+    log.debug("validating spec against pattern '%s'" % (pattern_name))
     # test for required attributes
     required_attributes = [attr for attr in pattern if pattern[attr]['required']]
+    log.debug("required attributes for pattern '%s' : %s" %
+            (pattern_name, required_attributes))
     for attr in required_attributes:
         if attr not in spec:
-            log.debug("%s(): Required attributes for pattern '%s' : %s" %
-                    (caller, pattern_name, required_attributes))
-            log.error("Required attribute '%s' not found in '%s' spec" %
-                    (attr, pattern_name))
+            log.error("Required attribute '%s' not found in '%s' spec.  Must "
+                    "be one of %s" % (attr, pattern_name, required_attributes))
             valid_spec = False
     for attr in spec:
-        log.debug("%s(): Considering attribute '%s'" % (caller, attr))
+        log.debug("considering attribute '%s'" % (attr))
         # test if attribute is permitted
         if attr not in pattern:
-            log.error("Attribute '%s' not permitted for spec pattern '%s'" %
+            log.warn("Attribute '%s' not present spec valdation pattern '%s'" %
                     (attr, pattern_name))
-            valid_spec = False
             continue
         # test attribute type. ignore attr if value is None
         if spec[attr]:
             # (surely there must be a better way to extract the data type of
             # an object as a string)
             spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
-            log.debug("%s(): Spec attribute type: '%s'" % (caller, spec_attr_type))
+            log.debug("spec attribute type: '%s'" % (spec_attr_type))
             # simple attribute pattern
             if isinstance(pattern[attr]['atype'], str):
-                log.debug("%s(): Pattern attribute type: '%s'" %
-                        (caller, pattern[attr]['atype']))
+                log.debug("pattern attribute type: '%s'" %
+                        (pattern[attr]['atype']))
                 if spec_attr_type != pattern[attr]['atype']:
                     log.error("Attribute '%s' must be of type '%s'" %
                             (attr, pattern[attr]['atype']))
@@ -149,7 +151,7 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
             else:
                 # complex attribute pattern
                 valid_types = pattern[attr]['atype'].keys()
-                log.debug("%s(): Pattern attribute types: '%s'" % (caller, valid_types))
+                log.debug("pattern attribute types: '%s'" % (valid_types))
                 if not spec_attr_type in valid_types: 
                     log.error("Attribute '%s' must be one of type '%s'" %
                             (attr, valid_types))
@@ -158,8 +160,8 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
                 atype = pattern[attr]['atype'][spec_attr_type]
                 # test attributes values
                 if atype and 'values' in atype:
-                    log.debug("%s(): Allowed values for attrubute '%s': %s" %
-                            (caller, attr, atype['values']))
+                    log.debug("allowed values for attrubute '%s': %s" %
+                            (attr, atype['values']))
                     if not spec[attr] in atype['values']:
                         log.error("Value of attribute '%s' must be one of '%s'" %
                                 (attr, atype['values']))
