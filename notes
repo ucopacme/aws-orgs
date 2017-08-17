@@ -20,13 +20,19 @@ devise workflow for using this in real service context:
   run from lambda/jenkins
 
 
+
+
+
+
 __________________
 utils.py
 
 TODO:
-should validate_spec() return a possibly altered spec or a bool? (e.g. value = 'default')
-should validate_spec() error if spec contains non-defined attributes?
+in munge_path() check if default_path is defined or not
+DONE validate_spec() warn if spec contains non-defined attributes?
 
+CONSIDER:
+should validate_spec() return a possibly altered specl? (e.g. value = 'default')
 
 
 
@@ -86,20 +92,19 @@ account-spec details allowed values for name components
 __________________
 TODO auth.py:
 
+document spec structures
 when reporting roles, handle service roles as well as 'AWS' roles
-create_groups: use boto group resourse
-create_groups: after deleting a group, remove it from deployed['groups']
-validate delegation specs
-validate policy specs
-add Exclude attribute to groups and delegations for when 'ALL' is specified
+IN PROGRESS validate policy specs
+add 'Exclude' attribute to groups and delegations for when 'ALL' is specified
 delete unused custom policies
 in delegation report list accounts in alphabetical order
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes
 incorporate theading
-in munge_path() check if default_path is defined or not
 
-DONE document spec structures
+DONE create_groups: use boto group resourse
+DONE create_groups: after deleting a group, remove it from deployed['groups']
+DONE validate delegation specs
 DONE handle 'ALL' special value in users[members]
 DONE reconsider spec param auth_account
 DONE handle 'ALL' special value in delegations[trusting_accounts]

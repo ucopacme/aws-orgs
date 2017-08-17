@@ -44,73 +44,6 @@ import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
 
-def validate_spec_file(log, spec_file):
-    """
-    Validate spec-file is properly formed.
-    """
-    caller = 'validate_spec_file'
-    log.debug("%s(): '%s'" % (caller, spec_file))
-    validation_patterns = load_validation_patterns()
-    valid_spec = True
-    with open(spec_file) as f:
-        base_spec = yaml.load(f.read())
-
-    valid_spec = validate_spec(log, validation_patterns, 'auth', base_spec)
-    #patterns = ['users', 'groups', 'delegations', 'custom_policies']
-    patterns = ['delegations']
-    for pattern_name in patterns:
-        log.debug("%s(): Processing pattern '%s'" % (caller, pattern_name))
-        if pattern_name in base_spec:
-            for spec in base_spec[pattern_name]:
-                if not validate_spec(log, validation_patterns, pattern_name, spec):
-                    valid_spec = False
-    if valid_spec:
-        return base_spec
-    else:
-        log.critical("Spec file '%s' failed syntax validation" % spec_file)
-        sys.exit(1)
-
-    #string_keys = [
-    #        'master_account_id',
-    #        'auth_account_id',
-    #        'org_access_role',
-    #        'default_path']
-    #for key in string_keys:
-    #    if not key in spec:
-    #        msg = "Invalid spec-file: missing required param '%s'." % key
-    #        raise RuntimeError(msg)
-    #    if not isinstance(spec[key], str):
-    #        msg = "Invalid spec-file: '%s' must be type 'str'." % key
-    #        raise RuntimeError(msg)
-    #list_keys = ['users', 'groups', 'delegations', 'custom_policies']
-    #for key in list_keys:
-    #    if not key in spec:
-    #        msg = "Invalid spec-file: missing required param '%s'." % key
-    #        raise RuntimeError(msg)
-    #    if not isinstance(spec[key], list):
-    #        msg = "Invalid spec-file: '%s' must be type 'list'." % key
-    #        raise RuntimeError(msg)
-    #return spec
-
-
-def validate_delegation_spec(args, log, d_spec):
-    return True
-
-
-def validate_policy_spec(args, log, p_spec):
-    return True
-
-
-def munge_path(default_path, spec):
-    """
-    Return formated 'Path' attribute for use in iam client calls. 
-    Prepend the 'default_path'.
-    """
-    if 'Path' in spec and spec['Path']:
-        return "/%s/%s/" % (default_path, spec['Path'])
-    return "/%s/" % default_path
-
-
 def get_assume_role_credentials(account_id, role_name, path=None,
         region_name=None):
     """
@@ -429,10 +362,6 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 policy_name)
         log.error("Policy creation failed.")
         return None
-    if not validate_policy_spec(args, log, p_spec):
-        log.error("Custom Policy spec for '%' invalid." % policy_name)
-        log.error("Policy creation failed.")
-        return None
     policy_doc = json.dumps(dict(
             Version='2012-10-17',
             Statement=p_spec['Statement']))
@@ -673,9 +602,6 @@ def manage_delegations(args, log, deployed, auth_spec):
     trusting accounts and group policies in Auth (trusted) account.
     """
     for d_spec in auth_spec['delegations']:
-        if not validate_delegation_spec(args, log, d_spec):
-            log.error("Delegation spec for '%s' invalid" % d_spec['RoleName'])
-            return
         if d_spec['RoleName'] == auth_spec['org_access_role']:
             log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
             return
@@ -700,31 +626,31 @@ def main():
     args = docopt(__doc__)
     log = get_logger(args)
 
-    auth_spec = validate_spec_file(log, args['--spec-file'])
-    #org_client = boto3.client('organizations')
-    #validate_master_id(org_client, auth_spec)
-    #credentials = get_assume_role_credentials(
-    #        auth_spec['auth_account_id'],
-    #        auth_spec['org_access_role'])
-    #iam_client = boto3.client('iam', **credentials)
-    #deployed = dict(
-    #        users = iam_client.list_users()['Users'],
-    #        groups = iam_client.list_groups()['Groups'],
-    #        accounts = scan_deployed_accounts(org_client))
+    auth_spec = validate_spec_file(log, args['--spec-file'], 'auth')
+    org_client = boto3.client('organizations')
+    validate_master_id(org_client, auth_spec)
+    credentials = get_assume_role_credentials(
+            auth_spec['auth_account_id'],
+            auth_spec['org_access_role'])
+    iam_client = boto3.client('iam', **credentials)
+    deployed = dict(
+            users = iam_client.list_users()['Users'],
+            groups = iam_client.list_groups()['Groups'],
+            accounts = scan_deployed_accounts(org_client))
 
-    #if args['report']:
-    #    display_provisioned_users(log, deployed)
-    #    display_provisioned_groups(credentials, log, deployed)
-    #    display_roles_in_accounts(log, deployed, auth_spec)
+    if args['report']:
+        display_provisioned_users(log, deployed)
+        display_provisioned_groups(credentials, log, deployed)
+        display_roles_in_accounts(log, deployed, auth_spec)
 
-    #if args['users']:
-    #    create_users(credentials, args, log, deployed, auth_spec)
-    #    create_groups(credentials, args, log, deployed, auth_spec)
-    #    manage_group_members(credentials, args, log, deployed, auth_spec)
-    #    manage_group_policies(credentials, args, log, deployed, auth_spec)
+    if args['users']:
+        create_users(credentials, args, log, deployed, auth_spec)
+        create_groups(credentials, args, log, deployed, auth_spec)
+        manage_group_members(credentials, args, log, deployed, auth_spec)
+        manage_group_policies(credentials, args, log, deployed, auth_spec)
 
-    #if args['delegation']:
-    #    manage_delegations(args, log, deployed, auth_spec)
+    if args['delegation']:
+        manage_delegations(args, log, deployed, auth_spec)
 
 if __name__ == "__main__":
     main()

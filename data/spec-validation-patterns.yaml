@@ -11,11 +11,67 @@ auth:
   default_path:
     required: True
     atype: str
+  users:
+    required: False
+    pattern: True
+    atype: list
+  groups:
+    required: False
+    pattern: True
+    atype: list
   delegations:
     required: False
+    pattern: True
     atype: list
-      #list:
-        #pattern: delegations    
+  custom_policies:
+    required: False
+    pattern: True
+    atype: list
+
+
+users:
+  Name:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Path:
+    required: False
+    atype: str
+  Team:
+    required: True
+    atype: str
+
+
+groups:
+  Name:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Path:
+    required: False
+    atype: str
+  Members:
+    required: False
+    atype: 
+      str:
+        values:
+          - ALL
+      list:
+  Policies:
+    required: False
+    atype: list
 
 
 delegations:
@@ -29,7 +85,6 @@ delegations:
         values:
           - present
           - absent
-        #default: present
   Description:
     required: False
     atype: str
@@ -47,10 +102,31 @@ delegations:
     required: False
     atype:
       bool:
-        #default: True
   Policies:
     required: False
     atype: list
   Path:
     required: False
     atype: str
+
+
+custom_policies:
+  PolicyName:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Description:
+    required: False
+    atype: str
+  Statement:
+    required: True
+    atype: 
+      str:
+      list:
+
