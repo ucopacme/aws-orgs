@@ -1,3 +1,22 @@
+auth:
+  master_account_id:
+    required: True
+    atype: str
+  auth_account_id:
+    required: True
+    atype: str
+  org_access_role:
+    required: True
+    atype: str
+  default_path:
+    required: True
+    atype: str
+  delegations:
+    required: False
+    atype: list
+      #list:
+        #pattern: delegations    
+
 
 delegations:
   RoleName:
@@ -10,7 +29,7 @@ delegations:
         values:
           - present
           - absent
-        default: present
+        #default: present
   Description:
     required: False
     atype: str
@@ -28,7 +47,7 @@ delegations:
     required: False
     atype:
       bool:
-        default: True
+        #default: True
   Policies:
     required: False
     atype: list

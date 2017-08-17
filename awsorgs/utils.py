@@ -92,12 +92,15 @@ def validate_master_id(org_client, spec):
     return
 
 
-def load_spec_patterns():
+# QUESTION: I'm loading a data file by name.  It is part of the project and
+# explicitly installed by setup.py.  but in code, should I define it as
+# a constant insted of just loading a str?
+def load_validation_patterns():
     """
     Return dict of patterns for use when validating specification syntax
     """
     filename =  os.path.abspath(pkg_resources.resource_filename(
-            __name__, '../data/specification-formats.yaml'))
+            __name__, '../data/spec-validation-patterns.yaml'))
     with open(filename) as f:
         return yaml.load(f.read())
 
@@ -109,22 +112,21 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
     """
     pattern = spec_patterns[pattern_name]
     valid_spec = True
-    log.debug("Validating spec against spec pattern '%s'\n Spec content:\n" % 
-            (pattern_name, yaml.dumps(spec)))
+    caller = 'validate_spec'
+    log.debug("%s(): Validating spec against spec pattern '%s'" % (caller, pattern_name))
     # test for required attributes
     required_attributes = [attr for attr in pattern if pattern[attr]['required']]
     for attr in required_attributes:
         if attr not in spec:
-            log.debug("Required attributes for pattern '%s' : %s" %
-                    (pattern_name, required_attributes))
+            log.debug("%s(): Required attributes for pattern '%s' : %s" %
+                    (caller, pattern_name, required_attributes))
             log.error("Required attribute '%s' not found in '%s' spec" %
                     (attr, pattern_name))
             valid_spec = False
     for attr in spec:
-        log.debug("Considering attribute '%s'" % attr)
+        log.debug("%s(): Considering attribute '%s'" % (caller, attr))
         # test if attribute is permitted
         if attr not in pattern:
-            #print '  illegal attribute %s' % attr
             log.error("Attribute '%s' not permitted for spec pattern '%s'" %
                     (attr, pattern_name))
             valid_spec = False
@@ -132,16 +134,14 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
         # test attribute type. ignore attr if value is None
         if spec[attr]:
             # (surely there must be a better way to extract the data type of
-            # and object as a string)
+            # an object as a string)
             spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
-            #print spec_attr_type
-            #print type(pattern[attr]['atype'])
-            log.debug("Spec attribute type: '%s'" % spec_attr_type)
+            log.debug("%s(): Spec attribute type: '%s'" % (caller, spec_attr_type))
             # simple attribute pattern
             if isinstance(pattern[attr]['atype'], str):
-                log.debug("Pattern attribute type: '%s'" % pattern[attr]['atype'])
+                log.debug("%s(): Pattern attribute type: '%s'" %
+                        (caller, pattern[attr]['atype']))
                 if spec_attr_type != pattern[attr]['atype']:
-                    #print '  attribute type must be %s' % pattern[attr]['atype']
                     log.error("Attribute '%s' must be of type '%s'" %
                             (attr, pattern[attr]['atype']))
                     valid_spec = False
@@ -149,10 +149,8 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
             else:
                 # complex attribute pattern
                 valid_types = pattern[attr]['atype'].keys()
-                log.debug("Pattern attribute types: '%s'" % valid_types)
-                #print valid_types
+                log.debug("%s(): Pattern attribute types: '%s'" % (caller, valid_types))
                 if not spec_attr_type in valid_types: 
-                    #print '  attribute type must be %s' % valid_types
                     log.error("Attribute '%s' must be one of type '%s'" %
                             (attr, valid_types))
                     valid_spec = False
@@ -160,17 +158,11 @@ def validate_spec(log, spec_patterns, pattern_name, spec):
                 atype = pattern[attr]['atype'][spec_attr_type]
                 # test attributes values
                 if atype and 'values' in atype:
-                    log.debug("Allowed values for attrubute '%s': %s" %
-                            (attr, atype['values']))
+                    log.debug("%s(): Allowed values for attrubute '%s': %s" %
+                            (caller, attr, atype['values']))
                     if not spec[attr] in atype['values']:
-                        #print '  attribute value must be in %s' % atype['values']
-                        log.error("Value of attribute '%s' must be one of '%s'"
-                                % (attr, atype['values']))
+                        log.error("Value of attribute '%s' must be one of '%s'" %
+                                (attr, atype['values']))
                         valid_spec = False
                         continue
-                    # assign 'default' value
-                    if 'default' in atype and not spec[attr]:
-                        log.debug("Assigning value '%s' to attrubute '%s'" %
-                                (attr, atype['default']))
-                        spec[attr] = atype['default']
     return valid_spec

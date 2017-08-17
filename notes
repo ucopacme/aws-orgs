@@ -21,6 +21,21 @@ devise workflow for using this in real service context:
 
 
 __________________
+utils.py
+
+TODO:
+should validate_spec() return a possibly altered spec or a bool? (e.g. value = 'default')
+should validate_spec() error if spec contains non-defined attributes?
+
+
+
+
+
+
+
+
+
+__________________
 TODO awsorgs.py:
 
 change 'policy' to sc_policy everywhere
@@ -295,3 +310,30 @@ import sys; sys.__plen = len(sys.path)
 import sys; new = sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p = getattr(sys, '__egginsert', 0); sys.path[p:p] = new; sys.__egginsert = p + len(new)
 
 
+
+
+
+
+
+should validate_spec() return a possibly altered spec or a bool?
+example is setting a default value:
+
+       if atype and 'values' in atype:
+           log.debug("Allowed values for attrubute '%s': %s" %
+                   (attr, atype['values']))
+           if not spec[attr] in atype['values']:
+               log.error("Value of attribute '%s' must be one of '%s'" %
+                       (attr, atype['values']))
+               valid_spec = False
+               continue
+           # assign 'default' value
+           if 'default' in atype and not spec[attr]:
+               log.debug("Assigning value '%s' to attrubute '%s'" %
+                       (attr, atype['default']))
+               spec[attr] = atype['default']
+   if not valid_spec:
+        return None
+    else:
+        return spec
+
+"""
