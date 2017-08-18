@@ -40,43 +40,6 @@ import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
 
-def validate_account_spec_file(args):
-    """
-    Validate spec-file is properly formed.
-    """
-    spec = yaml.load(open(args['--spec-file']).read())
-    string_keys = ['master_account_id']
-    for key in string_keys:
-        if not key in spec:
-            msg = "Invalid spec-file: missing required param '%s'." % key
-            raise RuntimeError(msg)
-        if not isinstance(spec[key], str):
-            msg = "Invalid spec-file: '%s' must be type 'str'." % key
-            raise RuntimeError(msg)
-    list_keys = ['accounts']
-    for key in list_keys:
-        if not key in spec:
-            msg = "Invalid spec-file: missing required param '%s'." % key
-            raise RuntimeError(msg)
-        if not isinstance(spec[key], list):
-            msg = "Invalid spec-file: '%s' must be type 'list'." % key
-            raise RuntimeError(msg)
-
-    # validate accounts spec
-    err_prefix = "Malformed accounts spec in spec-file"
-    for a_spec in spec['accounts']:
-        if not isinstance(a_spec, dict):
-            msg = "%s: not a dictionary: '%s'" % (err_prefix, str(a_spec))
-            raise RuntimeError(msg)
-        if not 'Name' in a_spec:
-            msg = ("%s: missing 'Name' key near: '%s'" %
-              (err_prefix, str(a_spec)))
-            raise RuntimeError(msg)
-
-    # all done!
-    return spec
-
-
 def scan_created_accounts(org_client):
     """
     Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
