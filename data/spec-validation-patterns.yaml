@@ -1,0 +1,132 @@
+auth:
+  master_account_id:
+    required: True
+    atype: str
+  auth_account_id:
+    required: True
+    atype: str
+  org_access_role:
+    required: True
+    atype: str
+  default_path:
+    required: True
+    atype: str
+  users:
+    required: False
+    pattern: True
+    atype: list
+  groups:
+    required: False
+    pattern: True
+    atype: list
+  delegations:
+    required: False
+    pattern: True
+    atype: list
+  custom_policies:
+    required: False
+    pattern: True
+    atype: list
+
+
+users:
+  Name:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Path:
+    required: False
+    atype: str
+  Team:
+    required: True
+    atype: str
+
+
+groups:
+  Name:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Path:
+    required: False
+    atype: str
+  Members:
+    required: False
+    atype: 
+      str:
+        values:
+          - ALL
+      list:
+  Policies:
+    required: False
+    atype: list
+
+
+delegations:
+  RoleName:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Description:
+    required: False
+    atype: str
+  TrustingAccount:
+    required: True
+    atype: 
+      str:
+        values:
+          - ALL
+      list:
+  TrustedGroup:
+    required: True
+    atype: str
+  RequireMFA:
+    required: False
+    atype:
+      bool:
+  Policies:
+    required: False
+    atype: list
+  Path:
+    required: False
+    atype: str
+
+
+custom_policies:
+  PolicyName:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+  Description:
+    required: False
+    atype: str
+  Statement:
+    required: True
+    atype: 
+      str:
+      list:
+

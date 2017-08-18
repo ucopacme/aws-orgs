@@ -39,59 +39,9 @@ import docopt
 from docopt import docopt
 
 import awsorgs.utils
-from awsorgs.utils import (
-        lookup,
-        ensure_absent,
-        get_logger,
-        validate_master_id)
+from awsorgs.utils import *
 import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
-
-
-def validate_auth_spec_file(spec_file):
-    """
-    Validate spec-file is properly formed.
-    """
-    spec = yaml.load(open(spec_file).read())
-    string_keys = [
-            'master_account_id',
-            'auth_account_id',
-            'org_access_role',
-            'default_path']
-    for key in string_keys:
-        if not key in spec:
-            msg = "Invalid spec-file: missing required param '%s'." % key
-            raise RuntimeError(msg)
-        if not isinstance(spec[key], str):
-            msg = "Invalid spec-file: '%s' must be type 'str'." % key
-            raise RuntimeError(msg)
-    list_keys = ['users', 'groups', 'delegations', 'custom_policies']
-    for key in list_keys:
-        if not key in spec:
-            msg = "Invalid spec-file: missing required param '%s'." % key
-            raise RuntimeError(msg)
-        if not isinstance(spec[key], list):
-            msg = "Invalid spec-file: '%s' must be type 'list'." % key
-            raise RuntimeError(msg)
-    return spec
-
-
-def validate_delegation_spec(args, log, d_spec):
-    return True
-
-
-def validate_policy_spec(args, log, p_spec):
-    return True
-
-
-def munge_path(default_path, spec):
-    """
-    Return formated 'Path' attribute for use in iam client calls. 
-    Prepend the 'default_path'.
-    """
-    if 'Path' in spec and spec['Path']:
-        return "/%s/%s/" % (default_path, spec['Path'])
-    return "/%s/" % default_path
 
 
 def get_assume_role_credentials(account_id, role_name, path=None,
@@ -422,10 +372,6 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 policy_name)
         log.error("Policy creation failed.")
         return None
-    if not validate_policy_spec(args, log, p_spec):
-        log.error("Custom Policy spec for '%' invalid." % policy_name)
-        log.error("Policy creation failed.")
-        return None
     policy_doc = json.dumps(dict(
             Version='2012-10-17',
             Statement=p_spec['Statement']))
@@ -669,9 +615,6 @@ def manage_delegations(args, log, deployed, auth_spec):
     trusting accounts and group policies in Auth (trusted) account.
     """
     for d_spec in auth_spec['delegations']:
-        if not validate_delegation_spec(args, log, d_spec):
-            log.error("Delegation spec for '%s' invalid" % d_spec['RoleName'])
-            return
         if d_spec['RoleName'] == auth_spec['org_access_role']:
             log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
             return
@@ -697,7 +640,7 @@ def main():
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
 
-    auth_spec = validate_auth_spec_file(args['--spec-file'])
+    auth_spec = validate_spec_file(log, args['--spec-file'], 'auth')
     org_client = boto3.client('organizations')
     validate_master_id(org_client, auth_spec)
     credentials = get_assume_role_credentials(

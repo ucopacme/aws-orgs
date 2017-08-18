@@ -32,6 +32,7 @@ setup(
             'samples/org-spec.yaml',
             'samples/account-spec.yaml',
             'samples/auth-spec.yaml',
+            'data/spec-validation-patterns.yaml',
         ],
     },
     entry_points={

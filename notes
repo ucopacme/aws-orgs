@@ -20,6 +20,27 @@ devise workflow for using this in real service context:
   run from lambda/jenkins
 
 
+
+
+
+
+__________________
+utils.py
+
+TODO:
+in munge_path() check if default_path is defined or not
+DONE validate_spec() warn if spec contains non-defined attributes?
+
+CONSIDER:
+should validate_spec() return a possibly altered specl? (e.g. value = 'default')
+
+
+
+
+
+
+
+
 __________________
 TODO awsorgs.py:
 
@@ -78,20 +99,19 @@ policy attached to group not getting detached when commented out in auth-spec
 
 TODO:
 
+document spec structures
 when reporting roles, handle service roles as well as 'AWS' roles
-create_groups: use boto group resourse
-create_groups: after deleting a group, remove it from deployed['groups']
-validate delegation specs
-validate policy specs
-add Exclude attribute to groups and delegations for when 'ALL' is specified
+IN PROGRESS validate policy specs
+add 'Exclude' attribute to groups and delegations for when 'ALL' is specified
 delete unused custom policies
 in delegation report list accounts in alphabetical order
 report unmanaged iam resources in all accounts
 recreate role,policy if path changes
 incorporate theading
-in munge_path() check if default_path is defined or not
 
-DONE document spec structures
+DONE create_groups: use boto group resourse
+DONE create_groups: after deleting a group, remove it from deployed['groups']
+DONE validate delegation specs
 DONE handle 'ALL' special value in users[members]
 DONE reconsider spec param auth_account
 DONE handle 'ALL' special value in delegations[trusting_accounts]
@@ -305,6 +325,30 @@ import sys; new = sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p = getattr(
 
 
 
+should validate_spec() return a possibly altered spec or a bool?
+example is setting a default value:
+
+       if atype and 'values' in atype:
+           log.debug("Allowed values for attrubute '%s': %s" %
+                   (attr, atype['values']))
+           if not spec[attr] in atype['values']:
+               log.error("Value of attribute '%s' must be one of '%s'" %
+                       (attr, atype['values']))
+               valid_spec = False
+               continue
+           # assign 'default' value
+           if 'default' in atype and not spec[attr]:
+               log.debug("Assigning value '%s' to attrubute '%s'" %
+                       (attr, atype['default']))
+               spec[attr] = atype['default']
+   if not valid_spec:
+        return None
+    else:
+        return spec
+
+
+
+
 _________________________________________
 
 login profile setup
@@ -327,4 +371,5 @@ agould@horus:~/.aws> aws iam create-access-key --user-name agould
         "AccessKeyId": "XXXXXXXXXXXXXXXXXXXX"
     }
 }
+
 
