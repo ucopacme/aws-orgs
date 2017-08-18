@@ -69,7 +69,14 @@ account-spec details allowed values for name components
 
 
 __________________
-TODO auth.py:
+auth.py:
+
+BUGS:
+custom policy not updating
+policy attached to group not getting detached when commented out in auth-spec
+
+
+TODO:
 
 when reporting roles, handle service roles as well as 'AWS' roles
 create_groups: use boto group resourse
@@ -294,4 +301,30 @@ import sys; sys.__plen = len(sys.path)
 /home/ashely/aws/aws-orgs
 import sys; new = sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p = getattr(sys, '__egginsert', 0); sys.path[p:p] = new; sys.__egginsert = p + len(new)
 
+
+
+
+
+_________________________________________
+
+login profile setup
+
+agould@horus:~/.aws> aws iam create-login-profile --user-name agould --password 'XXXXXXXXXX!' --password-reset-required
+{
+    "LoginProfile": {
+        "UserName": "agould", 
+        "CreateDate": "2017-08-16T23:07:42.825Z", 
+        "PasswordResetRequired": true
+    }
+}
+agould@horus:~/.aws> aws iam create-access-key --user-name agould 
+{
+    "AccessKey": {
+        "UserName": "agould", 
+        "Status": "Active", 
+        "CreateDate": "2017-08-16T23:17:44.609Z", 
+        "SecretAccessKey": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 
+        "AccessKeyId": "XXXXXXXXXXXXXXXXXXXX"
+    }
+}
 
