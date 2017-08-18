@@ -73,6 +73,9 @@ DONE in manage_policies: dont delete a policy attached to an ou
 __________________
 TODO accounts.py:
 
+DONE apply new spec validation framework
+DONE derive Email attribute from domain_name
+DONE enforce use of Team attribute on managed accounts
 DONE import more functions from awsorgs
 DONE account creation
 DONE fill out validate_account_spec_file()
@@ -80,8 +83,6 @@ DONE in scan_deployed_accounts:
   DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
 
 CONSIDER:
-add spec param 'require_team' as boolean:
-  enforce use of Team attribute on managed accounts
 parse account names for compliance
 account-spec details allowed values for name components
 

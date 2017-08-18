@@ -1,4 +1,51 @@
-auth:
+account_spec:
+  master_account_id:
+    required: True
+    atype: str
+  default_domain:
+    required: True
+    atype: str
+  teams:
+    required: False
+    pattern: True
+    atype: list
+  accounts:
+    required: False
+    pattern: True
+    atype: list
+
+teams:
+  Name:
+    required: True
+    atype: str
+  BusinessContacts:
+    required: True
+    atype: list
+  TechnicalContacts:
+    required: True
+    atype: list
+
+
+accounts:
+  Name:
+    required: True
+    atype: str
+  Email:
+    required: False
+    atype: str
+  Team:
+    required: True
+    atype: str
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+
+
+auth_spec:
   master_account_id:
     required: True
     atype: str

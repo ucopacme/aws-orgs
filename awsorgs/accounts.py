@@ -35,12 +35,7 @@ import docopt
 from docopt import docopt
 
 import awsorgs.utils
-from awsorgs.utils import (
-        lookup,
-        get_logger,
-        ensure_absent,
-        get_root_id,
-        validate_master_id)
+from awsorgs.utils import *
 import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
@@ -110,10 +105,15 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                         a_spec['Name'])
                 break
             # create a new account
+            if 'Email' in a_spec and a_spec['Email']:
+                email_addr = a_spec['Email']
+            else:
+                email_addr = '%s@%s' % (a_spec['Name'], account_spec['default_domain'])
             log.info("Creating account '%s'" % (a_spec['Name']))
+            log.debug('account email: %s' % email_addr)
             if args['--exec']:
                 new_account = org_client.create_account(
-                        AccountName=a_spec['Name'], Email=a_spec['Email'])
+                        AccountName=a_spec['Name'], Email=email_addr)
                 create_id = new_account['CreateAccountStatus']['Id']
                 log.info("CreateAccountStatus Id: %s" % (create_id))
                 # validate creation status
@@ -161,7 +161,7 @@ def main():
     deployed_accounts = scan_deployed_accounts(org_client)
 
     if args['--spec-file']:
-        account_spec = validate_account_spec_file(args)
+        account_spec = validate_spec_file(log, args['--spec-file'], 'account_spec')
         validate_master_id(org_client, account_spec)
 
     if args['report']:

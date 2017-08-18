@@ -625,8 +625,7 @@ def manage_delegations(args, log, deployed, auth_spec):
 def main():
     args = docopt(__doc__)
     log = get_logger(args)
-
-    auth_spec = validate_spec_file(log, args['--spec-file'], 'auth')
+    auth_spec = validate_spec_file(log, args['--spec-file'], 'auth_spec')
     org_client = boto3.client('organizations')
     validate_master_id(org_client, auth_spec)
     credentials = get_assume_role_credentials(

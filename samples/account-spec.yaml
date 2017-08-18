@@ -15,23 +15,20 @@ default_email_domain: example.com
 #
 teams:
   - Name: systems
-    Contacts:
-      Business:
-        - ghzuza@example.com
-      Technical:
-        - ashely@example.com
-  - Name: blee
-    Contacts:
-      Business:
-        - hwait@example.com
-      Technical:
-        - jethro@example.com
-  - Name: gorp
-    Contacts:
-      Business:
-        - nbpage@example.com
-      Technical:
-        - mary@example.com
+    BusinessContacts:
+      - tim@example.com
+    TechnicalContacts:
+      - ashely@example.com
+  - Name: project1
+    BusinessContacts:
+      - mohan@example.com
+    TechnicalContacts:
+      - elena@example.com
+  - Name: project2
+    BusinessContacts:
+      - mary@example.com
+    TechnicalContacts:
+      - khalid@example.com
 
 
 # Accounts Specification.  List of managed AWS accounts in the Organization.
@@ -55,15 +52,11 @@ accounts:
   - Name: Security
     Email: security@example.com
     Team: systems
-  - Name: blee-poc
-    Email: blee-poc@example.com
-    Team: blee
-  - Name: blee-prod
-    Email: blee-prod@example.com
-    Team: blee
-  - Name: gorp-poc
-    Email: gorp-pod@example.com
-    Team: gorp
-  - Name: gorp-prod
-    Email: gorp-prod@example.com
-    Team: gorp
+  - Name: project1-poc
+    Team: project1
+  - Name: project1-prod
+    Team: project1
+  - Name: project2-poc
+    Team: project2
+  - Name: project2-prod
+    Team: project2
