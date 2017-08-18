@@ -91,7 +91,16 @@ account-spec details allowed values for name components
 
 
 __________________
-TODO auth.py:
+auth.py:
+
+BUGS:
+policy attached to group not getting detached when commented out in auth-spec
+
+botocore.errorfactory.LimitExceededException: An error occurred (LimitExceeded) when calling the CreatePolicyVersion operation: A managed policy can have up to 5 versions. Before you create a new version, you must delete an existing version.
+
+
+
+TODO:
 
 document spec structures
 when reporting roles, handle service roles as well as 'AWS' roles
@@ -319,8 +328,6 @@ import sys; new = sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p = getattr(
 
 
 
-
-
 should validate_spec() return a possibly altered spec or a bool?
 example is setting a default value:
 
@@ -342,4 +349,30 @@ example is setting a default value:
     else:
         return spec
 
-"""
+
+
+
+_________________________________________
+
+login profile setup
+
+agould@horus:~/.aws> aws iam create-login-profile --user-name agould --password 'XXXXXXXXXX!' --password-reset-required
+{
+    "LoginProfile": {
+        "UserName": "agould", 
+        "CreateDate": "2017-08-16T23:07:42.825Z", 
+        "PasswordResetRequired": true
+    }
+}
+agould@horus:~/.aws> aws iam create-access-key --user-name agould 
+{
+    "AccessKey": {
+        "UserName": "agould", 
+        "Status": "Active", 
+        "CreateDate": "2017-08-16T23:17:44.609Z", 
+        "SecretAccessKey": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 
+        "AccessKeyId": "XXXXXXXXXXXXXXXXXXXX"
+    }
+}
+
+

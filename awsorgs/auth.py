@@ -128,6 +128,7 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     """
     Print report of currently deployed delegation roles in each account
     in the Organization.
+    We only care about AWS principals, not Service principals.
     """
     header = "Provisioned IAM Roles in all Org Accounts:"
     overbar = '_' * len(header)
@@ -147,16 +148,17 @@ def display_roles_in_accounts(log, deployed, auth_spec):
         log.info("Roles:")
         for name in role_names:
             role = iam_resource.Role(name)
-            log.info("  %s" % name)
-            log.info("    Arn:\t%s" % role.arn)
-            log.info("    Principal:\t%s" % 
-                    role.assume_role_policy_document['Statement'][0]['Principal']['AWS'])
-            attached = [p.policy_name for p 
-                     in list(role.attached_policies.all())]
-            if attached:
-                log.info("    Attached Policies:")
-                for policy in attached:
-                    log.info("      %s" % policy)
+            principal = role.assume_role_policy_document['Statement'][0]['Principal']
+            if 'AWS' in principal:
+                log.info("  %s" % name)
+                log.info("    Arn:\t%s" % role.arn)
+                log.info("    Principal:\t%s" % principal['AWS'])
+                attached = [p.policy_name for p 
+                         in list(role.attached_policies.all())]
+                if attached:
+                    log.info("    Attached Policies:")
+                    for policy in attached:
+                        log.info("      %s" % policy)
 
 
 # ISSUE: deleting user: may need to delete user policy and signing keys as well.
@@ -302,37 +304,42 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
     iam_resource = boto3.resource('iam', **credentials)
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
+    log.debug("auth account: '%s'" % auth_account)
     for g_spec in auth_spec['groups']:
-        if ('Policies' in g_spec and g_spec['Policies']
-                and not ensure_absent(g_spec)
-                and lookup(deployed['groups'], 'GroupName', g_spec['Name'])):
-            group = iam_resource.Group(g_spec['Name'])
-            attached_policies = [p.policy_name for p
-                    in list(group.attached_policies.all())]
-            # attach missing policies
-            for policy_name in g_spec['Policies']:
-                if not policy_name in attached_policies:
-                    policy_arn = get_policy_arn(iam_client, policy_name, args,
-                            log, auth_spec)
-                    log.info("Attaching policy '%s' to group '%s' in "
-                            "account '%s'." % (policy_name, g_spec['Name'],
-                            auth_account))
-                    if args['--exec']:
-                        group.attach_policy(PolicyArn=policy_arn)
-                elif lookup(auth_spec['custom_policies'], 'PolicyName',
-                        policy_name):
-                    policy_arn = get_policy_arn(iam_client, policy_name, args,
-                            log, auth_spec)
-            # datach obsolete policies
-            for policy_name in attached_policies:
-                if not policy_name in g_spec['Policies']:
-                    policy_arn = get_policy_arn(iam_client, policy_name, args,
-                            log, auth_spec)
-                    log.info("Detaching policy '%s' from group '%s' in "
-                            "account '%s'." % (policy_name, g_spec['Name'],
-                            auth_account))
-                    if args['--exec']:
-                        group.detach_policy(PolicyArn=policy_arn)
+        log.debug("processing group spec for '%s':\n%s" % (g_spec['Name'], g_spec))
+        if 'Policies' in g_spec and g_spec['Policies']:
+            if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
+                    and not ensure_absent(g_spec)):
+                group = iam_resource.Group(g_spec['Name'])
+                attached_policies = [p.policy_name for p
+                        in list(group.attached_policies.all())]
+                log.debug("attached policies: '%s'" % attached_policies)
+                log.debug("specified policies: '%s'" % g_spec['Policies'])
+                # attach missing policies
+                for policy_name in g_spec['Policies']:
+                    if not policy_name in attached_policies:
+                        policy_arn = get_policy_arn(iam_client, policy_name, args,
+                                log, auth_spec)
+                        log.debug("policy Arn for '%s': %s" % (policy_name, policy_arn))
+                        log.info("Attaching policy '%s' to group '%s' in "
+                                "account '%s'." % (policy_name, g_spec['Name'],
+                                auth_account))
+                        if args['--exec']:
+                            group.attach_policy(PolicyArn=policy_arn)
+                    elif lookup(auth_spec['custom_policies'], 'PolicyName',
+                            policy_name):
+                        policy_arn = get_policy_arn(iam_client, policy_name, args,
+                                log, auth_spec)
+                # datach obsolete policies
+                for policy_name in attached_policies:
+                    if not policy_name in g_spec['Policies']:
+                        policy_arn = get_policy_arn(iam_client, policy_name, args,
+                                log, auth_spec)
+                        log.info("Detaching policy '%s' from group '%s' in "
+                                "account '%s'." % (policy_name, g_spec['Name'],
+                                auth_account))
+                        if args['--exec']:
+                            group.detach_policy(PolicyArn=policy_arn)
 
 
 def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
@@ -341,6 +348,7 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
     Checks AWS scope first, then calls manage_custom_policy() for
     local scope policies.
     """
+    log.debug("policyName: '%s'" % policy_name)
     aws_policies = iam_client.list_policies(Scope='AWS',
             MaxItems=500)['Policies']
     policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
@@ -356,6 +364,7 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
     Create or update a custom IAM policy in an account based on
     a policy specification.  Returns the policy arn.
     """
+    log.debug("policyName: '%s'" % policy_name)
     p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
     if not p_spec:
         log.error("Custom Policy spec for '%s' not found in auth-spec." %
@@ -365,7 +374,10 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
     policy_doc = json.dumps(dict(
             Version='2012-10-17',
             Statement=p_spec['Statement']))
+    log.debug("Policy document from auth_spec:\n'%s'" %
+            json.dumps(json.loads(policy_doc), indent=2, separators=(',', ': ')))
     custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+    log.debug("Custom policies:'%s'" % custom_policies)
     policy = lookup(custom_policies, 'PolicyName', policy_name)
     if not policy:
         log.info("Creating custom policy '%s'." % policy_name)
@@ -381,6 +393,9 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 PolicyArn=policy['Arn'],
                 VersionId=policy['DefaultVersionId']
                 )['PolicyVersion']['Document']
+        log.debug("Policy document from deployed policy:\n'%s'" %
+                json.dumps(current_doc, indent=2, separators=(',', ': ')))
+                #json.dumps(json.loads(current_doc), indent=2, separators=(',', ': ')))
         if json.dumps(current_doc) != policy_doc:
             log.info("Updating custom policy '%s'." % policy_name)
             if args['--exec']:
@@ -625,6 +640,7 @@ def manage_delegations(args, log, deployed, auth_spec):
 def main():
     args = docopt(__doc__)
     log = get_logger(args)
+    log.debug("%s: args:\n%s" % (__name__, args))
     auth_spec = validate_spec_file(log, args['--spec-file'], 'auth_spec')
     org_client = boto3.client('organizations')
     validate_master_id(org_client, auth_spec)
