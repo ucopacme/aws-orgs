@@ -40,11 +40,14 @@ users:
         values:
           - present
           - absent
-  Path:
-    required: False
-    atype: str
   Team:
     required: True
+    atype: str
+  Email:
+    required: True
+    atype: str
+  Path:
+    required: False
     atype: str
 
 

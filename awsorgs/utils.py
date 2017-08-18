@@ -110,10 +110,11 @@ def validate_spec_file(log, spec_file, pattern_name):
     """
     Validate spec-file is properly formed.
     """
-    log.debug("validating spec file '%s' for pattern '%s'" % (spec_file, pattern_name))
+    log.debug("loading spec file '%s'" % spec_file)
     validation_patterns = load_validation_patterns(log)
     with open(spec_file) as f:
         spec = yaml.load(f.read())
+    log.debug("calling validate_spec() for pattern '%s'" % pattern_name)
     if validate_spec(log, validation_patterns, pattern_name, spec):
         return spec
     else:
@@ -154,7 +155,7 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
         log.debug("  considering attribute '%s'" % attr)
         # test if attribute is permitted
         if attr not in pattern:
-            log.warn("Attribute '%s' not present spec validation pattern '%s'" %
+            log.warn("Attribute '%s' does not exist in validation pattern '%s'" %
                     (attr, pattern_name))
             continue
         # test attribute type. ignore attr if value is None

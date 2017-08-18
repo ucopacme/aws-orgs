@@ -300,28 +300,27 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
     """
     Attach managed policies to groups based on group specification
     """
-    log.debug("manage_group_policies()")
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
-    log.debug("Auth account: '%s'" % auth_account)
+    log.debug("auth account: '%s'" % auth_account)
     for g_spec in auth_spec['groups']:
-        log.debug("Processing group spec for '%s':\n%s" % (g_spec['Name'], g_spec))
+        log.debug("processing group spec for '%s':\n%s" % (g_spec['Name'], g_spec))
         if 'Policies' in g_spec and g_spec['Policies']:
             if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
                     and not ensure_absent(g_spec)):
                 group = iam_resource.Group(g_spec['Name'])
                 attached_policies = [p.policy_name for p
                         in list(group.attached_policies.all())]
-                log.debug("Attached policies: '%s'" % attached_policies)
-                log.debug("Specified policies: '%s'" % g_spec['Policies'])
+                log.debug("attached policies: '%s'" % attached_policies)
+                log.debug("specified policies: '%s'" % g_spec['Policies'])
                 # attach missing policies
                 for policy_name in g_spec['Policies']:
                     if not policy_name in attached_policies:
                         policy_arn = get_policy_arn(iam_client, policy_name, args,
                                 log, auth_spec)
-                        log.debug("Policy Arn for '%s': %s" % (policy_name, policy_arn))
+                        log.debug("policy Arn for '%s': %s" % (policy_name, policy_arn))
                         log.info("Attaching policy '%s' to group '%s' in "
                                 "account '%s'." % (policy_name, g_spec['Name'],
                                 auth_account))
@@ -349,7 +348,7 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
     Checks AWS scope first, then calls manage_custom_policy() for
     local scope policies.
     """
-    log.debug("get_policy_arn(): PolicyName: '%s'" % policy_name)
+    log.debug("policyName: '%s'" % policy_name)
     aws_policies = iam_client.list_policies(Scope='AWS',
             MaxItems=500)['Policies']
     policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
@@ -365,7 +364,7 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
     Create or update a custom IAM policy in an account based on
     a policy specification.  Returns the policy arn.
     """
-    log.debug("manage_custom_policy(): PolicyName: '%s'" % policy_name)
+    log.debug("policyName: '%s'" % policy_name)
     p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
     if not p_spec:
         log.error("Custom Policy spec for '%s' not found in auth-spec." %
@@ -375,7 +374,8 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
     policy_doc = json.dumps(dict(
             Version='2012-10-17',
             Statement=p_spec['Statement']))
-    log.debug("Policy document from auth_spec:\n'%s'" % policy_doc)
+    log.debug("Policy document from auth_spec:\n'%s'" %
+            json.dumps(json.loads(policy_doc), indent=2, separators=(',', ': ')))
     custom_policies = iam_client.list_policies(Scope='Local')['Policies']
     log.debug("Custom policies:'%s'" % custom_policies)
     policy = lookup(custom_policies, 'PolicyName', policy_name)
@@ -393,7 +393,9 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 PolicyArn=policy['Arn'],
                 VersionId=policy['DefaultVersionId']
                 )['PolicyVersion']['Document']
-        log.debug("Policy document from deployed policy:\n'%s'" % current_doc)
+        log.debug("Policy document from deployed policy:\n'%s'" %
+                json.dumps(current_doc, indent=2, separators=(',', ': ')))
+                #json.dumps(json.loads(current_doc), indent=2, separators=(',', ': ')))
         if json.dumps(current_doc) != policy_doc:
             log.info("Updating custom policy '%s'." % policy_name)
             if args['--exec']:

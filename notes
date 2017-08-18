@@ -93,8 +93,10 @@ __________________
 auth.py:
 
 BUGS:
-custom policy not updating
 policy attached to group not getting detached when commented out in auth-spec
+
+botocore.errorfactory.LimitExceededException: An error occurred (LimitExceeded) when calling the CreatePolicyVersion operation: A managed policy can have up to 5 versions. Before you create a new version, you must delete an existing version.
+
 
 
 TODO:
