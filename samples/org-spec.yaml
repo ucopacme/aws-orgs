@@ -24,12 +24,12 @@ default_ou: root
 #                 this OU.
 #   Child_OU:     Type list.  List of child Organizational Units.
 #
-organizational_unit_spec:
+organizational_units:
   # the root OU must be defined
   - Name: root
     Child_OU:
       - Name: prod
-        Policies: 
+        SC_Policies: 
           - prod-service-policy
         Accounts:
           - blee-prod
@@ -38,12 +38,12 @@ organizational_unit_spec:
         Accounts:
           - gorp-poc
           - blee-poc
-        Policies: 
+        SC_Policies: 
           - poc_service_policy
       - Name: auth
         Accounts:
           - auth
-        Policies:
+        SC_Policies:
           - auth-only
 
 
@@ -57,7 +57,7 @@ organizational_unit_spec:
 #   Description:  Type string.  The policy SID.
 #   Effect:       Type string.  Either 'Allow' or 'Deny'.
 #   Actions:      Type list.  List of AWS services controlled by the policy.
-policy_spec:
+sc_policies:
   - Name: FullAWSAccess         # default SCPolicy managed by AWS
   - Name: poc_service_policy
     Ensure: present
