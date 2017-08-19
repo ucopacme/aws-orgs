@@ -395,10 +395,18 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 )['PolicyVersion']['Document']
         log.debug("Policy document from deployed policy:\n'%s'" %
                 json.dumps(current_doc, indent=2, separators=(',', ': ')))
-                #json.dumps(json.loads(current_doc), indent=2, separators=(',', ': ')))
         if json.dumps(current_doc) != policy_doc:
             log.info("Updating custom policy '%s'." % policy_name)
             if args['--exec']:
+                log.debug("check for non-default policy versions for '%s'" % policy_name)
+                for v in iam_client.list_policy_versions(
+                        PolicyArn=policy['Arn'])['Versions']:
+                    if not v['IsDefaultVersion']:
+                        log.info("Deleting non-default policy version '%s' for "
+                                "policy '%s'" % (v['VersionId'], policy_name))
+                        iam_client.delete_policy_version(
+                                PolicyArn=policy['Arn'],
+                                VersionId=v['VersionId'])
                 iam_client.create_policy_version(
                         PolicyArn=policy['Arn'],
                         PolicyDocument=policy_doc,
