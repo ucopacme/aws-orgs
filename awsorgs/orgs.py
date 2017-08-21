@@ -97,6 +97,7 @@ def enable_policy_type_in_root(org_client, root_id):
 #                        (err_prefix, p_spec['Name']))
 #                raise RuntimeError(msg)
 #
+
 #    # recursive function to validate ou_spec are properly formed.
 #    def validate_ou_spec(ou_spec_list):
 #        global account_map, ou_list
@@ -153,6 +154,17 @@ def enable_policy_type_in_root(org_client, root_id):
 #            ou       = ou_list,
 #            policies = policy_list)
 #    return org_spec
+
+
+# Things I still need:
+#        # dont manage default policy
+#                # make sure accounts are unique across org
+#    # track managed resources
+#    org_spec['managed'] = dict(
+#            accounts = account_map.keys(),
+#            ou       = ou_list,
+#            policies = policy_list)
+
 
 
 def scan_deployed_accounts(org_client):
@@ -273,7 +285,7 @@ def specify_policy_content(p_spec):
     return """{ "Version": "2012-10-17", "Statement": [ { "Effect": "%s", "Action": %s, "Resource": "*" } ] }""" % (p_spec['Effect'], json.dumps(p_spec['Actions']))
 
 
-def display_provisioned_policies(org_client, log, deployed_policies):
+def display_provisioned_policies(org_client, log, deployed):
     """
     Print report of currently deployed Service Control Policies in
     AWS Organization.
@@ -281,7 +293,7 @@ def display_provisioned_policies(org_client, log, deployed_policies):
     header = "Provisioned Service Control Policies:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
-    for policy in deployed_policies:
+    for policy in deployed['policies']:
         log.info("\nName:\t\t%s" % policy['Name'])
         log.info("Description:\t%s" % policy['Description'])
         log.info("Id:\t%s" % policy['Id'])
@@ -292,17 +304,17 @@ def display_provisioned_policies(org_client, log, deployed_policies):
                 separators=(',', ': ')))
 
 
-def manage_policies(org_client, args, log, deployed_policies, policy_spec):
+def manage_policies(org_client, args, log, deployed, org_spec):
     """
     Manage Service Control Policies in the AWS Organization.  Make updates
-    according to the policy specification ('policy_spec').  Do not touch
+    according to the sc_policies specification.  Do not touch
     the default policy.  Do not delete an attached policy.
     """
-    for p_spec in policy_spec:
+    for p_spec in org_spec['sc_policies']:
         policy_name = p_spec['Name']
         # dont touch default policy
-        if not policy_name == args['default_policy']:
-            policy_id = lookup(deployed_policies, 'Name', policy_name, 'Id')
+        if not policy_name == org_spec['default_policy']:
+            policy_id = lookup(deployed['policies'], 'Name', policy_name, 'Id')
             # policy already exists
             if policy_id:
                 # check if we need to delete policy
@@ -317,7 +329,7 @@ def manage_policies(org_client, args, log, deployed_policies, policy_spec):
                         org_client.delete_policy(PolicyId=policy_id)
                 # check for policy updates
                 elif (p_spec['Description'] !=
-                        lookup(deployed_policies,'Id',policy_id,'Description')
+                        lookup(deployed['policies'], 'Id', policy_id, 'Description')
                         or specify_policy_content(p_spec) !=
                         get_policy_content(org_client, policy_id)):
                     log.info("Updating policy '%s'" % (policy_name))
@@ -403,46 +415,43 @@ def display_provisioned_ou(org_client, log, deployed_ou, parent_name,
             display_provisioned_ou(org_client, log, deployed_ou, ou_name,indent)
 
 
-def manage_policy_attachments(org_client, args, log, deployed_policies,
-        ou_spec, ou_id):
+def manage_policy_attachments(org_client, args, log, deployed, org_spec, ou_spec, ou_id):
     """
     Attach or detach specified Service Control Policy to a deployed 
     OrganizatinalUnit.  Do not detach the default policy ever.
     """
     # create lists policies_to_attach and policies_to_detach
     attached_policy_list = list_policies_in_ou(org_client, ou_id)
-    if 'Policies' in ou_spec and isinstance(ou_spec['Policies'],list):
-        spec_policy_list = ou_spec['Policies']
+    if 'SC_Policies' in ou_spec and isinstance(ou_spec['SC_Policies'], list):
+        spec_policy_list = ou_spec['SC_Policies']
     else:
         spec_policy_list = []
     policies_to_attach = [p for p in spec_policy_list
             if p not in attached_policy_list]
     policies_to_detach = [p for p in attached_policy_list
             if p not in spec_policy_list
-            and p != args['default_policy']]
+            and p != org_spec['default_policy']]
     # attach policies
     for policy_name in policies_to_attach:
-        if not lookup(deployed_policies,'Name',policy_name):
+        if not lookup(deployed['policies'],'Name',policy_name):
             raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
                     policy_name)
         if not ensure_absent(ou_spec):
-            log.info("Attaching policy '%s' to OU '%s'" %
-                    (policy_name, ou_spec['Name']))
+            log.info("Attaching policy '%s' to OU '%s'" % (policy_name, ou_spec['Name']))
             if args['--exec']:
                 org_client.attach_policy(
-                        PolicyId=lookup(
-                                deployed_policies, 'Name', policy_name, 'Id'),
+                        PolicyId=lookup(deployed['policies'], 'Name', policy_name, 'Id'),
                         TargetId=ou_id)
     # detach policies
     for policy_name in policies_to_detach:
-        log.info("Detaching policy '%s' from OU '%s'" %
-                (policy_name, ou_spec['Name']))
+        log.info("Detaching policy '%s' from OU '%s'" % (policy_name, ou_spec['Name']))
         if args['--exec']:
-            org_client.detach_policy(PolicyId=lookup(deployed_policies,
-                    'Name', policy_name, 'Id'), TargetId=ou_id)
+            org_client.detach_policy(
+                    PolicyId=lookup(deployed['policies'], 'Name', policy_name, 'Id'),
+                    TargetId=ou_id)
 
 
-def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
+def manage_ou(org_client, args, log, deployed, org_spec, ou_spec_list, parent_name):
     """
     Recursive function to manage OrganizationalUnits in the AWS
     Organization.
@@ -455,13 +464,13 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
 
             # check for child_ou. recurse before other tasks.
             if 'Child_OU' in ou_spec:
-                manage_ou(org_client, args, log, deployed,
+                manage_ou(org_client, args, log, deployed, org_spec,
                         ou_spec['Child_OU'], ou_spec['Name'])
 
             # check if ou 'absent'
             if ensure_absent(ou_spec):
                 # error if ou contains anything
-                for key in ['Accounts', 'Policies', 'Child_OU']:
+                for key in ['Accounts', 'SC_Policies', 'Child_OU']:
                     if key in ou and ou[key]:
                         msg = ("Can not delete OU '%s'. deployed '%s' exists." %
                                 (ou_spec['Name'], key))
@@ -474,8 +483,8 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
                             OrganizationalUnitId=ou['Id'])
 
             else:
-                manage_policy_attachments( org_client, args, log,
-                        deployed['policies'], ou_spec, ou['Id'])
+                manage_policy_attachments(org_client, args, log,
+                        deployed, org_spec, ou_spec, ou['Id'])
                 manage_account_moves( org_client, args, log,
                         deployed['accounts'], ou_spec, ou['Id'])
 
@@ -488,13 +497,13 @@ def manage_ou (org_client, args, log, deployed, ou_spec_list, parent_name):
                         ParentId=lookup(deployed['ou'],'Name',parent_name,'Id'),
                         Name=ou_spec['Name'])['OrganizationalUnit']
                 manage_policy_attachments(org_client, args, log,
-                        deployed['policies'], ou_spec, new_ou['Id'])
+                        deployed, org_spec, ou_spec, new_ou['Id'])
                 manage_account_moves(org_client, args, log,
                         deployed['accounts'], ou_spec, new_ou['Id'])
                 if ('Child_OU' in ou_spec and isinstance(new_ou, dict)
                         and 'Id' in new_ou):
                     # recurse
-                    manage_ou( org_client, args, log, deployed,
+                    manage_ou(org_client, args, log, deployed, org_spec,
                             ou_spec['Child_OU'], new_ou['Name'])
 
 
@@ -510,7 +519,6 @@ def main():
 
     if args['--spec-file']:
         org_spec = validate_spec_file(log, args['--spec-file'], 'org_spec')
-        #org_spec = validate_spec_file(args)
         validate_master_id(org_client, org_spec)
 
     if args['report']:
@@ -518,23 +526,19 @@ def main():
         overbar = '_' * len(header)
         log.info("\n%s\n%s" % (overbar, header))
         display_provisioned_ou(org_client, log, deployed['ou'], 'root')
-        display_provisioned_policies(org_client, log, deployed['policies'])
+        display_provisioned_policies(org_client, log, deployed)
 
     if args['organization']:
-        pass
-        #enable_policy_type_in_root(org_client, root_id)
-        #args['default_policy'] = org_spec['default_policy']
-
-        #manage_policies(org_client, args, log, deployed['policies'],
-        #        org_spec['policy_spec'])
-        ## rescan deployed policies
-        #deployed['policies'] = scan_deployed_policies(org_client)
-        #manage_ou(org_client, args, log, deployed,
-        #        org_spec['organizational_unit_spec'], 'root')
+        enable_policy_type_in_root(org_client, root_id)
+        manage_policies(org_client, args, log, deployed, org_spec)
+        # rescan deployed policies
+        deployed['policies'] = scan_deployed_policies(org_client)
+        manage_ou(org_client, args, log, deployed, org_spec,
+                org_spec['organizational_units'], 'root')
 
         ## check for unmanaged resources
         #for key in org_spec['managed'].keys():
-        #    unmanaged= [a for a in map(lambda a: a['Name'], deployed[key])
+        #    unmanaged= [a['name'] for a in deployed[key]
         #            if a not in org_spec['managed'][key] ]
         #    # warn about unmanaged org resources
         #    if unmanaged:

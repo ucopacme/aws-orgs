@@ -19,7 +19,7 @@ def lookup(dlist, lkey, lvalue, rkey=None):
         dlist:   lookup table -  a list of dictionaries
         lkey:    name of key to use as lookup criteria
         lvalue:  value to use as lookup criteria
-        key:     (optional) name of key referencing a value to return
+        rkey:    (optional) name of key referencing a value to return
     """
     items = [d for d in dlist
              if lkey in d
