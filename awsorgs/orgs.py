@@ -50,121 +50,51 @@ def enable_policy_type_in_root(org_client, root_id):
                 PolicyType='SERVICE_CONTROL_POLICY')
 
 
-#def validate_spec_file(args):
-#    """
-#    Validate spec-file is properly formed.
-#    """
-#    org_spec = yaml.load(open(args['--spec-file']).read())
-#    spec_str = ['master_account_id', 'default_policy', 'default_ou' ]
-#    for s in spec_str:
-#        if not s in org_spec:
-#            msg = "Invalid spec-file: missing required param '%s'." % s
-#            raise RuntimeError(msg)
-#        if not isinstance(org_spec[s], str):
-#            msg = "Invalid spec-file: '%s' must be type 'str'." % s
-#            raise RuntimeError(msg)
-#    spec_list = ['organizational_unit_spec', 'policy_spec']
-#    for a in spec_list:
-#        if not a in org_spec:
-#            msg = "Invalid spec-file: missing required param '%s'." % a
-#            raise RuntimeError(msg)
-#        if not isinstance(org_spec[a], list):
-#            msg = "Invalid spec-file: '%s' must be type 'list'." % a
-#            raise RuntimeError(msg)
-#
-#    # Validate this policy_spec is properly formed.
-#    err_prefix = "Malformed policy in spec-file:"
-#    for p_spec in org_spec['policy_spec']:
-#        if not isinstance(p_spec, dict):
-#            msg = "%s not a dictionary: '%s'" % (err_prefix, str(p_spec))
-#            raise RuntimeError(msg)
-#        if not 'Name' in p_spec:
-#            msg = "%s missing 'Name' key: '%s'" % (err_prefix, str(p_spec))
-#            raise RuntimeError(msg)
-#        # dont manage default policy
-#        if p_spec['Name'] == org_spec['default_policy']:
-#            org_spec['policy_spec'].remove(p_spec)
-#            break
-#        if not ensure_absent(p_spec):
-#            required_keys = ['Description', 'Effect', 'Actions']
-#            for key in required_keys:
-#                if not key in p_spec:
-#                    msg = ("%s '%s': missing required param '%s'" %
-#                            (err_prefix, p_spec['Name'], key))
-#                    raise RuntimeError(msg)
-#            if not isinstance(p_spec['Actions'], list):
-#                msg = ("%s '%s': 'Actions' must be type list." %
-#                        (err_prefix, p_spec['Name']))
-#                raise RuntimeError(msg)
-#
-
-#    # recursive function to validate ou_spec are properly formed.
-#    def validate_ou_spec(ou_spec_list):
-#        global account_map, ou_list
-#        err_prefix = "Malformed OU in spec-file:"
-#        for ou_spec in ou_spec_list:
-#            if not isinstance(ou_spec, dict):
-#                msg = err_prefix + "not a dictionary: '%s'" % str(ou_spec)
-#                raise RuntimeError(msg)
-#            if not 'Name' in ou_spec:
-#                msg = err_prefix + "missing 'Name' key near: '%s'" % str(ou_spec)
-#                raise RuntimeError(msg)
-#            ou_list.append(ou_spec['Name'])
-#            # check for children OUs. recurse before running other tests
-#            if 'Child_OU' in ou_spec and isinstance(ou_spec['Child_OU'], list):
-#                validate_ou_spec(ou_spec['Child_OU'])
-#            # check for optional keys
-#            optional_keys = ['Accounts', 'Policies', 'Child_OU']
-#            for key in optional_keys:
-#                if key in ou_spec and ou_spec[key]:
-#                    if ensure_absent(ou_spec):
-#                        msg = ("%s OU '%s' is 'absent, but '%s' is populated." %
-#                                (err_prefix, ou_spec['Name'], key))
-#                        raise RuntimeError(msg)
-#                    if not isinstance(ou_spec[key], list):
-#                        msg = ("%s OU '%s': value of '%s' must be a list." %
-#                                (err_prefix, ou_spec['Name'], key))
-#                        raise RuntimeError(msg)
-#
-#                # build mapping of accounts to ou_names
-#                # make sure accounts are unique across org
-#                if key == 'Accounts' and key in ou_spec and ou_spec['Accounts']:
-#                    for account in ou_spec['Accounts']:
-#                        if account in account_map:
-#                            msg = ("%s account %s set in multiple OU: %s, %s" %
-#                                    ( err_prefix, account,
-#                                    account_map[account], ou_spec['Name']))
-#                            raise  RuntimeError(msg)
-#                        else:
-#                            account_map[account] = ou_spec['Name']
-#
-#    # initailize lists of managed resources
-#    global account_map, ou_list
-#    account_map = {}
-#    ou_list = []
-#    policy_list = map(lambda p: p['Name'], org_spec['policy_spec'])
-#    # pretent we manage default_policy
-#    policy_list.append(org_spec['default_policy'])
-#
-#    # call recursive function to validate OUs.
-#    #   side effect: populate account_map, ou_list.
-#    validate_ou_spec(org_spec['organizational_unit_spec'])
-#    org_spec['managed'] = dict(
-#            accounts = account_map.keys(),
-#            ou       = ou_list,
-#            policies = policy_list)
-#    return org_spec
+def validate_unique_accounts(log, root_spec):
+    """
+    Make sure accounts are unique across org
+    """
+    def map_accounts(spec):
+        # build mapping of accounts to ou_names
+        if 'Accounts' in spec and spec['Accounts']:
+            for account in spec['Accounts']:
+                if account in account_map:
+                    account_map[account].append(spec['Name'])
+                else:
+                    account_map[account] = [(spec['Name'])]
+        if 'Child_OU' in spec and spec['Child_OU']:
+            for child_spec in spec['Child_OU']:
+                map_accounts(child_spec)
+    # find accounts set in more than one OU
+    unique = True
+    global account_map
+    account_map = {}
+    map_accounts(root_spec)
+    for account, ou in account_map.items():
+        if len(ou) > 1:
+            log.error("Account '%s' set in multiple OU: %s" % (account, ou))
+            unique = False
+    if not unique:
+        log.critical("Accounts can not be set in multiple Organizatinal Units")
+        sys.exit(1)
 
 
-# Things I still need:
-#        # dont manage default policy
-#                # make sure accounts are unique across org
-#    # track managed resources
-#    org_spec['managed'] = dict(
-#            accounts = account_map.keys(),
-#            ou       = ou_list,
-#            policies = policy_list)
-
+def search_spec(spec, search_key, recurse_key):
+    """
+    Recursively scans spec structure and returns a list of values
+    keyed with 'search_key' or and empty list.  Assumes values
+    are either list or str.
+    """
+    value = []
+    if search_key in spec and spec[search_key]:
+        if isinstance(spec[search_key], str):
+            value.append(spec[search_key])
+        else:
+            value += spec[search_key]
+    if recurse_key in spec and spec[recurse_key]:
+        for child_spec in spec[recurse_key]:
+            value += search_spec(child_spec, search_key, recurse_key)
+    return sorted(value)
 
 
 def scan_deployed_accounts(org_client):
@@ -520,6 +450,15 @@ def main():
     if args['--spec-file']:
         org_spec = validate_spec_file(log, args['--spec-file'], 'org_spec')
         validate_master_id(org_client, org_spec)
+        root_spec = lookup(org_spec['organizational_units'], 'Name', 'root')
+        validate_unique_accounts(log, root_spec)
+        managed = dict(
+                accounts = search_spec(root_spec, 'Accounts', 'Child_OU'),
+                ou = search_spec(root_spec, 'Name', 'Child_OU'),
+                policies = [p['Name'] for p in org_spec['sc_policies']])
+        # ensure default_policy is considered 'managed'
+        if org_spec['default_policy'] not in managed['policies']:
+            managed['policies'].append(org_spec['default_policy'])
 
     if args['report']:
         header = 'Provisioned Organizational Units in Org:'
@@ -536,18 +475,15 @@ def main():
         manage_ou(org_client, args, log, deployed, org_spec,
                 org_spec['organizational_units'], 'root')
 
-        ## check for unmanaged resources
-        #for key in org_spec['managed'].keys():
-        #    unmanaged= [a['name'] for a in deployed[key]
-        #            if a not in org_spec['managed'][key] ]
-        #    # warn about unmanaged org resources
-        #    if unmanaged:
-        #        log.warn("Unmanaged %s in Org: %s" %
-        #                (key,', '.join(unmanaged)))
-        #        if key ==  'accounts':
-        #            # append unmanaged accounts to default_ou
-        #            place_unmanged_accounts(org_client, args, log, deployed,
-        #                    unmanaged, org_spec['default_ou'])
+        # check for unmanaged resources
+        for key in managed.keys():
+            unmanaged= [a['Name'] for a in deployed[key] if a['Name'] not in managed[key]]
+            if unmanaged:
+                log.warn("Unmanaged %s in Organization: %s" % (key,', '.join(unmanaged)))
+                if key ==  'accounts':
+                    # append unmanaged accounts to default_ou
+                    place_unmanged_accounts(org_client, args, log, deployed,
+                            unmanaged, org_spec['default_ou'])
 
 
 if __name__ == "__main__":
