@@ -37,6 +37,24 @@ def lookup(dlist, lkey, lvalue, rkey=None):
     return items[0]
 
 
+def search_spec(spec, search_key, recurse_key):
+    """
+    Recursively scans spec structure and returns a list of values
+    keyed with 'search_key' or and empty list.  Assumes values
+    are either list or str.
+    """
+    value = []
+    if search_key in spec and spec[search_key]:
+        if isinstance(spec[search_key], str):
+            value.append(spec[search_key])
+        else:
+            value += spec[search_key]
+    if recurse_key in spec and spec[recurse_key]:
+        for child_spec in spec[recurse_key]:
+            value += search_spec(child_spec, search_key, recurse_key)
+    return sorted(value)
+
+
 def ensure_absent(spec):
     """
     test if an 'Ensure' key is set to absent in dictionary 'spec'

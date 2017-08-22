@@ -44,8 +44,7 @@ should validate_spec() return a possibly altered specl? (e.g. value = 'default')
 __________________
 TODO awsorgs.py:
 
-change 'policy' to sc_policy everywhere
-NA have exeptions write to logger. how?
+IN PROGRESS change 'policy' to sc_policy everywhere
 NA in logger: prepend timestamp to messages
 add unit testing
 NA make logger write to different url
@@ -95,8 +94,6 @@ auth.py:
 
 BUGS:
 policy attached to group not getting detached when commented out in auth-spec
-
-botocore.errorfactory.LimitExceededException: An error occurred (LimitExceeded) when calling the CreatePolicyVersion operation: A managed policy can have up to 5 versions. Before you create a new version, you must delete an existing version.
 
 
 
@@ -374,5 +371,6 @@ agould@horus:~/.aws> aws iam create-access-key --user-name agould
         "AccessKeyId": "XXXXXXXXXXXXXXXXXXXX"
     }
 }
+
 
 
