@@ -1,3 +1,23 @@
+org_spec:
+  master_account_id:
+    required: True
+    atype: str
+  default_policy:
+    required: True
+    atype: str
+  default_ou:
+    required: True
+    atype: str
+  organizational_units:
+    required: False
+    atype: list
+    spec_pattern: organizational_unit
+  sc_policies:
+    required: False
+    atype: list
+    spec_pattern: sc_policy
+
+
 account_spec:
   master_account_id:
     required: True
@@ -7,42 +27,12 @@ account_spec:
     atype: str
   teams:
     required: False
-    pattern: True
     atype: list
+    spec_pattern: team
   accounts:
     required: False
-    pattern: True
     atype: list
-
-teams:
-  Name:
-    required: True
-    atype: str
-  BusinessContacts:
-    required: True
-    atype: list
-  TechnicalContacts:
-    required: True
-    atype: list
-
-
-accounts:
-  Name:
-    required: True
-    atype: str
-  Email:
-    required: False
-    atype: str
-  Team:
-    required: True
-    atype: str
-  Ensure:
-    required: False
-    atype:
-      str:
-        values:
-          - present
-          - absent
+    spec_pattern: account
 
 
 auth_spec:
@@ -60,26 +50,36 @@ auth_spec:
     atype: str
   users:
     required: False
-    pattern: True
     atype: list
+    spec_pattern: user
   groups:
     required: False
-    pattern: True
     atype: list
+    spec_pattern: group
   delegations:
     required: False
-    pattern: True
     atype: list
+    spec_pattern: delegation
   custom_policies:
     required: False
-    pattern: True
     atype: list
+    spec_pattern: custom_policy
 
 
-users:
+organizational_unit:
   Name:
     required: True
     atype: str
+  Accounts:
+    required: False
+    atype: list
+  Child_OU:
+    required: False
+    spec_pattern: organizational_unit
+    atype: list
+  SC_Policies:
+    required: False
+    atype: list
   Ensure:
     required: False
     atype:
@@ -87,6 +87,61 @@ users:
         values:
           - present
           - absent
+
+
+sc_policy:
+  Name:
+    required: True
+    atype: str
+  Description:
+    required: False
+    atype: str
+  Effect:
+    required: False
+    atype:
+      str:
+        values:
+          - Allow
+          - Deny
+  Actions:
+    required: False
+    atype: list
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+
+team:
+  Name:
+    required: True
+    atype: str
+  BusinessContacts:
+    required: True
+    atype: list
+  TechnicalContacts:
+    required: True
+    atype: list
+
+
+account:
+  Name:
+    required: True
+    atype: str
+  Email:
+    required: False
+    atype: str
+  Team:
+    required: True
+    atype: str
+
+
+user:
+  Name:
+    required: True
+    atype: str
   Team:
     required: True
     atype: str
@@ -96,12 +151,6 @@ users:
   Path:
     required: False
     atype: str
-
-
-groups:
-  Name:
-    required: True
-    atype: str
   Ensure:
     required: False
     atype:
@@ -109,6 +158,12 @@ groups:
         values:
           - present
           - absent
+
+
+group:
+  Name:
+    required: True
+    atype: str
   Path:
     required: False
     atype: str
@@ -122,12 +177,6 @@ groups:
   Policies:
     required: False
     atype: list
-
-
-delegations:
-  RoleName:
-    required: True
-    atype: str
   Ensure:
     required: False
     atype:
@@ -135,6 +184,12 @@ delegations:
         values:
           - present
           - absent
+
+
+delegation:
+  RoleName:
+    required: True
+    atype: str
   Description:
     required: False
     atype: str
@@ -158,12 +213,6 @@ delegations:
   Path:
     required: False
     atype: str
-
-
-custom_policies:
-  PolicyName:
-    required: True
-    atype: str
   Ensure:
     required: False
     atype:
@@ -171,6 +220,12 @@ custom_policies:
         values:
           - present
           - absent
+
+
+custom_policy:
+  PolicyName:
+    required: True
+    atype: str
   Description:
     required: False
     atype: str
@@ -179,4 +234,11 @@ custom_policies:
     atype: 
       str:
       list:
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
 

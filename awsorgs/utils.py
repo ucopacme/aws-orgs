@@ -19,7 +19,7 @@ def lookup(dlist, lkey, lvalue, rkey=None):
         dlist:   lookup table -  a list of dictionaries
         lkey:    name of key to use as lookup criteria
         lvalue:  value to use as lookup criteria
-        key:     (optional) name of key referencing a value to return
+        rkey:    (optional) name of key referencing a value to return
     """
     items = [d for d in dlist
              if lkey in d
@@ -35,6 +35,24 @@ def lookup(dlist, lkey, lvalue, rkey=None):
             return items[0][rkey]
         return None
     return items[0]
+
+
+def search_spec(spec, search_key, recurse_key):
+    """
+    Recursively scans spec structure and returns a list of values
+    keyed with 'search_key' or and empty list.  Assumes values
+    are either list or str.
+    """
+    value = []
+    if search_key in spec and spec[search_key]:
+        if isinstance(spec[search_key], str):
+            value.append(spec[search_key])
+        else:
+            value += spec[search_key]
+    if recurse_key in spec and spec[recurse_key]:
+        for child_spec in spec[recurse_key]:
+            value += search_spec(child_spec, search_key, recurse_key)
+    return sorted(value)
 
 
 def ensure_absent(spec):
@@ -158,8 +176,21 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
             log.warn("Attribute '%s' does not exist in validation pattern '%s'" %
                     (attr, pattern_name))
             continue
+        # handle recursive patterns
+        if 'spec_pattern' in pattern[attr]:
+            pattern_name = pattern[attr]['spec_pattern']
+            if not isinstance(spec[attr], list):
+                log.error("Attribute '%s' must be a list of '%s' specs.  Context: %s" %
+                        (attr, pattern_name, spec))
+                valid_spec = False
+                continue
+            for sub_spec in spec[attr]:
+                log.debug("calling validate_spec() for pattern '%s'" % pattern_name)
+                log.debug("context: %s" % sub_spec)
+                if not validate_spec(log, validation_patterns, pattern_name, sub_spec):
+                    valid_spec = False
         # test attribute type. ignore attr if value is None
-        if spec[attr]:
+        elif spec[attr]:
             # (surely there must be a better way to extract the data type of
             # an object as a string)
             spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
@@ -190,11 +221,4 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
                                 (attr, atype['values']))
                         valid_spec = False
                         continue
-        if 'pattern' in pattern[attr] and pattern[attr]['pattern']:
-            pattern_name = attr
-            for sub_spec in spec[pattern_name]:
-                log.debug("calling validate_spec() for pattern '%s'" % pattern_name)
-                log.debug("context: %s" % sub_spec)
-                if not validate_spec(log, validation_patterns, pattern_name, sub_spec):
-                    valid_spec = False
     return valid_spec
