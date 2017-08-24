@@ -40,15 +40,18 @@ import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
 
-def scan_created_accounts(org_client):
+def scan_created_accounts(log, org_client):
     """
     Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
     Returns a list of dictionary.
     """
+    log.debug('running')
     status = org_client.list_create_account_status(States=['SUCCEEDED'])
     created_accounts = status['CreateAccountStatuses']
     while 'NextToken' in status and status['NextToken']:
-        status = org_client.list_create_account_status(States=['SUCCEEDED'],
+        log.debug("NextToken: %s" % status['NextToken'])
+        status = org_client.list_create_account_status(
+                States=['SUCCEEDED'],
                 NextToken=status['NextToken'])
         created_accounts += status['CreateAccountStatuses']
     return created_accounts
@@ -62,7 +65,7 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     for a_spec in account_spec['accounts']:
         if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
             # check if it is still being provisioned
-            created_accounts = scan_created_accounts(org_client)
+            created_accounts = scan_created_accounts(log, org_client)
             if lookup(created_accounts, 'AccountName', a_spec['Name']):
                 log.warn("New account '%s' is not yet available" %
                         a_spec['Name'])
@@ -121,7 +124,7 @@ def main():
     log = get_logger(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
-    deployed_accounts = scan_deployed_accounts(org_client)
+    deployed_accounts = scan_deployed_accounts(log, org_client)
 
     if args['--spec-file']:
         account_spec = validate_spec_file(log, args['--spec-file'], 'account_spec')

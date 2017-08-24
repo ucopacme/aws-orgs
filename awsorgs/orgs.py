@@ -98,15 +98,17 @@ def list_policies_in_ou (org_client, ou_id):
     return sorted(map(lambda ou: ou['Name'], policies_in_ou))
 
 
-def scan_deployed_accounts(org_client):
+def scan_deployed_accounts(log, org_client):
     """
     Query AWS Organization for deployed accounts.
     Returns a list of dictionary.
     """
+    log.debug('running')
     accounts = org_client.list_accounts()
     deployed_accounts = accounts['Accounts']
     while 'NextToken' in accounts and accounts['NextToken']:
-        accounts = org_client.list_accounts()
+        log.debug("NextToken: %s" % accounts['NextToken'])
+        accounts = org_client.list_accounts(NextToken=accounts['NextToken'])
         deployed_accounts += accounts['Accounts']
     # only return accounts that have an 'Name' key
     return [d for d in deployed_accounts if 'Name' in d ]
@@ -401,7 +403,7 @@ def main():
     root_id = get_root_id(org_client)
     deployed = dict(
             policies = scan_deployed_policies(org_client),
-            accounts = scan_deployed_accounts(org_client),
+            accounts = scan_deployed_accounts(log, org_client),
             ou = scan_deployed_ou(org_client, root_id))
 
     if args['--spec-file']:
