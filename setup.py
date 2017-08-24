@@ -22,11 +22,12 @@ setup(
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
     ],
     keywords='aws organizations',
     packages=find_packages(exclude=['scratch', 'notes']),
-    install_requires=['boto3', 'docopt'],
+    install_requires=['boto3', 'docopt', 'PyYAML'],
     package_data={
         'aws-orgs': [
             'samples/org-spec.yaml',
