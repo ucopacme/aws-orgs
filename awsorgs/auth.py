@@ -134,7 +134,8 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     header = "Provisioned IAM Roles in all Org Accounts:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
-    for account in deployed['accounts']:
+
+    def _dislay_role(log, account, auth_spec):
         credentials = get_assume_role_credentials( account['Id'],
                 auth_spec['org_access_role'])
         iam_client = boto3.client('iam', **credentials)
@@ -154,12 +155,14 @@ def display_roles_in_accounts(log, deployed, auth_spec):
                 log.info("  %s" % name)
                 log.info("    Arn:\t%s" % role.arn)
                 log.info("    Principal:\t%s" % principal['AWS'])
-                attached = [p.policy_name for p 
-                         in list(role.attached_policies.all())]
+                attached = [p.policy_name for p in list(role.attached_policies.all())]
                 if attached:
                     log.info("    Attached Policies:")
                     for policy in attached:
                         log.info("      %s" % policy)
+
+    for account in deployed['accounts']:
+        threading.Thread(target=_dislay_role, args=(log, account, auth_spec)).start()
 
 
 # ISSUE: deleting user: may need to delete user policy and signing keys as well.
@@ -424,6 +427,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     Assign and manage assume role trust policies on IAM groups in
     Auth account.
     """
+    log.debug('running')
     credentials = get_assume_role_credentials(
             auth_spec['auth_account_id'],
             auth_spec['org_access_role'])
@@ -439,8 +443,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
         return
 
     # make list of existing group policies which match this role name
-    group_policies_for_role = [p.policy_name
-            for p in list(group.policies.all())
+    group_policies_for_role = [p.policy_name for p in list(group.policies.all())
             if d_spec['RoleName'] in p.policy_name.split('-')]
 
     # test if delegation should be deleted
@@ -652,13 +655,15 @@ def manage_delegations(args, log, deployed, auth_spec):
                     auth_spec['org_access_role'])
             t = threading.Thread(
                     target=manage_delegation_role,
-                    args=(credentials, args, log, deployed, auth_spec, account['Name'], trusting_accounts, d_spec))
+                    args=(credentials, args, log, deployed, auth_spec,
+                            account['Name'], trusting_accounts, d_spec))
             t.start()
             #manage_delegation_role(credentials, args, log, deployed, auth_spec,
             #        account['Name'], trusting_accounts, d_spec)
         # process groups in Auth account
-        set_group_assume_role_policies(args, log, deployed, auth_spec,
-                trusting_accounts, d_spec)
+        threading.Thread(target=set_group_assume_role_policies,
+                args=(args, log, deployed, auth_spec, trusting_accounts, d_spec)).start()
+        #set_group_assume_role_policies(args, log, deployed, auth_spec, trusting_accounts, d_spec)
 
 
 def main():
