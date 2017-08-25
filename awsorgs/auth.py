@@ -94,35 +94,52 @@ def display_provisioned_groups(credentials, log, deployed):
     List group memebers, attached policies and delegation assume role
     profiles.
     """
-    iam_resource = boto3.resource('iam', **credentials)
-    header = "Provisioned IAM Groups in Auth Account:"
-    overbar = '_' * len(header)
-    log.info("\n\n%s\n%s" % (overbar, header))
-    for name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
+
+    def _display_group(report, name, iam_resource):
+        messages = []
         group = iam_resource.Group(name)
         members = list(group.users.all())
         attached_policies = list(group.attached_policies.all())
         assume_role_resources = [p.policy_document['Statement'][0]['Resource']
                 for p in list(group.policies.all()) if
                 p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-        log.info("\n%s\t%s" % ('Name:', name))
-        log.info("%s\t%s" % ('Arn:', group.arn))
+        messages.append("\n%s\t%s" % ('Name:', name))
+        messages.append("%s\t%s" % ('Arn:', group.arn))
         if members:
-            log.info("Members:")
-            log.info("\n".join(["  %s" % u.name for u in members]))
+            messages.append("Members:")
+            messages.append("\n".join(["  %s" % u.name for u in members]))
         if attached_policies:
-            log.info("Policies:")
-            log.info("\n".join(["  %s" % p.arn for p in attached_policies]))
+            messages.append("Policies:")
+            messages.append("\n".join(["  %s" % p.arn for p in attached_policies]))
         if assume_role_resources:
-            log.info("Assume role profiles:")
-            log.info("  Account\tRole ARN")
+            messages.append("Assume role profiles:")
+            messages.append("  Account\tRole ARN")
             profiles = {}
             for role_arn in assume_role_resources:
                 account_name = lookup(deployed['accounts'], 'Id',
                         role_arn.split(':')[4], 'Name')
                 profiles[account_name] =  role_arn
             for account_name in sorted(profiles.keys()):
-                log.info("  %s:\t%s" % (account_name, profiles[account_name]))
+                messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
+        report[group_name] = messages
+
+    iam_resource = boto3.resource('iam', **credentials)
+    header = "Provisioned IAM Groups in Auth Account:"
+    overbar = '_' * len(header)
+    log.info("\n\n%s\n%s" % (overbar, header))
+    report = {}
+    threads = []
+    for group_name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
+        t = threading.Thread(
+                target=_display_group,
+                args=(report, group_name, iam_resource))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+    for group_name, messages in sorted(report.items()):
+        for msg in messages:
+            log.info(msg)
 
 
 def display_roles_in_accounts(log, deployed, auth_spec):
@@ -131,38 +148,52 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     in the Organization.
     We only care about AWS principals, not Service principals.
     """
-    header = "Provisioned IAM Roles in all Org Accounts:"
-    overbar = '_' * len(header)
-    log.info("\n\n%s\n%s" % (overbar, header))
-
-    def _dislay_role(log, account, auth_spec):
+    # sub function to gather report for each account
+    def _dislay_role(report, account, auth_spec):
         credentials = get_assume_role_credentials( account['Id'],
                 auth_spec['org_access_role'])
         iam_client = boto3.client('iam', **credentials)
         iam_resource = boto3.resource('iam', **credentials)
         role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
         custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-        log.info("\nAccount:\t%s" % account['Name'])
+        messages = []
+        messages.append("\nAccount:\t%s" % account['Name'])
         if custom_policies:
-            log.info("Custom Policies:")
+            messages.append("Custom Policies:")
             for policy in custom_policies:
-                log.info("  %s" % policy['PolicyName'])
-        log.info("Roles:")
+                messages.append("  %s" % policy['PolicyName'])
+        messages.append("Roles:")
         for name in role_names:
             role = iam_resource.Role(name)
             principal = role.assume_role_policy_document['Statement'][0]['Principal']
             if 'AWS' in principal:
-                log.info("  %s" % name)
-                log.info("    Arn:\t%s" % role.arn)
-                log.info("    Principal:\t%s" % principal['AWS'])
+                messages.append("  %s" % name)
+                messages.append("    Arn:\t%s" % role.arn)
+                messages.append("    Principal:\t%s" % principal['AWS'])
                 attached = [p.policy_name for p in list(role.attached_policies.all())]
                 if attached:
-                    log.info("    Attached Policies:")
+                    messages.append("    Attached Policies:")
                     for policy in attached:
-                        log.info("      %s" % policy)
+                        messages.append("      %s" % policy)
+        report[account['Name']] = messages
 
+    # process the reports
+    header = "Provisioned IAM Roles in all Org Accounts:"
+    overbar = '_' * len(header)
+    log.info("\n\n%s\n%s" % (overbar, header))
+    report = {}
+    threads = []
     for account in deployed['accounts']:
-        threading.Thread(target=_dislay_role, args=(log, account, auth_spec)).start()
+        t = threading.Thread(
+                target=_dislay_role,
+                args=(report, account, auth_spec))
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+    for account, messages in sorted(report.items()):
+        for msg in messages:
+            log.info(msg)
 
 
 # ISSUE: deleting user: may need to delete user policy and signing keys as well.
@@ -653,17 +684,13 @@ def manage_delegations(args, log, deployed, auth_spec):
             credentials = get_assume_role_credentials(
                     account['Id'],
                     auth_spec['org_access_role'])
-            t = threading.Thread(
+            threading.Thread(
                     target=manage_delegation_role,
                     args=(credentials, args, log, deployed, auth_spec,
-                            account['Name'], trusting_accounts, d_spec))
-            t.start()
-            #manage_delegation_role(credentials, args, log, deployed, auth_spec,
-            #        account['Name'], trusting_accounts, d_spec)
+                            account['Name'], trusting_accounts, d_spec)).start()
         # process groups in Auth account
         threading.Thread(target=set_group_assume_role_policies,
                 args=(args, log, deployed, auth_spec, trusting_accounts, d_spec)).start()
-        #set_group_assume_role_policies(args, log, deployed, auth_spec, trusting_accounts, d_spec)
 
 
 def main():
