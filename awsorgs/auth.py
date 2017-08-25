@@ -31,6 +31,7 @@ import os
 import sys
 import yaml
 import json
+import threading
 
 import boto3
 import botocore.exceptions
@@ -503,6 +504,7 @@ def manage_delegation_role(credentials, args, log, deployed,
     Create and manage a cross account access delegetion role in an
     account based on delegetion specification.
     """
+    log.debug('account: %s' % account_name)
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
     role = iam_resource.Role(d_spec['RoleName'])
@@ -622,6 +624,7 @@ def manage_delegations(args, log, deployed, auth_spec):
     trusting accounts and group policies in Auth (trusted) account.
     """
     for d_spec in auth_spec['delegations']:
+        log.debug('considering %s' % d_spec['RoleName'])
         if d_spec['RoleName'] == auth_spec['org_access_role']:
             log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
             return
@@ -647,8 +650,12 @@ def manage_delegations(args, log, deployed, auth_spec):
             credentials = get_assume_role_credentials(
                     account['Id'],
                     auth_spec['org_access_role'])
-            manage_delegation_role(credentials, args, log, deployed, auth_spec,
-                    account['Name'], trusting_accounts, d_spec)
+            t = threading.Thread(
+                    target=manage_delegation_role,
+                    args=(credentials, args, log, deployed, auth_spec, account['Name'], trusting_accounts, d_spec))
+            t.start()
+            #manage_delegation_role(credentials, args, log, deployed, auth_spec,
+            #        account['Name'], trusting_accounts, d_spec)
         # process groups in Auth account
         set_group_assume_role_policies(args, log, deployed, auth_spec,
                 trusting_accounts, d_spec)
