@@ -5,13 +5,11 @@ master_account_id: 'XXXXXXXXXXXX'
 
 # Email domain to use for account creation if the accounts['Email'] field
 # is not explicitly specified.
-default_email_domain: example.com
+default_domain: example.com
 
 
 # Teams Specifation.  This provides a labeling system for tracking folks within
 # your organization who are responsible for managed accounts and users.
-#
-# NOTE: not required in current version
 #
 teams:
   - Name: systems

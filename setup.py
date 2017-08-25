@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='aws-orgs',
-    version='0.0.3.dev1',
+    version='0.0.4.rc1',
     description='Tools to manage AWS Organizations',
     long_description=long_description,
     url='https://github.com/ashleygould/aws-orgs',
@@ -18,21 +18,20 @@ setup(
     author_email='agould@ucop.edu',
     license='MIT',
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
     ],
     keywords='aws organizations',
     packages=find_packages(exclude=['scratch', 'notes']),
     install_requires=['boto3', 'docopt'],
     package_data={
-        'aws-orgs': [
-            'samples/org-spec.yaml',
-            'samples/account-spec.yaml',
-            'samples/auth-spec.yaml',
-            'data/spec-validation-patterns.yaml',
+        'awsorgs': [
+            'samples/*.yaml',
+            'data/*.yaml',
         ],
     },
     entry_points={

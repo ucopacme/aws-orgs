@@ -262,6 +262,9 @@ def manage_group_members(credentials, args, log, deployed, auth_spec):
                     # all managed users except when user ensure: absent
                     spec_members = [user['Name'] for user in auth_spec['users']
                             if not ensure_absent(user)]
+                    if 'ExcludeMembers' in g_spec and g_spec['ExcludeMembers']:
+                        spec_members = [user for user in spec_members
+                                if user not in g_spec['ExcludeMembers']]
                 else:
                     # just specified members
                     for username in g_spec['Members']:
@@ -414,7 +417,8 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
         return policy['Arn']
 
 
-def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
+def set_group_assume_role_policies(args, log, deployed, auth_spec,
+        trusting_accounts, d_spec):
     """
     Assign and manage assume role trust policies on IAM groups in
     Auth account.
@@ -447,11 +451,6 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
             if args['--exec']:
                 group.Policy(policy_name).delete()
         return
-
-    if d_spec['TrustingAccount'] == 'ALL':
-        trusting_accounts = [a['Name'] for a in deployed['accounts']]
-    else:
-        trusting_accounts = d_spec['TrustingAccount']
 
     # keep track of managed group policies as we process them
     managed_policies = []
@@ -499,7 +498,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
 
 
 def manage_delegation_role(credentials, args, log, deployed,
-        auth_spec, account_name, d_spec):
+        auth_spec, account_name, trusting_accounts, d_spec):
     """
     Create and manage a cross account access delegetion role in an
     account based on delegetion specification.
@@ -509,9 +508,7 @@ def manage_delegation_role(credentials, args, log, deployed,
     role = iam_resource.Role(d_spec['RoleName'])
 
     # check if role should not exist
-    if (account_name not in d_spec['TrustingAccount']
-            and d_spec['TrustingAccount'] != 'ALL'
-            or ensure_absent(d_spec)):
+    if account_name not in trusting_accounts or ensure_absent(d_spec):
         try:
             role.load()
         except ClientError as e:
@@ -530,7 +527,7 @@ def manage_delegation_role(credentials, args, log, deployed,
             role.delete()
         return
 
-    # assemble assume role policy document for delegation role
+    # else: assemble assume role policy document for delegation role
     principal = "arn:aws:iam::%s:root" % auth_spec['auth_account_id']
     statement = dict(
             Effect='Allow',
@@ -628,21 +625,33 @@ def manage_delegations(args, log, deployed, auth_spec):
         if d_spec['RoleName'] == auth_spec['org_access_role']:
             log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
             return
+
+        # munge trusting_accounts list
+        if d_spec['TrustingAccount'] == 'ALL':
+            trusting_accounts = [a['Name'] for a in deployed['accounts']]
+            if 'ExcludeAccounts' in d_spec and d_spec['ExcludeAccounts']:
+                trusting_accounts = [a for a in trusting_accounts
+                        if a not in d_spec['ExcludeAccounts']]
+        else:
+            trusting_accounts = d_spec['TrustingAccount']
+
+        # 
+        for account_name in trusting_accounts:
+            if not lookup(deployed['accounts'], 'Name', account_name):
+                log.error("Can not manage delegation role '%s' in account "
+                        "'%s'.  Account '%s' not found in Org" %
+                        (d_spec['RoleName'], account_name, account_name))
+
         # process roles in trusting accounts
-        if d_spec['TrustingAccount'] != 'ALL':
-            for account_name in d_spec['TrustingAccount']:
-                if not lookup(deployed['accounts'], 'Name', account_name):
-                    log.error("Can not create delegation role '%s' in account "
-                            "'%s'.  Account '%s' not found in Org" %
-                            (d_spec['RoleName'], account_name, account_name))
         for account in deployed['accounts']:
             credentials = get_assume_role_credentials(
                     account['Id'],
                     auth_spec['org_access_role'])
-            manage_delegation_role(credentials, args, log,
-                    deployed, auth_spec, account['Name'], d_spec)
+            manage_delegation_role(credentials, args, log, deployed, auth_spec,
+                    account['Name'], trusting_accounts, d_spec)
         # process groups in Auth account
-        set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec)
+        set_group_assume_role_policies(args, log, deployed, auth_spec,
+                trusting_accounts, d_spec)
 
 
 def main():
@@ -659,7 +668,7 @@ def main():
     deployed = dict(
             users = iam_client.list_users()['Users'],
             groups = iam_client.list_groups()['Groups'],
-            accounts = scan_deployed_accounts(org_client))
+            accounts = scan_deployed_accounts(log, org_client))
 
     if args['report']:
         display_provisioned_users(log, deployed)

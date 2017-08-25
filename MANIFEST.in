@@ -1,0 +1,5 @@
+include README.rst
+include LICENSE.txt
+include awsorgs/samples/*.yaml
+include awsorgs/data/*.yaml
+

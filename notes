@@ -28,7 +28,7 @@ __________________
 utils.py
 
 TODO:
-in munge_path() check if default_path is defined or not
+NA in munge_path() check if default_path is defined or not
 DONE validate_spec() warn if spec contains non-defined attributes?
 
 CONSIDER:
@@ -48,8 +48,8 @@ IN PROGRESS change 'policy' to sc_policy everywhere
 NA in logger: prepend timestamp to messages
 add unit testing
 NA make logger write to different url
-scan_deployed_accounts: fix 'NextToken' logic.
 
+DONE (hard to test) scan_deployed_accounts: fix 'NextToken' logic.
 DONE make master_id check a function. import into accounts.
 DONE control order of organization tasks
 DONE get rid of globals
@@ -72,6 +72,7 @@ DONE in manage_policies: dont delete a policy attached to an ou
 __________________
 TODO accounts.py:
 
+set account email if not specified
 DONE apply new spec validation framework
 DONE derive Email attribute from domain_name
 DONE enforce use of Team attribute on managed accounts
@@ -99,16 +100,16 @@ policy attached to group not getting detached when commented out in auth-spec
 
 TODO:
 
-document spec structures
-when reporting roles, handle service roles as well as 'AWS' roles
-IN PROGRESS validate policy specs
-add 'Exclude' attribute to groups and delegations for when 'ALL' is specified
 delete unused custom policies
-in delegation report list accounts in alphabetical order
-report unmanaged iam resources in all accounts
 recreate role,policy if path changes
+report unmanaged iam resources in all accounts
+in delegation report list accounts in alphabetical order
+when reporting roles, handle service roles as well as 'AWS' roles
 incorporate theading
 
+DONE add 'Exclude' attribute to groups and delegations for when 'ALL' is specified
+DONE document spec structures
+DONE validate policy specs
 DONE create_groups: use boto group resourse
 DONE create_groups: after deleting a group, remove it from deployed['groups']
 DONE validate delegation specs

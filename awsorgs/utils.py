@@ -117,9 +117,8 @@ def validate_master_id(org_client, spec):
     master_account_id = org_client.describe_organization(
       )['Organization']['MasterAccountId']
     if master_account_id != spec['master_account_id']:
-        errmsg = ("""The Organization Master Account Id '%s' does not
-          match the 'master_account_id' set in the spec-file.  
-          Is your '--profile' arg correct?""" % master_account_id)
+        errmsg = ("The Organization Master Account Id '%s' does not match the "
+                "'master_account_id' set in the spec-file" % master_account_id)
         raise RuntimeError(errmsg)
     return
 
@@ -147,7 +146,7 @@ def load_validation_patterns(log):
     """
     Return dict of patterns for use when validating specification syntax
     """
-    PATTERN_FILE = '../data/spec-validation-patterns.yaml'
+    PATTERN_FILE = 'data/spec-validation-patterns.yaml'
     log.debug("loading file: '%s'" % PATTERN_FILE)
     filename =  os.path.abspath(pkg_resources.resource_filename(__name__, PATTERN_FILE))
             #__name__, '../data/spec-validation-patterns.yaml'))
