@@ -2,7 +2,6 @@
 
 import os
 import sys
-import re
 import pkg_resources
 
 import boto3
@@ -141,7 +140,8 @@ def validate_spec_file(log, spec_file, pattern_name):
 
 # QUESTION: I'm loading a data file by name.  It is part of the project and
 # explicitly installed by setup.py.  but in code, should I define it as
-# a constant insted of just loading a str?
+# a constant insted of just loading a str? where should I declare this 
+# constant?
 def load_validation_patterns(log):
     """
     Return dict of patterns for use when validating specification syntax
@@ -190,9 +190,7 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
                     valid_spec = False
         # test attribute type. ignore attr if value is None
         elif spec[attr]:
-            # (surely there must be a better way to extract the data type of
-            # an object as a string)
-            spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
+            spec_attr_type = spec[attr].__class__.__name__
             log.debug("    spec attribute object type: '%s'" % (spec_attr_type))
             # simple attribute pattern
             if isinstance(pattern[attr]['atype'], str):
