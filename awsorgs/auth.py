@@ -452,7 +452,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     Assign and manage assume role trust policies on IAM groups in
     Auth account.
     """
-    log.debug('running')
+    log.debug('role: %s' % d_spec['RoleName'])
     credentials = get_assume_role_credentials(
             auth_spec['auth_account_id'],
             auth_spec['org_access_role'])
@@ -532,7 +532,7 @@ def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_s
     account based on delegetion specification.
     """
     account_name = account['Name']
-    log.debug('account: %s' % account_name)
+    log.debug('account: %s, role: %s' % (account_name, d_spec['RoleName']))
     credentials = get_assume_role_credentials(
             account['Id'],
             auth_spec['org_access_role'])
@@ -648,41 +648,39 @@ def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_s
                 role.detach_policy(PolicyArn=policy_arn)
 
 
-def manage_delegations(args, log, deployed, auth_spec):
+def manage_delegations(d_spec, args, log, deployed, auth_spec):
     """
     Create and manage cross account access delegations based on 
     delegation specifications.  Manages delegation roles in 
     trusting accounts and group policies in Auth (trusted) account.
     """
-    for d_spec in auth_spec['delegations']:
-        log.debug('considering %s' % d_spec['RoleName'])
-        if d_spec['RoleName'] == auth_spec['org_access_role']:
-            log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
-            return
+    log.debug('considering %s' % d_spec['RoleName'])
+    if d_spec['RoleName'] == auth_spec['org_access_role']:
+        log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
+        return
 
-        # munge trusting_accounts list
-        if d_spec['TrustingAccount'] == 'ALL':
-            trusting_accounts = [a['Name'] for a in deployed['accounts']]
-            if 'ExcludeAccounts' in d_spec and d_spec['ExcludeAccounts']:
-                trusting_accounts = [a for a in trusting_accounts
-                        if a not in d_spec['ExcludeAccounts']]
-        else:
-            trusting_accounts = d_spec['TrustingAccount']
+    # munge trusting_accounts list
+    if d_spec['TrustingAccount'] == 'ALL':
+        trusting_accounts = [a['Name'] for a in deployed['accounts']]
+        if 'ExcludeAccounts' in d_spec and d_spec['ExcludeAccounts']:
+            trusting_accounts = [a for a in trusting_accounts
+                    if a not in d_spec['ExcludeAccounts']]
+    else:
+        trusting_accounts = d_spec['TrustingAccount']
+    for account_name in trusting_accounts:
+        if not lookup(deployed['accounts'], 'Name', account_name):
+            log.error("Can not manage delegation role '%s' in account "
+                    "'%s'.  Account '%s' not found in Organization" %
+                    (d_spec['RoleName'], account_name, account_name))
+            trusting_accounts.remove(account_name)
 
-        # 
-        for account_name in trusting_accounts:
-            if not lookup(deployed['accounts'], 'Name', account_name):
-                log.error("Can not manage delegation role '%s' in account "
-                        "'%s'.  Account '%s' not found in Organization" %
-                        (d_spec['RoleName'], account_name, account_name))
+    # process groups in Auth account
+    set_group_assume_role_policies(args, log, deployed, auth_spec,
+            trusting_accounts, d_spec)
 
-        # run task in thread pool
-        queue_threads(log, deployed['accounts'], manage_delegation_role,
-                f_args=(args, log, auth_spec, trusting_accounts, d_spec))
-
-        # process groups in Auth account
-        threading.Thread(target=set_group_assume_role_policies,
-                args=(args, log, deployed, auth_spec, trusting_accounts, d_spec)).start()
+    # run manage_delegation_role() task in thread pool
+    queue_threads(log, deployed['accounts'], manage_delegation_role,
+            f_args=(args, log, auth_spec, trusting_accounts, d_spec))
 
 
 def main():
@@ -713,7 +711,8 @@ def main():
         manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['delegation']:
-        manage_delegations(args, log, deployed, auth_spec)
+        queue_threads(log, auth_spec['delegations'], manage_delegations,
+            f_args=(args, log, deployed, auth_spec))
 
 if __name__ == "__main__":
     main()

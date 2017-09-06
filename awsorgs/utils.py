@@ -229,7 +229,7 @@ def queue_threads(log, sequence, func, f_args=(), thread_count=20):
     def worker(*args):
         log.debug('%s: q.empty: %s' % (threading.current_thread().name, q.empty()))
         while not q.empty():
-            log.debug('%s: waiting for next item' % (threading.current_thread().name))
+            log.debug('%s: task: %s' % (threading.current_thread().name, func))
             item = q.get()
             log.debug('%s: processing item: %s' % (threading.current_thread().name, item))
             func(item, *args)
