@@ -89,6 +89,35 @@ def display_provisioned_users(log, deployed):
         log.info("%s%s\t%s" % (name, spacer, arn))
 
 
+def queue_threads(log, sequence, func, f_args=(), thread_count=20):
+    """generalized abstraction for running queued tasks in a thread pool"""
+    log.debug('function: %s. f_args: %s' % (func, f_args))
+
+    def worker(*args):
+        log.debug('%s: q.empty: %s' % 
+                (threading.current_thread().name, q.empty()))
+        while not q.empty():
+            log.debug('%s: waiting for next item' % (threading.current_thread().name))
+            item = q.get()
+            log.debug('%s: processing item: %s' %
+                    (threading.current_thread().name, item))
+            log.debug('%s: func: %s. args: %s' %
+                    (threading.current_thread().name, func, args))
+            func(item, *args)
+            q.task_done()
+
+    q = Queue.Queue()
+    for item in sequence:
+        log.debug('queuing item: %s' % item)
+        q.put(item)
+    log.debug('queue length: %s' % q.qsize())
+    for i in range(thread_count):
+        t = threading.Thread(target=worker, args=f_args)
+        t.setDaemon(True)
+        t.start()
+    q.join()
+
+
 def display_provisioned_groups(credentials, log, deployed):
     """
     Print report of currently deployed IAM groups in Auth account.
@@ -96,49 +125,42 @@ def display_provisioned_groups(credentials, log, deployed):
     profiles.
     """
     # Thread worker function to assemble lines of a group report
-    def display_group(q, report, iam_resource):
-        while not q.empty():
-            group_name = q.get()
-            messages = []
-            group = iam_resource.Group(group_name)
-            members = list(group.users.all())
-            attached_policies = list(group.attached_policies.all())
-            assume_role_resources = [p.policy_document['Statement'][0]['Resource']
-                    for p in list(group.policies.all()) if
-                    p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-            messages.append("\n%s\t%s" % ('Name:', group_name))
-            messages.append("%s\t%s" % ('Arn:', group.arn))
-            if members:
-                messages.append("Members:")
-                messages.append("\n".join(["  %s" % u.name for u in members]))
-            if attached_policies:
-                messages.append("Policies:")
-                messages.append("\n".join(["  %s" % p.arn for p in attached_policies]))
-            if assume_role_resources:
-                messages.append("Assume role profiles:")
-                messages.append("  Account\tRole ARN")
-                profiles = {}
-                for role_arn in assume_role_resources:
-                    account_name = lookup(deployed['accounts'], 'Id',
-                            role_arn.split(':')[4], 'Name')
-                    profiles[account_name] =  role_arn
-                for account_name in sorted(profiles.keys()):
-                    messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
-            report[group_name] = messages
-            q.task_done()
+    def display_group(group_name, report, iam_resource):
+        log.debug('group_name: %s' % group_name)
+        messages = []
+        group = iam_resource.Group(group_name)
+        members = list(group.users.all())
+        attached_policies = list(group.attached_policies.all())
+        assume_role_resources = [p.policy_document['Statement'][0]['Resource']
+                for p in list(group.policies.all()) if
+                p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
+        messages.append("\n%s\t%s" % ('Name:', group_name))
+        messages.append("%s\t%s" % ('Arn:', group.arn))
+        if members:
+            messages.append("Members:")
+            messages.append("\n".join(["  %s" % u.name for u in members]))
+        if attached_policies:
+            messages.append("Policies:")
+            messages.append("\n".join(["  %s" % p.arn for p in attached_policies]))
+        if assume_role_resources:
+            messages.append("Assume role profiles:")
+            messages.append("  Account\tRole ARN")
+            profiles = {}
+            for role_arn in assume_role_resources:
+                account_name = lookup(deployed['accounts'], 'Id',
+                        role_arn.split(':')[4], 'Name')
+                profiles[account_name] =  role_arn
+            for account_name in sorted(profiles.keys()):
+                messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
+        report[group_name] = messages
 
-    # set up threads and queue to gather report data from groups
+    # gather report data from groups
     report = {}
     iam_resource = boto3.resource('iam', **credentials)
-    q = Queue.Queue(maxsize=0)
-    max_threads = 10
-    for group_name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
-        q.put(group_name)
-    for i in range(max_threads):
-        t = threading.Thread(target=display_group, args=(q, report, iam_resource))
-        t.setDaemon(True)
-        t.start()
-    q.join()
+    group_names = sorted(map(lambda g: g['GroupName'], deployed['groups']))
+    log.debug('group_names: %s' % group_names)
+    queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
+            thread_count=10)
 
     # print report
     header = "Provisioned IAM Groups in Auth Account:"
