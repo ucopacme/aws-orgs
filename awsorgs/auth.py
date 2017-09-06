@@ -32,7 +32,7 @@ import sys
 import yaml
 import json
 import threading
-import Queue # python 3 alert!
+#import Queue # python 3 alert!
 
 import boto3
 import botocore.exceptions
@@ -89,35 +89,6 @@ def display_provisioned_users(log, deployed):
         log.info("%s%s\t%s" % (name, spacer, arn))
 
 
-def queue_threads(log, sequence, func, f_args=(), thread_count=20):
-    """generalized abstraction for running queued tasks in a thread pool"""
-    log.debug('function: %s. f_args: %s' % (func, f_args))
-
-    def worker(*args):
-        log.debug('%s: q.empty: %s' % 
-                (threading.current_thread().name, q.empty()))
-        while not q.empty():
-            log.debug('%s: waiting for next item' % (threading.current_thread().name))
-            item = q.get()
-            log.debug('%s: processing item: %s' %
-                    (threading.current_thread().name, item))
-            log.debug('%s: func: %s. args: %s' %
-                    (threading.current_thread().name, func, args))
-            func(item, *args)
-            q.task_done()
-
-    q = Queue.Queue()
-    for item in sequence:
-        log.debug('queuing item: %s' % item)
-        q.put(item)
-    log.debug('queue length: %s' % q.qsize())
-    for i in range(thread_count):
-        t = threading.Thread(target=worker, args=f_args)
-        t.setDaemon(True)
-        t.start()
-    q.join()
-
-
 def display_provisioned_groups(credentials, log, deployed):
     """
     Print report of currently deployed IAM groups in Auth account.
@@ -162,7 +133,7 @@ def display_provisioned_groups(credentials, log, deployed):
     queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
             thread_count=10)
 
-    # print report
+    # log report
     header = "Provisioned IAM Groups in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
@@ -178,54 +149,38 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     We only care about AWS principals, not Service principals.
     """
     # Thread worker function to gather report for each account
-    def display_role(i, q, report, auth_spec):
-        while not q.empty():
-            print '%s: waiting for next account' % i
-            account = q.get(True, 1)
-            print '%s: processing account: %s' % (i,account['Name'])
-            credentials = get_assume_role_credentials(
-                    account['Id'],
-                    auth_spec['org_access_role'])
-            iam_client = boto3.client('iam', **credentials)
-            iam_resource = boto3.resource('iam', **credentials)
-            role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
-            custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-            messages = []
-            messages.append("\nAccount:\t%s" % account['Name'])
-            if custom_policies:
-                messages.append("Custom Policies:")
-                for policy in custom_policies:
-                    messages.append("  %s" % policy['PolicyName'])
-            messages.append("Roles:")
-            for name in role_names:
-                role = iam_resource.Role(name)
-                principal = role.assume_role_policy_document['Statement'][0]['Principal']
-                if 'AWS' in principal:
-                    messages.append("  %s" % name)
-                    messages.append("    Arn:\t%s" % role.arn)
-                    messages.append("    Principal:\t%s" % principal['AWS'])
-                    attached = [p.policy_name for p in list(role.attached_policies.all())]
-                    if attached:
-                        messages.append("    Attached Policies:")
-                        for policy in attached:
-                            messages.append("      %s" % policy)
-            report[account['Name']] = messages
-            q.task_done()
-
-    # set up threads and queue to gather report data from accounts
+    def display_role(account, report, auth_spec):
+        credentials = get_assume_role_credentials(
+                account['Id'],
+                auth_spec['org_access_role'])
+        iam_client = boto3.client('iam', **credentials)
+        iam_resource = boto3.resource('iam', **credentials)
+        role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
+        custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+        messages = []
+        messages.append("\nAccount:\t%s" % account['Name'])
+        if custom_policies:
+            messages.append("Custom Policies:")
+            for policy in custom_policies:
+                messages.append("  %s" % policy['PolicyName'])
+        messages.append("Roles:")
+        for name in role_names:
+            role = iam_resource.Role(name)
+            principal = role.assume_role_policy_document['Statement'][0]['Principal']
+            if 'AWS' in principal:
+                messages.append("  %s" % name)
+                messages.append("    Arn:\t%s" % role.arn)
+                messages.append("    Principal:\t%s" % principal['AWS'])
+                attached = [p.policy_name for p in list(role.attached_policies.all())]
+                if attached:
+                    messages.append("    Attached Policies:")
+                    for policy in attached:
+                        messages.append("      %s" % policy)
+        report[account['Name']] = messages
+    # gather report data from accounts
     report = {}
-    q = Queue.Queue()
-    max_threads = 10
-    for account in deployed['accounts']:
-        print 'queuing account %s'  % account['Name']
-        q.put(account)
-    print q.qsize()
-    for i in range(max_threads):
-        t = threading.Thread(target=display_role, args=(i, q, report, auth_spec,))
-        t.setDaemon(True)
-        t.start()
-    q.join()
-
+    queue_threads(log, deployed['accounts'], display_role, f_args=(report, auth_spec),
+            thread_count=10)
     # process the reports
     header = "Provisioned IAM Roles in all Org Accounts:"
     overbar = '_' * len(header)
@@ -571,13 +526,16 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                 group.Policy(policy_name).delete()
 
 
-def manage_delegation_role(credentials, args, log, deployed,
-        auth_spec, account_name, trusting_accounts, d_spec):
+def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_spec):
     """
     Create and manage a cross account access delegetion role in an
     account based on delegetion specification.
     """
+    account_name = account['Name']
     log.debug('account: %s' % account_name)
+    credentials = get_assume_role_credentials(
+            account['Id'],
+            auth_spec['org_access_role'])
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
     role = iam_resource.Role(d_spec['RoleName'])
@@ -718,15 +676,10 @@ def manage_delegations(args, log, deployed, auth_spec):
                         "'%s'.  Account '%s' not found in Organization" %
                         (d_spec['RoleName'], account_name, account_name))
 
-        # process roles in trusting accounts
-        for account in deployed['accounts']:
-            credentials = get_assume_role_credentials(
-                    account['Id'],
-                    auth_spec['org_access_role'])
-            threading.Thread(
-                    target=manage_delegation_role,
-                    args=(credentials, args, log, deployed, auth_spec,
-                            account['Name'], trusting_accounts, d_spec)).start()
+        # run task in thread pool
+        queue_threads(log, deployed['accounts'], manage_delegation_role,
+                f_args=(args, log, auth_spec, trusting_accounts, d_spec))
+
         # process groups in Auth account
         threading.Thread(target=set_group_assume_role_policies,
                 args=(args, log, deployed, auth_spec, trusting_accounts, d_spec)).start()
