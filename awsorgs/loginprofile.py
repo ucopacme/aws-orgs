@@ -3,12 +3,11 @@
 instructions how to get started.
 
 Usage:
-  awsloginprofile [-vd] USER [--new | --reset | --disable | --reenable]
-                  [--password PASSWORD] [--email EMAIL] [--boto-log]
+  awsloginprofile USER [--new | --reset | --disable | --reenable] 
+                  [--password PASSWORD] [--email EMAIL] [-vd] [--boto-log]
   awsloginprofile --help
 
 Options:
-  -h, --help            Show this help message and exit.
   USER                  Name of IAM user.
   --new                 Create new login profile.
   --reset               Reset password for existing login profile.
@@ -16,6 +15,7 @@ Options:
   --reenable            Recreate login profile, reactivate access keys.
   --password PASSWORD   Supply password, do not require user to reset.
   --email EMAIL         Supply user's email address for sending credentials.
+  -h, --help            Show this help message and exit.
   -v, --verbose         Log to activity to STDOUT at log level INFO.
   -d, --debug           Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log            Include botocore and boto3 logs in log stream.
@@ -38,16 +38,10 @@ from awsorgs.utils import *
 
 """
 TODO:
-modify utils.get_logger() so it does not require 'report' param
+modify utils.get_logger() so it does not require 'report' '--exec' param
+disable/reenable ssh keys
 
 
-if report
-  list status of user
-
-create login profile
-  generate random pw
-  validate user exists
-  overwrite existing profile?
 
 email user
   validate sms service
@@ -73,57 +67,94 @@ revoke one-time pw if older than 24hrs
 """
 
 
+def prep_email(log, args, onetimepw):
+    pass
 
 
 def main():
     args = docopt(__doc__)
-    #log = get_logger(args)
-    #log.debug("%s: args:\n%s" % (__name__, args))
-    print("%s: args:\n%s" % (__name__, args))
 
-    #iam = boto3.resource('iam')
-    #user = iam.User(args['--user'])
-    #print user
-    #print user.password_last_used
-    #login_profile = user.LoginProfile()
-    #print login_profile
+    # log level
+    log_level = logging.CRITICAL
+    if args['--verbose'] or args['--boto-log']:
+        log_level = logging.INFO
+    if args['--debug']:
+        log_level = logging.DEBUG
+    # log format
+    log_format = '%(name)s: %(levelname)-9s%(message)s'
+    if args['--debug']:
+        log_format = '%(name)s: %(levelname)-9s%(funcName)s():  %(message)s'
+    if not args['--boto-log']:
+        logging.getLogger('botocore').propagate = False
+        logging.getLogger('boto3').propagate = False
+    logging.basicConfig(format=log_format, level=log_level)
+    log = logging.getLogger(__name__)
+    log.debug("%s: args:\n%s" % (__name__, args))
 
-    #try:
-    #    login_profile.load()
-    #except ClientError as e:
-    #    if e.response['Error']['Code'] == 'NoSuchEntity':
-    #        # create login profile
-    #        log.info('creating login profile for user %s' % user.name)
-    #        onetimepw = passgen()
-    #        print onetimepw
-    #        login_profile = user.create_login_profile(
-    #                Password=onetimepw,
-    #                PasswordResetRequired=True)
+    iam = boto3.resource('iam')
+    user = iam.User(args['USER'])
+    try:
+        user.load()
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchEntity':
+            print('no such user: %s' % args['USER'])
+            sys.exit(1)
 
-    ##print type(login_profile.create_date)
-    #print login_profile.create_date
-    #print login_profile.password_reset_required
-
-    #if args['--reset']:
-    #    # update login profile with new passwd
-    #    log.info('updating passwd for user %s' % user.name)
-    #    onetimepw = passgen()
-    #    print onetimepw
-    #    result = login_profile.update(
-    #            Password=onetimepw,
-    #            PasswordResetRequired=True)
-    #print result
-
-    #if args['--disable']:
-    #    # delete login profile
-    #    log.info('deleting login profile for user %s' % user.name)
-    #    result = login_profile.delete()
-    #    for key in user.access_keys.all():
-    #        key.deactivate()
-
-    #print result
+    # check for user supplied passwd
+    if args['--password']:
+        passwd = args['--password']
+        require_reset = False
+    else:
+        passwd = passgen()
+        require_reset = True
 
 
+    login_profile = user.LoginProfile()
+    try:
+        login_profile.load()
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchEntity':
+            if args['--new'] or args['--reenable']:
+                # create login profile
+                log.info('creating login profile for user %s' % user.name)
+                login_profile = user.create_login_profile(
+                        Password=passwd,
+                        PasswordResetRequired=require_reset)
+                prep_email(log, args, passwd)
+            else:
+                print "User '%s' has no login profile" % args['USER']
+                sys.exit(0)
+
+    if args['--reset']:
+        # update login profile with new passwd
+        log.info('updating passwd for user %s' % user.name)
+        onetimepw = passgen()
+        login_profile.update(
+                Password=passwd,
+                PasswordResetRequired=require_reset)
+        prep_email(log, args, passwd)
+
+    elif args['--disable']:
+        # delete login profile
+        log.info('disabling login profile for user %s' % user.name)
+        login_profole.delete()
+        # deactivate access keys
+        for key in user.access_keys.all():
+            key.deactivate()
+
+    elif args['--reenable']:
+        # reactivate access keys
+        log.info('reenabling access keys for user %s' % user.name)
+        for key in user.access_keys.all():
+            key.activate()
+
+    else:
+        print 'User:                  %s' % user.name
+        print 'Id:                    %s' % user.user_id
+        print 'create_date:           %s' % user.create_date
+        print 'password_last_used:    %s' % user.password_last_used
+        print 'profile create date    %s' % login_profile.create_date
+        print 'Passwd reset required: %s' % login_profile.password_reset_required
 
 
 if __name__ == "__main__":
