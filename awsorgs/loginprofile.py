@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-"""Generatate AWS IAM user login profile and notify user with useful
-instructions how to get started.
+"""Manage AWS IAM user login profile.
 
 Usage:
-  awsloginprofile USER [--new | --reset | --disable | --reenable] 
-                  [--password PASSWORD] [--email EMAIL] [-vd] [--boto-log]
+  awsloginprofile USER [-vd] [--boto-log]
+  awsloginprofile USER --disable [-vd] [--boto-log]
+  awsloginprofile USER (--new | --reset | --reenable) [-vd] [--boto-log]
+                       [--password PASSWORD] [--email EMAIL]
   awsloginprofile --help
 
 Options:
@@ -25,11 +26,11 @@ Options:
 
 import os
 import sys
+import yaml
+import logging
 
 import boto3
 from botocore.exceptions import ClientError
-import yaml
-import logging
 import docopt
 from docopt import docopt
 from passgen import passgen
@@ -38,123 +39,166 @@ from awsorgs.utils import *
 
 """
 TODO:
-modify utils.get_logger() so it does not require 'report' '--exec' param
 disable/reenable ssh keys
-
-
-
-email user
-  validate sms service
-  gather aws config profiles for user
-  send email with
-    user info
-      user name
-      account name
-      account Id
-      aws console login url
-    instructions for credentials setup
-      reset one-time pw
-      create access key
-      mfa device
-      populate ~/.aws/{credentials,config}
-      upload ssh pubkey (optional)
-    aws-shelltools usage
-  send separate email with one-time pw
-
 revoke one-time pw if older than 24hrs
-
+prep_email()
+send_email()
 
 """
 
 
-def prep_email(log, args, onetimepw):
+def prep_email(log, args, passwd, email):
+    """
+    email user
+      validate sms service
+      gather aws config profiles for user
+      send email with
+        user info
+          user name
+          account name
+          account Id
+          aws console login url
+        instructions for credentials setup
+          reset one-time pw
+          create access key
+          mfa device
+          populate ~/.aws/{credentials,config}
+          upload ssh pubkey (optional)
+        aws-shelltools usage
+      send separate email with one-time pw
+    """
     pass
 
 
-def main():
-    args = docopt(__doc__)
-
-    # log level
-    log_level = logging.CRITICAL
-    if args['--verbose'] or args['--boto-log']:
-        log_level = logging.INFO
-    if args['--debug']:
-        log_level = logging.DEBUG
-    # log format
-    log_format = '%(name)s: %(levelname)-9s%(message)s'
-    if args['--debug']:
-        log_format = '%(name)s: %(levelname)-9s%(funcName)s():  %(message)s'
-    if not args['--boto-log']:
-        logging.getLogger('botocore').propagate = False
-        logging.getLogger('boto3').propagate = False
-    logging.basicConfig(format=log_format, level=log_level)
-    log = logging.getLogger(__name__)
-    log.debug("%s: args:\n%s" % (__name__, args))
-
+def validate_user(user_name):
     iam = boto3.resource('iam')
-    user = iam.User(args['USER'])
+    user = iam.User(user_name)
     try:
         user.load()
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchEntity':
-            print('no such user: %s' % args['USER'])
-            sys.exit(1)
-
-    # check for user supplied passwd
-    if args['--password']:
-        passwd = args['--password']
-        require_reset = False
-    else:
-        passwd = passgen()
-        require_reset = True
+            return    
+    return user
 
 
+def validate_login_profile(user):
     login_profile = user.LoginProfile()
     try:
         login_profile.load()
     except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchEntity':
-            if args['--new'] or args['--reenable']:
-                # create login profile
-                log.info('creating login profile for user %s' % user.name)
-                login_profile = user.create_login_profile(
-                        Password=passwd,
-                        PasswordResetRequired=require_reset)
-                prep_email(log, args, passwd)
-            else:
-                print "User '%s' has no login profile" % args['USER']
-                sys.exit(0)
+            return
+    return login_profile
 
-    if args['--reset']:
-        # update login profile with new passwd
+
+def munge_passwd(passwd=None):
+    # check for user supplied passwd
+    if passwd:
+        require_reset = False
+    else:
+        passwd = passgen()
+        require_reset = True
+    return passwd, require_reset
+
+
+def create_profile(log, user, passwd, require_reset):
+    # create login profile
+    log.info('creating login profile for user %s' % user.name)
+    return user.create_login_profile(
+            Password=passwd,
+            PasswordResetRequired=require_reset)
+
+
+def update_profile(log, user, login_profile, passwd, require_reset):
+    # update login profile with new passwd
+    if login_profile:
         log.info('updating passwd for user %s' % user.name)
-        onetimepw = passgen()
-        login_profile.update(
+        return login_profile.update(
                 Password=passwd,
                 PasswordResetRequired=require_reset)
-        prep_email(log, args, passwd)
+    else:
+        log.error("user '%s' has no login profile" % user.name)
+        sys.exit(1)
 
-    elif args['--disable']:
-        # delete login profile
-        log.info('disabling login profile for user %s' % user.name)
-        login_profole.delete()
-        # deactivate access keys
-        for key in user.access_keys.all():
+def disable_profile(log, user, login_profile):
+    # delete login profile
+    if login_profile:
+        log.info('deleting login profile for user %s' % user.name)
+        login_profile.delete()
+    else:
+        log.warn("user '%s' has no login profile" % user.name)
+
+
+def enable_access_keys(log, user, enable=True):
+    for key in user.access_keys.all():
+        if enable and key.status == 'Inactive':
+            log.info('enabling access key %s for user %s' %
+                    (key.access_key_id, user.name))
+            key.activate()
+        elif not enable and key.status == 'Active':
+            log.info('disabling access key %s for user %s' %
+                    (key.access_key_id, user.name))
             key.deactivate()
 
+
+def user_report(log, user, login_profile):
+    log.info('User:                  %s' % user.name)
+    log.info('User Id:               %s' % user.user_id)
+    log.info('User created:          %s' % user.create_date)
+    if login_profile:
+        log.info('User login profile:    %s' % login_profile.create_date)
+        log.info('Password last used:    %s' % user.password_last_used)
+        log.info('Passwd reset required: %s' % login_profile.password_reset_required)
+    else:
+        log.info('User login profile:    %s' % login_profile)
+
+
+def main():
+    args = docopt(__doc__)
+    # HACK ALERT! add unused args to make get_logger() happy
+    args['--exec'] = False
+    args['report'] = True
+    log = get_logger(args)
+
+    user = validate_user(args['USER'])
+    if not user:
+        log.critical('no such user: %s' % args['USER'])
+        sys.exit(1)
+
+    login_profile = validate_login_profile(user)
+    passwd, require_reset = munge_passwd(args['--password'])
+
+    if args['--new']:
+        if not login_profile:
+            login_profile = create_profile(log, user, passwd, require_reset)
+            prep_email(log, user, passwd, args['--email'])
+        else:
+            log.warn("login profile for user '%s' already exists" % user.name)
+        if args['--verbose']:
+            user_report(log, user, login_profile)
+
+    elif args['--reset']:
+        login_profile = update_profile(log, user, login_profile, passwd, require_reset)
+        prep_email(log, user, passwd, args['--email'])
+        if args['--verbose']:
+            user_report(log, user, login_profile)
+
+    elif args['--disable']:
+        disable_profile(log, user, login_profile)
+        enable_access_keys(log, user, False)
+        if args['--verbose']:
+            user_report(log, user, login_profile)
+
     elif args['--reenable']:
-        # reactivate access keys
-        log.info('reenabling access keys for user %s' % user.name)
-        for key in user.access_keys.all():
-            key.activate()
+        if not login_profile:
+            login_profile = create_profile(log, user, passwd, require_reset)
+            prep_email(log, user, passwd, args['--email'])
+        enable_access_keys(log, user, True)
+        if args['--verbose']:
+            user_report(log, user, login_profile)
 
     else:
-        print 'User:                  %s' % user.name
-        print 'Id:                    %s' % user.user_id
-        print 'create_date:           %s' % user.create_date
-        print 'password_last_used:    %s' % user.password_last_used
-        print 'profile create date    %s' % login_profile.create_date
-        print 'Passwd reset required: %s' % login_profile.password_reset_required
+        user_report(log, user, login_profile)
 
 
 if __name__ == "__main__":
