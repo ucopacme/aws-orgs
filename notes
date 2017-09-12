@@ -348,6 +348,13 @@ example is setting a default value:
         return spec
 
 
+_________________________________________
+using re module:
+
+import re
+# extract the data type of an object as a string
+spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
+
 
 
 _________________________________________
@@ -374,4 +381,79 @@ agould@horus:~/.aws> aws iam create-access-key --user-name agould
 }
 
 
+___________________________
+ssh keys and code commit
+
+
+agould@horus:~/.ssh> ssh-keygen
+Generating public/private rsa key pair.
+Enter file in which to save the key (/home/agould/.ssh/id_rsa): /home/agould/.ssh/codecommit_rsa
+Enter passphrase (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /home/agould/.ssh/codecommit_rsa.
+Your public key has been saved in /home/agould/.ssh/codecommit_rsa.pub.
+The key fingerprint is:
+SHA256:jarXXaSIBT9Q5LW3ZqDgG9w4hF6GdTW7Fg9x1jsyuxA agould@horus.ucop.edu
+[cut]
+
+aws iam upload-ssh-public-key --user-name agould --ssh-public-key-body 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdo4Shu5FwcsD+4X/sZ2wp3K8UrptrKMrGDl4f6tRN11J3TA1Z0X6aCOeKHFMt9C72yyf72WIwCdAgLOND83ZUKYv0GxiPnzpZt0GP8v+YYdYLVJpgWagOxeWxEeScxqa7HMFqY1v2TEK/yfNGgPhILUyLh7UnQRUs3glHh+3nj4IesLtP0+YpAL4/I7efO2/Tzsvn0WUd3lPlZ7FzKu9kSzUoGTzJBc0TNEqpoqLauCejBqRS6k6g1YsTDDQOFGW/00RzGh4FMCoUSvr2Cxgtx5etq3pkoRUhY9d1QL8b7+5ZJ7nwOaYlfKtenbWY2Ak08cDFBRD/6/3GQhqiVEjL agould@horus.ucop.edu'
+
+{
+    "SSHPublicKey": {
+        "UserName": "agould", 
+        "Status": "Active", 
+        "SSHPublicKeyBody": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdo4Shu5FwcsD+4X/sZ2wp3K8UrptrKMrGDl4f6tRN11J3TA1Z0X6aCOeKHFMt9C72yyf72WIwCdAgLOND83ZUKYv0GxiPnzpZt0GP8v+YYdYLVJpgWagOxeWxEeScxqa7HMFqY1v2TEK/yfNGgPhILUyLh7UnQRUs3glHh+3nj4IesLtP0+YpAL4/I7efO2/Tzsvn0WUd3lPlZ7FzKu9kSzUoGTzJBc0TNEqpoqLauCejBqRS6k6g1YsTDDQOFGW/00RzGh4FMCoUSvr2Cxgtx5etq3pkoRUhY9d1QL8b7+5ZJ7nwOaYlfKtenbWY2Ak08cDFBRD/6/3GQhqiVEjL agould@horus.ucop.edu", 
+        "UploadDate": "2017-08-25T22:35:51.814Z", 
+        "Fingerprint": "47:e3:4d:b0:1c:ab:17:8a:a2:92:7a:31:b9:f7:07:01", 
+        "SSHPublicKeyId": "APKAIZ623TNLLU6GU3DQ"
+    }
+}
+
+agould@horus:~> tail -3 .ssh/config 
+Host git-codecommit.*.amazonaws.com
+  User APKAIZ623TNLLU6GU3DQ
+  IdentityFile ~/.ssh/codecommit_rsa
+agould@horus:~> chmod 600 .ssh/config
+agould@horus:~> ll .ssh/config
+-rw-------. 1 agould agould 223 Aug 25 15:37 .ssh/config
+
+agould@horus:~> ssh git-codecommit.us-east-2.amazonaws.com
+Warning: Permanently added 'git-codecommit.us-east-2.amazonaws.com,52.95.20.120' (RSA) to the list of known hosts.
+Enter passphrase for key '/home/agould/.ssh/codecommit_rsa': 
+You have successfully authenticated over SSH. You can use Git to interact with AWS CodeCommit. Interactive shells are not supported.Connection to git-codecommit.us-east-2.amazonaws.com closed by remote host.
+Connection to git-codecommit.us-east-2.amazonaws.com closed.
+
+
+___________________________
+accessing code commit repos (not ssh)
+
+https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html
+https://alestic.com/2015/11/aws-codecommit-iam-role/
+https://stackoverflow.com/questions/33728004/access-to-aws-codecommit-by-federated-users
+
+ashely@horus:~> git config --global credential.helper '!aws codecommit credential-helper $@'
+ashely@horus:~> git config --global credential.UseHttpPath true
+ashely@horus:~> git config --global user.name 'Ashley Gould'
+ashely@horus:~> git config --global user.email 'agould@ucop.edu'
+ashely@horus:~> cat .gitconfig 
+[credential]
+        helper = !aws codecommit credential-helper $@
+        UseHttpPath = true
+[user]
+        name = Ashley Gould
+        email = agould@ucop.edu
+
+
+agould@horus:~/tmp/git> aws-assume-role ppers
+agould@horus:~/tmp/git> aws codecommit list-repositories
+{
+    "repositories": [
+        {
+            "repositoryName": "etransfer.ucop.edu", 
+            "repositoryId": "b7c1e548-3d26-4b35-8191-441d2ee46bd5"
+        }
+    ]
+}
+agould@horus:~/tmp/git> git clone https://git-codecommit.us-west-2.amazonaws.com/v1/repos/etransfer.ucop.edu
+Cloning into 'etransfer.ucop.edu'...
 

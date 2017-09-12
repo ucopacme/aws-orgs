@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 
 """Manage users, group, and roles for cross account authentication in an
@@ -97,7 +97,7 @@ def display_provisioned_groups(credentials, log, deployed):
     header = "Provisioned IAM Groups in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
-    for name in sorted(map(lambda g: g['GroupName'], deployed['groups'])):
+    for name in sorted([g['GroupName'] for g in deployed['groups']]):
         group = iam_resource.Group(name)
         members = list(group.users.all())
         attached_policies = list(group.attached_policies.all())
