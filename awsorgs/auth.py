@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 
 """Manage users, group, and roles for cross account authentication in an

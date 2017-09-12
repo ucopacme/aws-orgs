@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 
 """Manage recources in an AWS Organization.
@@ -54,7 +54,7 @@ def validate_accounts_unique_in_org(log, root_spec):
         return account_map
     # find accounts set to more than one OU
     unique = True
-    for account, ou in map_accounts(root_spec).items():
+    for account, ou in list(map_accounts(root_spec).items()):
         if len(ou) > 1:
             log.error("Account '%s' set in multiple OU: %s" % (account, ou))
             unique = False
@@ -95,7 +95,7 @@ def list_policies_in_ou (org_client, ou_id):
     """
     policies_in_ou = org_client.list_policies_for_target(
             TargetId=ou_id, Filter='SERVICE_CONTROL_POLICY',)['Policies']
-    return sorted(map(lambda ou: ou['Name'], policies_in_ou))
+    return sorted([ou['Name'] for ou in policies_in_ou])
 
 
 def scan_deployed_accounts(log, org_client):
@@ -157,8 +157,8 @@ def scan_deployed_ou(org_client, root_id):
         else:
             for ou in deployed_ou:
                 if ou['Name'] == parent_name:
-                    ou['Child_OU'] = map(lambda d: d['Name'], child_ou)
-                    ou['Accounts'] = map(lambda d: d['Name'], accounts)
+                    ou['Child_OU'] = [d['Name'] for d in child_ou]
+                    ou['Accounts'] = [d['Name'] for d in accounts]
         for ou in child_ou:
             ou['ParentId'] = parent_id
             deployed_ou.append(ou)
@@ -434,7 +434,7 @@ def main():
         manage_ou(org_client, args, log, deployed, org_spec,
                 org_spec['organizational_units'], 'root')
         # check for unmanaged resources
-        for key in managed.keys():
+        for key in list(managed.keys()):
             unmanaged= [a['Name'] for a in deployed[key] if a['Name'] not in managed[key]]
             if unmanaged:
                 log.warn("Unmanaged %s in Organization: %s" % (key,', '.join(unmanaged)))

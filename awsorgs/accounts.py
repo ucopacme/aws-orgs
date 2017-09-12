@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 
 """Manage accounts in an AWS Organization.
@@ -112,7 +112,7 @@ def display_provisioned_accounts(log, deployed_accounts):
     header = "Provisioned Accounts in Org:"
     overbar = '_' * len(header)
     log.info("\n%s\n%s" % (overbar, header))
-    for a_name in sorted(map(lambda a: a['Name'], deployed_accounts)):
+    for a_name in sorted([a['Name'] for a in deployed_accounts]):
         a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
         a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
         spacer = ' ' * (24 - len(a_name))
@@ -136,8 +136,8 @@ def main():
     if args['create']:
         create_accounts(org_client, args, log, deployed_accounts, account_spec)
         unmanaged= [a
-                for a in map(lambda a: a['Name'], deployed_accounts)
-                if a not in map(lambda a: a['Name'], account_spec['accounts'])]
+                for a in [a['Name'] for a in deployed_accounts]
+                if a not in [a['Name'] for a in account_spec['accounts']]]
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
 
