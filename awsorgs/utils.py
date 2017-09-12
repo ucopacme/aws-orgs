@@ -201,7 +201,7 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
                     continue
             else:
                 # complex attribute pattern
-                valid_types = pattern[attr]['atype'].keys()
+                valid_types = list(pattern[attr]['atype'].keys())
                 log.debug("    pattern attribute types: '%s'" % valid_types)
                 if not spec_attr_type in valid_types: 
                     log.error("Attribute '%s' must be one of type '%s'" %
