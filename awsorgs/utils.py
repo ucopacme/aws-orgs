@@ -4,7 +4,11 @@ import os
 import sys
 import pkg_resources
 import threading
-import Queue # python 3 alert!
+try:
+    import Queue as queue
+except ImportError:
+    import queue
+
 
 import boto3
 import yaml
@@ -235,7 +239,7 @@ def queue_threads(log, sequence, func, f_args=(), thread_count=20):
             func(item, *args)
             q.task_done()
 
-    q = Queue.Queue()
+    q = queue.Queue()
     for item in sequence:
         log.debug('queuing item: %s' % item)
         q.put(item)
