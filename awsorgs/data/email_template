@@ -1,0 +1,17 @@
+Hello dear user,
+
+You have been granted access to our central AWS authentication account.
+From here you can assume designated roles into other AWS accounts in
+our Organization.
+
+Please use the credentials below to log into the AWS console and
+complete your own user setup.  You will be required to change your
+password as you log in.
+
+  IAM User Name:	$user_name
+  One Time Password:	$onetimepw
+  Login URL:
+
+
+Once logged in take the time to set up a 'Virtual MFA Device' and
+'AWS Access Keys' for your IAM user.  

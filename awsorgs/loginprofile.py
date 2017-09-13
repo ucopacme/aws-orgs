@@ -28,6 +28,7 @@ import os
 import sys
 import yaml
 import logging
+from string import Template
 
 import boto3
 from botocore.exceptions import ClientError
@@ -47,7 +48,7 @@ send_email()
 """
 
 
-def prep_email(log, args, passwd, email):
+def prep_email(log, user, passwd, email):
     """
     email user
       validate sms service
@@ -67,7 +68,12 @@ def prep_email(log, args, passwd, email):
         aws-shelltools usage
       send separate email with one-time pw
     """
-    pass
+    EMAIL_TEMPLATE = 'data/email_template'
+    log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
+    template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
+    mapping = dict(user_name=user.name, onetimepw=passwd) 
+    with open(template) as tpl:
+        print(Template(tpl.read()).substitute(mapping))
 
 
 def validate_user(user_name):

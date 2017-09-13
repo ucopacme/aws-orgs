@@ -148,7 +148,7 @@ def load_validation_patterns(log):
     """
     PATTERN_FILE = 'data/spec-validation-patterns.yaml'
     log.debug("loading file: '%s'" % PATTERN_FILE)
-    filename =  os.path.abspath(pkg_resources.resource_filename(__name__, PATTERN_FILE))
+    filename = os.path.abspath(pkg_resources.resource_filename(__name__, PATTERN_FILE))
             #__name__, '../data/spec-validation-patterns.yaml'))
     with open(filename) as f:
         return yaml.load(f.read())
