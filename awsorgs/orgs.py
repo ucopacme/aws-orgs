@@ -70,7 +70,7 @@ def enable_policy_type_in_root(org_client, root_id):
     organization root.
     """
     p_type = org_client.list_roots()['Roots'][0]['PolicyTypes']
-    if(not p_type or (p_type['Type'][0] == 'SERVICE_CONTROL_POLICY' and p_type[0]['Status'] != 'ENABLED')):
+    if(not p_type or (p_type[0]['Type'] == 'SERVICE_CONTROL_POLICY' and p_type[0]['Status'] != 'ENABLED')):
         org_client.enable_policy_type(RootId=root_id, PolicyType='SERVICE_CONTROL_POLICY')
 
 
