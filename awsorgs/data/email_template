@@ -10,8 +10,27 @@ password as you log in.
 
   IAM User Name:	$user_name
   One Time Password:	$onetimepw
-  Login URL:
+  Login URL:            https://${trusted_id}.signin.aws.amazon.com/console
 
 
-Once logged in take the time to set up a 'Virtual MFA Device' and
-'AWS Access Keys' for your IAM user.  
+Once logged in take the time to set up a 'Virtual MFA Device' and 'AWS
+Access Keys' for your IAM user.  We recommend you install Google
+Authenticator' app on your cell to use as your 'Virtual MFA Device'.
+
+For help see:
+https://support.google.com/accounts/answer/1066447?co=GENIE.Platform%3DiOS&hl=en&oco=0
+http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html#enable-virt-mfa-for-iam-user
+http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html#Using_CreateAccessKey
+
+
+
+After your MFA is set up, log out and log back in again.  You will be
+queried for your 6 digit token code.  Now you can assume role into any
+accounts where you have cross account access.
+
+Your IAM user has been granted cross account access to the following:
+
+{for each delegation print:}
+  accountID:      account_id
+  role:           path/role_name
+

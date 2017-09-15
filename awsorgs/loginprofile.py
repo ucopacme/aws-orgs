@@ -45,29 +45,26 @@ revoke one-time pw if older than 24hrs
 prep_email()
 send_email()
 
-"""
-
-
-def prep_email(log, user, passwd, email):
-    """
     email user
       validate sms service
       gather aws config profiles for user
-      send email with
+      prepare email with:
         user info
           user name
           account name
           account Id
           aws console login url
-        instructions for credentials setup
-          reset one-time pw
-          create access key
-          mfa device
+        DONE instructions for credentials setup
+          DONE create access key
+          DONE mfa device
           populate ~/.aws/{credentials,config}
           upload ssh pubkey (optional)
         aws-shelltools usage
-      send separate email with one-time pw
-    """
+
+"""
+
+
+def prep_email(log, user, passwd, email):
     EMAIL_TEMPLATE = 'data/email_template'
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
