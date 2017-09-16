@@ -64,11 +64,48 @@ send_email()
 """
 
 
+def get_user_name():
+    """
+    Returns the IAM user_name of the calling identidy (i.e. you)
+    """
+    sts = boto3.client('sts')
+    return sts.get_caller_identity()['Arn'].split('/')[-1]
+
+
+def list_delegations(user):
+    groups = list(user.groups.all())
+    assume_role_policies = []
+    for group in user.groups.all():
+        assume_role_policies += [p for p in list(group.policies.all()) if
+                p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
+    delegation_table = []
+    for policy in assume_role_policies:
+        delegation_table.append(dict(
+            trusting_id=policy.policy_document['Statement'][0]['Resource'].split(':')[4],
+            role_name=policy.name))
+    return delegation_table
+
+
+def format_delegation_table(delegation_table):
+    delegation_string = ''
+    for d in delegation_table:
+        delegation_string += ('  account_id:\t%s\n  role_name:\t%s\n\n' %
+                (d['trusting_id'], d['role_name']))
+    return delegation_string
+
+
 def prep_email(log, user, passwd, email):
     EMAIL_TEMPLATE = 'data/email_template'
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
+    delegation_table = list_delegations(user)
+    log.debug('delegation_table: %s' % delegation_table)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
-    mapping = dict(user_name=user.name, onetimepw=passwd) 
+    mapping = dict(
+            user_name=user.name,
+            onetimepw=passwd,
+            trusted_id=boto3.client('sts').get_caller_identity()['Account'],
+            delegations=format_delegation_table(delegation_table),
+    )
     with open(template) as tpl:
         print(Template(tpl.read()).substitute(mapping))
 

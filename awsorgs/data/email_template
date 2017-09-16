@@ -1,4 +1,7 @@
-Hello dear user,
+
+
+
+Dear user,
 
 You have been granted access to our central AWS authentication account.
 From here you can assume designated roles into other AWS accounts in
@@ -30,7 +33,4 @@ accounts where you have cross account access.
 
 Your IAM user has been granted cross account access to the following:
 
-{for each delegation print:}
-  accountID:      account_id
-  role:           path/role_name
-
+$delegations
