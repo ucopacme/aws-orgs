@@ -4,22 +4,25 @@
 Usage:
   awsloginprofile USER [-vd] [--boto-log]
   awsloginprofile USER --disable [-vd] [--boto-log]
+  awsloginprofile USER --disable-expired [--opt-ttl HOURS] [-vd] [--boto-log]
   awsloginprofile USER (--new | --reset | --reenable) [-vd] [--boto-log]
                        [--password PASSWORD] [--email EMAIL]
   awsloginprofile --help
 
 Options:
-  USER                  Name of IAM user.
-  --new                 Create new login profile.
-  --reset               Reset password for existing login profile.
-  --disable             Delete existing login profile, disable access keys.
-  --reenable            Recreate login profile, reactivate access keys.
-  --password PASSWORD   Supply password, do not require user to reset.
-  --email EMAIL         Supply user's email address for sending credentials.
-  -h, --help            Show this help message and exit.
-  -v, --verbose         Log to activity to STDOUT at log level INFO.
-  -d, --debug           Increase log level to 'DEBUG'. Implies '--verbose'.
-  --boto-log            Include botocore and boto3 logs in log stream.
+  USER                     Name of IAM user.
+  --new                    Create new login profile.
+  --reset                  Reset password for existing login profile.
+  --disable                Delete existing login profile, disable access keys.
+  --disable-expired        Delete profile if one-time-password exceeds --opt-ttl.
+  --reenable               Recreate login profile, reactivate access keys.
+  --opt-ttl HOURS          One-time-password time to live in hours [default: 24].
+  --password PASSWORD      Supply password, do not require user to reset.
+  --email EMAIL            Supply user's email address for sending credentials.
+  -h, --help               Show this help message and exit.
+  -v, --verbose            Log to activity to STDOUT at log level INFO.
+  -d, --debug              Increase log level to 'DEBUG'. Implies '--verbose'.
+  --boto-log               Include botocore and boto3 logs in log stream.
   
 
 """
@@ -29,6 +32,7 @@ import sys
 import yaml
 import logging
 from string import Template
+from datetime import datetime, timezone, timedelta
 
 import boto3
 from botocore.exceptions import ClientError
@@ -40,24 +44,24 @@ from awsorgs.utils import *
 
 """
 TODO:
+pydoc for functions
 disable/reenable ssh keys
-revoke one-time pw if older than 24hrs
-prep_email()
+DONE revoke one-time pw if older than 24hrs
+DONE prep_email()
 send_email()
 
     email user
       validate sms service
-      gather aws config profiles for user
+      DONE gather aws config profiles for user
       prepare email with:
-        user info
-          user name
-          account name
-          account Id
-          aws console login url
+        DONE user info
+          DONE user name
+          DONE account Id
+          DONE aws console login url
         DONE instructions for credentials setup
           DONE create access key
           DONE mfa device
-          populate ~/.aws/{credentials,config}
+          DONE populate ~/.aws/{credentials,config}
           upload ssh pubkey (optional)
         aws-shelltools usage
 
@@ -149,11 +153,12 @@ def create_profile(log, user, passwd, require_reset):
             PasswordResetRequired=require_reset)
 
 
-def update_profile(log, user, login_profile, passwd, require_reset):
+def reset_profile(log, user, login_profile, passwd, require_reset):
     # update login profile with new passwd
     if login_profile:
-        log.info('updating passwd for user %s' % user.name)
-        return login_profile.update(
+        log.info('resetting login profile for user %s' % user.name)
+        login_profile.delete()
+        return login_profile.create(
                 Password=passwd,
                 PasswordResetRequired=require_reset)
     else:
@@ -181,24 +186,42 @@ def enable_access_keys(log, user, enable=True):
             key.deactivate()
 
 
+def onetime_passwd_expired(log, user, login_profile, hours):
+    if login_profile and login_profile.password_reset_required:
+        now = datetime.now(timezone.utc)
+        log.debug('now: %s' % now.isoformat())
+        log.debug('ttl: %s' % timedelta(hours=hours))
+        log.debug('delta: %s' % (now - login_profile.create_date))
+        return (now - login_profile.create_date) > timedelta(hours=hours)
+    return False
+
+
 def user_report(log, user, login_profile):
-    log.info('User:                  %s' % user.name)
-    log.info('User Id:               %s' % user.user_id)
-    log.info('User created:          %s' % user.create_date)
+    log.info('User:                    %s' % user.name)
+    log.info('User Id:                 %s' % user.user_id)
+    log.info('User created:            %s' % user.create_date)
     if login_profile:
-        log.info('User login profile:    %s' % login_profile.create_date)
-        log.info('Password last used:    %s' % user.password_last_used)
-        log.info('Passwd reset required: %s' % login_profile.password_reset_required)
+        log.info('Login profile created:   %s' % login_profile.create_date)
+        log.info('Passwd reset required:   %s' % login_profile.password_reset_required)
+        if login_profile.password_reset_required:
+            log.info('One-time-passwd age:     %s' %
+                    (datetime.now(timezone.utc) - login_profile.create_date))
+        else:
+            log.info('Password last used:      %s' % user.password_last_used)
     else:
-        log.info('User login profile:    %s' % login_profile)
+        log.info('User login profile:      %s' % login_profile)
 
 
 def main():
     args = docopt(__doc__)
     # HACK ALERT! add unused args to make get_logger() happy
-    args['--exec'] = False
-    args['report'] = True
+    args['--exec'] = True
+    if not (args['--new'] or args['--reset'] or args['--disable'] or args['--disable-expired'] or args['--reenable']):
+        args['report'] = True
+    else:
+        args['report'] = False
     log = get_logger(args)
+    log.debug(args)
 
     user = validate_user(args['USER'])
     if not user:
@@ -214,28 +237,29 @@ def main():
             prep_email(log, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-        if args['--verbose']:
-            user_report(log, user, login_profile)
+        user_report(log, user, login_profile)
 
     elif args['--reset']:
-        login_profile = update_profile(log, user, login_profile, passwd, require_reset)
+        login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
         prep_email(log, user, passwd, args['--email'])
-        if args['--verbose']:
-            user_report(log, user, login_profile)
+        user_report(log, user, login_profile)
 
     elif args['--disable']:
         disable_profile(log, user, login_profile)
         enable_access_keys(log, user, False)
-        if args['--verbose']:
-            user_report(log, user, login_profile)
+
+    elif args['--disable-expired']:
+        if onetime_passwd_expired(log, user, login_profile, int(args['--opt-ttl'])):
+            disable_profile(log, user, login_profile)
 
     elif args['--reenable']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
             prep_email(log, user, passwd, args['--email'])
+        else:
+            log.warn("login profile for user '%s' already exists" % user.name)
         enable_access_keys(log, user, True)
-        if args['--verbose']:
-            user_report(log, user, login_profile)
+        user_report(log, user, login_profile)
 
     else:
         user_report(log, user, login_profile)

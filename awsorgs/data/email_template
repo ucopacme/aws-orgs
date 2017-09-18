@@ -1,7 +1,7 @@
 
 
 
-Dear user,
+Dear User,
 
 You have been granted access to our central AWS authentication account.
 From here you can assume designated roles into other AWS accounts in
@@ -17,7 +17,7 @@ password as you log in.
 
 
 Once logged in take the time to set up a 'Virtual MFA Device' and 'AWS
-Access Keys' for your IAM user.  We recommend you install Google
+Access Keys' for your IAM user.  We recommend you install 'Google
 Authenticator' app on your cell to use as your 'Virtual MFA Device'.
 
 For help see:
