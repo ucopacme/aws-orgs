@@ -3,6 +3,12 @@
 import os
 import sys
 import pkg_resources
+import threading
+try:
+    import Queue as queue
+except ImportError:
+    import queue
+
 
 import boto3
 import yaml
@@ -219,3 +225,28 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
                         valid_spec = False
                         continue
     return valid_spec
+
+
+def queue_threads(log, sequence, func, f_args=(), thread_count=20):
+    """generalized abstraction for running queued tasks in a thread pool"""
+
+    def worker(*args):
+        log.debug('%s: q.empty: %s' % (threading.current_thread().name, q.empty()))
+        while not q.empty():
+            log.debug('%s: task: %s' % (threading.current_thread().name, func))
+            item = q.get()
+            log.debug('%s: processing item: %s' % (threading.current_thread().name, item))
+            func(item, *args)
+            q.task_done()
+
+    q = queue.Queue()
+    for item in sequence:
+        log.debug('queuing item: %s' % item)
+        q.put(item)
+    log.debug('queue length: %s' % q.qsize())
+    for i in range(thread_count):
+        t = threading.Thread(target=worker, args=f_args)
+        t.setDaemon(True)
+        t.start()
+    q.join()
+
