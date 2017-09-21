@@ -103,10 +103,10 @@ TODO:
 delete unused custom policies
 recreate role,policy if path changes
 report unmanaged iam resources in all accounts
-in delegation report list accounts in alphabetical order
-when reporting roles, handle service roles as well as 'AWS' roles
-incorporate theading
+when reporting roles, handle service roles as well as 'IAM' roles
 
+DONE incorporate theading
+DONE in delegation report list accounts in alphabetical order
 DONE add 'Exclude' attribute to groups and delegations for when 'ALL' is specified
 DONE document spec structures
 DONE validate policy specs
