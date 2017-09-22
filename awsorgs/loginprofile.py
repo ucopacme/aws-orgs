@@ -77,30 +77,28 @@ def get_user_name():
 
 
 def list_delegations(user):
+    """Return list of assume_role resource arns for all groups for user"""
     groups = list(user.groups.all())
     assume_role_policies = []
     for group in user.groups.all():
         assume_role_policies += [p for p in list(group.policies.all())
                 if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-    delegation_table = []
-    for policy in assume_role_policies:
-        assume_role_arn = policy.policy_document['Statement'][0]['Resource']
-        delegation_table.append(dict(
-                role_arn=assume_role_arn,
-                role_name=assume_role_arn.partition('role/')[2],
-                account_id=assume_role_arn.split(':')[4]))
-    return delegation_table
+    return [policy.policy_document['Statement'][0]['Resource'] for policy
+            in assume_role_policies]
 
 
-def format_delegation_table(delegation_table):
+def format_delegation_table(delegation_arns):
     tpl = """
   account_id:   $account_id
   role_name:    $role_name
   role_arn:     $role_arn
 """
     delegation_string = ''
-    for d in delegation_table:
-        delegation_string += Template(tpl).substitute(d)
+    for assume_role_arn in delegation_arns:
+        delegation_string += Template(tpl).substitute(dict(
+                role_arn=assume_role_arn,
+                role_name=assume_role_arn.partition('role/')[2],
+                account_id=assume_role_arn.split(':')[4]))
     return delegation_string
 
 
@@ -216,6 +214,9 @@ def user_report(log, user, login_profile):
             log.info('Password last used:      %s' % user.password_last_used)
     else:
         log.info('User login profile:      %s' % login_profile)
+    assume_role_arns = list_delegations(user)
+    if assume_role_arns:
+        log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
 
 
 def main():
