@@ -80,21 +80,27 @@ def list_delegations(user):
     groups = list(user.groups.all())
     assume_role_policies = []
     for group in user.groups.all():
-        assume_role_policies += [p for p in list(group.policies.all()) if
-                p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
+        assume_role_policies += [p for p in list(group.policies.all())
+                if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
     delegation_table = []
     for policy in assume_role_policies:
+        assume_role_arn = policy.policy_document['Statement'][0]['Resource']
         delegation_table.append(dict(
-            trusting_id=policy.policy_document['Statement'][0]['Resource'].split(':')[4],
-            role_name=policy.name))
+                role_arn=assume_role_arn,
+                role_name=assume_role_arn.partition('role/')[2],
+                account_id=assume_role_arn.split(':')[4]))
     return delegation_table
 
 
 def format_delegation_table(delegation_table):
+    tpl = """
+  account_id:   $account_id
+  role_name:    $role_name
+  role_arn:     $role_arn
+"""
     delegation_string = ''
     for d in delegation_table:
-        delegation_string += ('  account_id:\t%s\n  role_name:\t%s\n\n' %
-                (d['trusting_id'], d['role_name']))
+        delegation_string += Template(tpl).substitute(d)
     return delegation_string
 
 
