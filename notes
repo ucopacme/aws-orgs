@@ -11,13 +11,8 @@ CONSIDER:
 a single interface executible with operation modes for all tasks:
   organization, accounts, users, delegation
 a single spec file awsorgs.conf which includes all the verious spec files
-create a class to store args, logger, specs and 'deployed' dict for passing
-  to functions
-devise workflow for using this in real service context:
-  change mgmt process
-  data in git/s3
-  log to cloudwatch
-  run from lambda/jenkins
+create a class to store args, logger, specs and 'deployed' dict for 
+  passing to functions.  see branch 'named_tuple'
 
 
 
@@ -32,22 +27,15 @@ NA in munge_path() check if default_path is defined or not
 DONE validate_spec() warn if spec contains non-defined attributes?
 
 CONSIDER:
-should validate_spec() return a possibly altered specl? (e.g. value = 'default')
-
-
-
-
-
+NOT should validate_spec() return a possibly altered specl? (e.g. value = 'default')
 
 
 
 __________________
 TODO awsorgs.py:
 
-IN PROGRESS change 'policy' to sc_policy everywhere
-NA in logger: prepend timestamp to messages
 add unit testing
-NA make logger write to different url
+IN PROGRESS change 'policy' to sc_policy everywhere
 
 DONE (hard to test) scan_deployed_accounts: fix 'NextToken' logic.
 DONE make master_id check a function. import into accounts.
@@ -66,6 +54,8 @@ DONE in manage_policy_attachments raise error when:
     DONE attaching to an absent ou
 DONE in manage_policies: dont delete a policy attached to an ou
 
+NA in logger: prepend timestamp to messages
+NA make logger write to different url
 
 
 
@@ -83,8 +73,8 @@ DONE in scan_deployed_accounts:
   DONE crosscheck fully created accounts against States=['SUCCEEDED'])['CreateAccountStatuses']
 
 CONSIDER:
-parse account names for compliance
-account-spec details allowed values for name components
+NOT parse account names for compliance
+NOT account-spec details allowed values for name components
 
 
 
@@ -93,18 +83,16 @@ account-spec details allowed values for name components
 __________________
 auth.py:
 
-BUGS:
-policy attached to group not getting detached when commented out in auth-spec
-
-
-
 TODO:
 
-delete unused custom policies
+delete unused custom policies.  (non-attached to any role)
+  see ListAccountsInOrganization in OrgMaster
 recreate role,policy if path changes
 report unmanaged iam resources in all accounts
 when reporting roles, handle service roles as well as 'IAM' roles
+harvest unmanaged roles in accounts which have the default path
 
+DONE require Team attribute for users
 DONE incorporate theading
 DONE in delegation report list accounts in alphabetical order
 DONE add 'Exclude' attribute to groups and delegations for when 'ALL' is specified
@@ -143,317 +131,53 @@ how/where do we structure/deploy yaml data for teams specification?
 
 CONSIDER:
 should group get deleted even if it still has users?
-distinguish local only functions
-create credentials for new users
-email credentials new users
-  requires an ses resource?
 add options for reporting:
   allow separate reports for users, groups, delegations
   allow for multiple levels of detail in delegation reports
 add spec param 'use_team_path' as boolean:
-  require Team attribute for users
-  append Path after team in munge_path()
+  NOT append Path after team in munge_path()
 
 
 
 
+_______________
+awsloginprofile
 
-    # delete unused custom policies
-    # TODO: be sure this policy is one we actually manage first.  How??
-    #policy = iam_resource.Policy(policy_arn)
-    #if policy.attachment_count == '0':
-    #    logger(log, "Deleting custom policy '%s' from account '%s'." %
-    #            (policy_name, account_name))
-    #    if args['--exec']:
-    #        policy.delete()
+TODO:
 
-# policy for group in trusted accoiunt to assume given role in trusting account.
-{
-  "Version": "2012-10-17",
-  "Statement": {
-    "Effect": "Allow",
-    "Action": "sts:AssumeRole",
-    "Resource": "arn:aws:iam::ACCOUNT-ID-WITHOUT-HYPHENS:role/PATH/ROLENAME"
-  }
-}
+incorporate creation credentials for new users into auth.py
+email credentials new users
+  requires an ses resource?
 
 
+subject = "Hello"
+html = "<b>Hello Consumer</b>"
 
-One liners:
-aws iam list-policies| grep PolicyName| sort |less
+client = boto3.client('ses', region_name='us-east-1', aws_access_key_id="your_key",
+        aws_secret_access_key="your_secret")
 
-
-
-
-
-
-
-references:
-http://www.python-course.eu/python3_tests.php
-
-
-
-## Example: using exceptions:
-
-def get_root_id(org_client):
-    """
-    Query deployed AWS Organization for its Root ID.
-    """
-    try:
-        root_id = org_client.list_roots()['Roots'][0]['Id']
-        return root_id
-    except NoCredentialsError as e:
-        print sys.argv[0]
-        print e
-        print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
-        print "in module:", __name__
-        raise SystemExit
-    except ClientError as e:
-        print e
-        print "at function:", inspect.getframeinfo(inspect.currentframe())[2]
-        print "in module:", __name__
-        raise SystemExit
-
-
-
-
-
-
-
-
-Use the response contained within the exception. Here is an example:
-
-import boto3
-from botocore.exceptions import ClientError
-
-try:
-    iam = boto3.client('iam')
-    user = iam.create_user(UserName='fred')
-    print "Created user: %s" % user
-except ClientError as e:
-    if e.response['Error']['Code'] == 'EntityAlreadyExists':
-        print "User already exists"
-    else:
-        print "Unexpected error: %s" % e
-The response dict in the exception will contain the following:
-
-- ['Error']['Code'] e.g. 'EntityAlreadyExists' or 'ValidationError'
-- ['ResponseMetadata']['HTTPStatusCode'] e.g. 400
-- ['ResponseMetadata']['RequestId'] e.g. 'd2b06652-88d7-11e5-99d0-812348583a35'
-- ['Error']['Message'] e.g. "An error occurred (EntityAlreadyExists) ..."
-- ['Error']['Type'] e.g. 'Sender'
-
-
-
-
-
-nice little bit of code:
-        response = cf_client.describe_stack_events(
-            StackName=stack_kwargs['StackName']
-        )
-        stack_exists = [d for d in response['StackEvents']
-            if d['ResourceType'] == 'AWS::CloudFormation::Stack'
-            and (d['ResourceStatus'] == 'CREATE_COMPLETE'
-            or d['ResourceStatus'] == 'UPDATE_COMPLETE')
-        ]
-        print stack_exists
-
-
-
-
-ISSUES:
-
-Sat Jul 15 10:16:02 PDT 2017
-[ashely@horus aws-orgs]$ ./accounts.py -v provision -s sample_input/account-spec-test0.yaml -d sample_input/ --exec
-Traceback (most recent call last):
-  File "./accounts.py", line 334, in <module>
-    provision_accounts(log, session, args, deployed_accounts, account_spec)
-  File "./accounts.py", line 294, in provision_accounts
-    cf_client, args, log, a_spec['Name'], stack_kwargs)
-  File "./accounts.py", line 223, in create_stack
-    cf_client.create_change_set(**stack_kwargs)
-  File "/usr/lib/python2.7/site-packages/botocore/client.py", line 253, in _api_call
-    return self._make_api_call(operation_name, kwargs)
-  File "/usr/lib/python2.7/site-packages/botocore/client.py", line 557, in _make_api_call
-    raise error_class(parsed_response, operation_name)
-botocore.exceptions.ClientError: An error occurred (ValidationError) when calling the CreateChangeSet operation: Stack:arn:aws:cloudformation:us-west-2:640965621536:stack/role-central-admin/9aaf0060-6980-11e7-802b-503acbd4dc61 is in CREATE_IN_PROGRESS state and can not be updated.
-
-
-
-
-
-
-
-
-_________________________________________
-
-Editing README.rst
-
-http://docutils.sourceforge.net/rst.html
-http://docutils.sourceforge.net/docs/user/rst/quickref.html
-
-realtime .rst editor:
-http://rst.ninjs.org
-
-
-
-
-_________________________________________
-
-using pip and setup.py
-
-See:
-https://packaging.python.org/en/latest/distributing.html
-https://github.com/pypa/sampleproject
-https://pypi.python.org/pypi?%3Aaction=list_classifiers
-
-
-[ashely@horus ~]$ pip install --user -e aws/aws-orgs/
-[ashely@horus ~]$ ll .local/lib/python2.7/site-packages/
-total 8
--rw-rw-r--. 1 ashely ashely  27 Jul 10 13:51 aws-orgs.egg-link
--rw-rw-r--. 1 ashely ashely 221 Jul 10 13:51 easy-install.pth
-
-[ashely@horus ~]$ cat .local/lib/python2.7/site-packages/aws-orgs.egg-link 
-/home/ashely/aws/aws-orgs
-
-[ashely@horus ~]$ cat .local/lib/python2.7/site-packages/easy-install.pth 
-import sys; sys.__plen = len(sys.path)
-/home/ashely/aws/aws-orgs
-import sys; new = sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p = getattr(sys, '__egginsert', 0); sys.path[p:p] = new; sys.__egginsert = p + len(new)
-
-
-
-
-
-should validate_spec() return a possibly altered spec or a bool?
-example is setting a default value:
-
-       if atype and 'values' in atype:
-           log.debug("Allowed values for attrubute '%s': %s" %
-                   (attr, atype['values']))
-           if not spec[attr] in atype['values']:
-               log.error("Value of attribute '%s' must be one of '%s'" %
-                       (attr, atype['values']))
-               valid_spec = False
-               continue
-           # assign 'default' value
-           if 'default' in atype and not spec[attr]:
-               log.debug("Assigning value '%s' to attrubute '%s'" %
-                       (attr, atype['default']))
-               spec[attr] = atype['default']
-   if not valid_spec:
-        return None
-    else:
-        return spec
-
-
-_________________________________________
-using re module:
-
-import re
-# extract the data type of an object as a string
-spec_attr_type = re.sub(r"<type '(\w+)'>", '\g<1>', str(type(spec[attr])))
-
-
-
-_________________________________________
-
-login profile setup
-
-agould@horus:~/.aws> aws iam create-login-profile --user-name agould --password 'XXXXXXXXXX!' --password-reset-required
-{
-    "LoginProfile": {
-        "UserName": "agould", 
-        "CreateDate": "2017-08-16T23:07:42.825Z", 
-        "PasswordResetRequired": true
-    }
-}
-agould@horus:~/.aws> aws iam create-access-key --user-name agould 
-{
-    "AccessKey": {
-        "UserName": "agould", 
-        "Status": "Active", 
-        "CreateDate": "2017-08-16T23:17:44.609Z", 
-        "SecretAccessKey": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 
-        "AccessKeyId": "XXXXXXXXXXXXXXXXXXXX"
-    }
-}
-
-
-___________________________
-ssh keys and code commit
-
-
-agould@horus:~/.ssh> ssh-keygen
-Generating public/private rsa key pair.
-Enter file in which to save the key (/home/agould/.ssh/id_rsa): /home/agould/.ssh/codecommit_rsa
-Enter passphrase (empty for no passphrase): 
-Enter same passphrase again: 
-Your identification has been saved in /home/agould/.ssh/codecommit_rsa.
-Your public key has been saved in /home/agould/.ssh/codecommit_rsa.pub.
-The key fingerprint is:
-SHA256:jarXXaSIBT9Q5LW3ZqDgG9w4hF6GdTW7Fg9x1jsyuxA agould@horus.ucop.edu
-[cut]
-
-aws iam upload-ssh-public-key --user-name agould --ssh-public-key-body 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdo4Shu5FwcsD+4X/sZ2wp3K8UrptrKMrGDl4f6tRN11J3TA1Z0X6aCOeKHFMt9C72yyf72WIwCdAgLOND83ZUKYv0GxiPnzpZt0GP8v+YYdYLVJpgWagOxeWxEeScxqa7HMFqY1v2TEK/yfNGgPhILUyLh7UnQRUs3glHh+3nj4IesLtP0+YpAL4/I7efO2/Tzsvn0WUd3lPlZ7FzKu9kSzUoGTzJBc0TNEqpoqLauCejBqRS6k6g1YsTDDQOFGW/00RzGh4FMCoUSvr2Cxgtx5etq3pkoRUhY9d1QL8b7+5ZJ7nwOaYlfKtenbWY2Ak08cDFBRD/6/3GQhqiVEjL agould@horus.ucop.edu'
-
-{
-    "SSHPublicKey": {
-        "UserName": "agould", 
-        "Status": "Active", 
-        "SSHPublicKeyBody": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdo4Shu5FwcsD+4X/sZ2wp3K8UrptrKMrGDl4f6tRN11J3TA1Z0X6aCOeKHFMt9C72yyf72WIwCdAgLOND83ZUKYv0GxiPnzpZt0GP8v+YYdYLVJpgWagOxeWxEeScxqa7HMFqY1v2TEK/yfNGgPhILUyLh7UnQRUs3glHh+3nj4IesLtP0+YpAL4/I7efO2/Tzsvn0WUd3lPlZ7FzKu9kSzUoGTzJBc0TNEqpoqLauCejBqRS6k6g1YsTDDQOFGW/00RzGh4FMCoUSvr2Cxgtx5etq3pkoRUhY9d1QL8b7+5ZJ7nwOaYlfKtenbWY2Ak08cDFBRD/6/3GQhqiVEjL agould@horus.ucop.edu", 
-        "UploadDate": "2017-08-25T22:35:51.814Z", 
-        "Fingerprint": "47:e3:4d:b0:1c:ab:17:8a:a2:92:7a:31:b9:f7:07:01", 
-        "SSHPublicKeyId": "APKAIZ623TNLLU6GU3DQ"
-    }
-}
-
-agould@horus:~> tail -3 .ssh/config 
-Host git-codecommit.*.amazonaws.com
-  User APKAIZ623TNLLU6GU3DQ
-  IdentityFile ~/.ssh/codecommit_rsa
-agould@horus:~> chmod 600 .ssh/config
-agould@horus:~> ll .ssh/config
--rw-------. 1 agould agould 223 Aug 25 15:37 .ssh/config
-
-agould@horus:~> ssh git-codecommit.us-east-2.amazonaws.com
-Warning: Permanently added 'git-codecommit.us-east-2.amazonaws.com,52.95.20.120' (RSA) to the list of known hosts.
-Enter passphrase for key '/home/agould/.ssh/codecommit_rsa': 
-You have successfully authenticated over SSH. You can use Git to interact with AWS CodeCommit. Interactive shells are not supported.Connection to git-codecommit.us-east-2.amazonaws.com closed by remote host.
-Connection to git-codecommit.us-east-2.amazonaws.com closed.
-
-
-___________________________
-accessing code commit repos (not ssh)
-
-https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html
-https://alestic.com/2015/11/aws-codecommit-iam-role/
-https://stackoverflow.com/questions/33728004/access-to-aws-codecommit-by-federated-users
-
-ashely@horus:~> git config --global credential.helper '!aws codecommit credential-helper $@'
-ashely@horus:~> git config --global credential.UseHttpPath true
-ashely@horus:~> git config --global user.name 'Ashley Gould'
-ashely@horus:~> git config --global user.email 'agould@ucop.edu'
-ashely@horus:~> cat .gitconfig 
-[credential]
-        helper = !aws codecommit credential-helper $@
-        UseHttpPath = true
-[user]
-        name = Ashley Gould
-        email = agould@ucop.edu
-
-
-agould@horus:~/tmp/git> aws-assume-role ppers
-agould@horus:~/tmp/git> aws codecommit list-repositories
-{
-    "repositories": [
-        {
-            "repositoryName": "etransfer.ucop.edu", 
-            "repositoryId": "b7c1e548-3d26-4b35-8191-441d2ee46bd5"
+client.send_email(
+    Source='ACME <do-not-reply@acme.com>',
+    Destination={'ToAddresses': [email]},
+    Message={
+        'Subject': {'Data': subject},
+        'Body': {
+            'Html': {'Data': html}
         }
-    ]
-}
-agould@horus:~/tmp/git> git clone https://git-codecommit.us-west-2.amazonaws.com/v1/repos/etransfer.ucop.edu
-Cloning into 'etransfer.ucop.edu'...
+    }
+)
+
+other mailers:
+yagmail
+marrow.mailer
+
+
+http://docs.aws.amazon.com/ses/latest/DeveloperGuide/send-an-email-using-sdk-programmatically.html
+
+
+
+
+________________________________________________________________________________
+________________________________________________________________________________
+
 

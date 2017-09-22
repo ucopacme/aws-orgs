@@ -32,7 +32,6 @@ import sys
 import yaml
 import json
 import threading
-#import Queue # python 3 alert!
 
 import boto3
 import botocore.exceptions
