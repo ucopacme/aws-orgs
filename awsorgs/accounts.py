@@ -111,12 +111,14 @@ def display_provisioned_accounts(log, deployed_accounts):
     """
     header = "Provisioned Accounts in Org:"
     overbar = '_' * len(header)
-    log.info("\n%s\n%s" % (overbar, header))
+    log.info("\n%s\n%s\n" % (overbar, header))
+    fmt_str = "{:20}{:16}{:24}{}"
+    log.info(fmt_str.format('Name:', 'Id:', 'Email:', 'Status:'))
     for a_name in sorted([a['Name'] for a in deployed_accounts]):
+        a_status = lookup(deployed_accounts, 'Name', a_name, 'Status')
         a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
         a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
-        spacer = ' ' * (24 - len(a_name))
-        log.info("%s%s%s\t\t%s" % (a_name, spacer, a_id, a_email))
+        log.info(fmt_str.format(a_name, a_id, a_email, a_status))
 
 
 def main():

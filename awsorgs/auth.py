@@ -32,7 +32,6 @@ import sys
 import yaml
 import json
 import threading
-#import Queue # python 3 alert!
 
 import boto3
 import botocore.exceptions
@@ -120,7 +119,8 @@ def display_provisioned_groups(credentials, log, deployed):
             for role_arn in assume_role_resources:
                 account_name = lookup(deployed['accounts'], 'Id',
                         role_arn.split(':')[4], 'Name')
-                profiles[account_name] =  role_arn
+                if account_name:
+                    profiles[account_name] = role_arn
             for account_name in sorted(profiles.keys()):
                 messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
         report[group_name] = messages
@@ -128,7 +128,7 @@ def display_provisioned_groups(credentials, log, deployed):
     # gather report data from groups
     report = {}
     iam_resource = boto3.resource('iam', **credentials)
-    group_names = sorted(map(lambda g: g['GroupName'], deployed['groups']))
+    group_names = sorted([g['GroupName'] for g in deployed['groups']])
     log.debug('group_names: %s' % group_names)
     queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
             thread_count=10)
@@ -697,12 +697,13 @@ def main():
     deployed = dict(
             users = iam_client.list_users()['Users'],
             groups = iam_client.list_groups()['Groups'],
-            accounts = scan_deployed_accounts(log, org_client))
+            accounts = [a for a in scan_deployed_accounts(log, org_client)
+                    if a['Status'] == 'ACTIVE'])
 
     if args['report']:
         display_provisioned_users(log, deployed)
         display_provisioned_groups(credentials, log, deployed)
-        display_roles_in_accounts(log, deployed, auth_spec)
+        #display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
         create_users(credentials, args, log, deployed, auth_spec)
