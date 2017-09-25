@@ -696,7 +696,8 @@ def main():
     deployed = dict(
             users = iam_client.list_users()['Users'],
             groups = iam_client.list_groups()['Groups'],
-            accounts = scan_deployed_accounts(log, org_client))
+            accounts = [a for a in scan_deployed_accounts(log, org_client)
+                    if a['Status'] == 'ACTIVE'])
 
     if args['report']:
         display_provisioned_users(log, deployed)
