@@ -703,7 +703,7 @@ def main():
     if args['report']:
         display_provisioned_users(log, deployed)
         display_provisioned_groups(credentials, log, deployed)
-        #display_roles_in_accounts(log, deployed, auth_spec)
+        display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
         create_users(credentials, args, log, deployed, auth_spec)
