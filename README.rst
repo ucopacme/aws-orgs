@@ -67,11 +67,18 @@ On RHEL6 you may need to update setuptools as well:
   awsauth delegation -v -s auth-spec.yaml
   awsauth delegation -v -s auth-spec.yaml --exec
 
+  awsloginprofile maryanne
+  awsloginprofile maryanne --new
+  awsloginprofile maryanne --new 2>&1 | mail -s 'Your login profile' maryanne@blee.red
+  awsloginprofile maryanne --reset
+  awsloginprofile maryanne --disable
+  awsloginprofile maryanne --reenable
+  awsloginprofile maryanne --disable-expired --opt-ttl 48
 
 
 
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.0.4
+:Version: 0.0.5.rc1
 
