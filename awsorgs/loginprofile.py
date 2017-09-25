@@ -23,16 +23,16 @@ Options:
   -v, --verbose            Log to activity to STDOUT at log level INFO.
   -d, --debug              Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log               Include botocore and boto3 logs in log stream.
-  
 
 """
+
 
 import os
 import sys
 import yaml
 import logging
 from string import Template
-from datetime import datetime, timezone, timedelta
+import datetime
 
 import boto3
 from botocore.exceptions import ClientError
@@ -42,30 +42,9 @@ from passgen import passgen
 
 from awsorgs.utils import *
 
-"""
-TODO:
-pydoc for functions
-disable/reenable ssh keys
-DONE revoke one-time pw if older than 24hrs
-DONE prep_email()
-send_email()
 
-    email user
-      validate sms service
-      DONE gather aws config profiles for user
-      prepare email with:
-        DONE user info
-          DONE user name
-          DONE account Id
-          DONE aws console login url
-        DONE instructions for credentials setup
-          DONE create access key
-          DONE mfa device
-          DONE populate ~/.aws/{credentials,config}
-          upload ssh pubkey (optional)
-        aws-shelltools usage
-
-"""
+# Relative path within awsorgs project to template file used by prep_email()
+EMAIL_TEMPLATE = 'data/email_template'
 
 
 def get_user_name():
@@ -88,6 +67,7 @@ def list_delegations(user):
 
 
 def format_delegation_table(delegation_arns):
+    """Generate formatted list of delegation attributes as printable string"""
     tpl = """
   account_id:   $account_id
   role_name:    $role_name
@@ -103,7 +83,7 @@ def format_delegation_table(delegation_arns):
 
 
 def prep_email(log, user, passwd, email):
-    EMAIL_TEMPLATE = 'data/email_template'
+    """Generate email body from template"""
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
     delegation_table = list_delegations(user)
     log.debug('delegation_table: %s' % delegation_table)
@@ -119,6 +99,7 @@ def prep_email(log, user, passwd, email):
 
 
 def validate_user(user_name):
+    """Return a valid IAM User object"""
     iam = boto3.resource('iam')
     user = iam.User(user_name)
     try:
@@ -130,6 +111,7 @@ def validate_user(user_name):
 
 
 def validate_login_profile(user):
+    """Return a valid IAM LoginProfile object"""
     login_profile = user.LoginProfile()
     try:
         login_profile.load()
@@ -140,7 +122,9 @@ def validate_login_profile(user):
 
 
 def munge_passwd(passwd=None):
-    # check for user supplied passwd
+    """Return new 'passwd' string and boolean 'require_reset'.
+    If passwd provided, set 'require_reset' to False.
+    """
     if passwd:
         require_reset = False
     else:
@@ -150,7 +134,6 @@ def munge_passwd(passwd=None):
 
 
 def create_profile(log, user, passwd, require_reset):
-    # create login profile
     log.info('creating login profile for user %s' % user.name)
     return user.create_login_profile(
             Password=passwd,
@@ -158,7 +141,9 @@ def create_profile(log, user, passwd, require_reset):
 
 
 def reset_profile(log, user, login_profile, passwd, require_reset):
-    # update login profile with new passwd
+    """Reset IAM user passwd by deleting and recreating login profile.
+    This ensures the password creation date gets reset when updating a password.
+    """
     if login_profile:
         log.info('resetting login profile for user %s' % user.name)
         login_profile.delete()
@@ -169,8 +154,7 @@ def reset_profile(log, user, login_profile, passwd, require_reset):
         log.error("user '%s' has no login profile" % user.name)
         sys.exit(1)
 
-def disable_profile(log, user, login_profile):
-    # delete login profile
+def delete_profile(log, user, login_profile):
     if login_profile:
         log.info('deleting login profile for user %s' % user.name)
         login_profile.delete()
@@ -178,7 +162,8 @@ def disable_profile(log, user, login_profile):
         log.warn("user '%s' has no login profile" % user.name)
 
 
-def enable_access_keys(log, user, enable=True):
+def set_access_key_status(log, user, enable=True):
+    """Enable or disable an IAM user's access keys"""
     for key in user.access_keys.all():
         if enable and key.status == 'Inactive':
             log.info('enabling access key %s for user %s' %
@@ -191,16 +176,20 @@ def enable_access_keys(log, user, enable=True):
 
 
 def onetime_passwd_expired(log, user, login_profile, hours):
+    """Test if initial one-time-only password is expired"""
     if login_profile and login_profile.password_reset_required:
-        now = datetime.now(timezone.utc)
+        now = datetime.datetime.now(datetime.timezone.utc)
         log.debug('now: %s' % now.isoformat())
-        log.debug('ttl: %s' % timedelta(hours=hours))
+        log.debug('ttl: %s' % datetime.timedelta(hours=hours))
         log.debug('delta: %s' % (now - login_profile.create_date))
-        return (now - login_profile.create_date) > timedelta(hours=hours)
+        return (now - login_profile.create_date) > datetime.timedelta(hours=hours)
     return False
 
 
 def user_report(log, user, login_profile):
+    """Generate report of IAM user's login profile, password usage, and
+    assume_role delegations for any groups user is member of.
+    """
     log.info('User:                    %s' % user.name)
     log.info('User Id:                 %s' % user.user_id)
     log.info('User created:            %s' % user.create_date)
@@ -209,7 +198,8 @@ def user_report(log, user, login_profile):
         log.info('Passwd reset required:   %s' % login_profile.password_reset_required)
         if login_profile.password_reset_required:
             log.info('One-time-passwd age:     %s' %
-                    (datetime.now(timezone.utc) - login_profile.create_date))
+                    (datetime.datetime.now(datetime.timezone.utc)
+                    - login_profile.create_date))
         else:
             log.info('Password last used:      %s' % user.password_last_used)
     else:
@@ -221,9 +211,14 @@ def user_report(log, user, login_profile):
 
 def main():
     args = docopt(__doc__)
-    # HACK ALERT! add unused args to make get_logger() happy
+    # HACK ALERT!
+    # set '--exec' and 'report' args to make get_logger() happy
     args['--exec'] = True
-    if not (args['--new'] or args['--reset'] or args['--disable'] or args['--disable-expired'] or args['--reenable']):
+    if not (args['--new']
+            or args['--reset']
+            or args['--disable']
+            or args['--disable-expired']
+            or args['--reenable']):
         args['report'] = True
     else:
         args['report'] = False
@@ -252,12 +247,12 @@ def main():
         user_report(log, user, login_profile)
 
     elif args['--disable']:
-        disable_profile(log, user, login_profile)
-        enable_access_keys(log, user, False)
+        delete_profile(log, user, login_profile)
+        set_access_key_status(log, user, False)
 
     elif args['--disable-expired']:
         if onetime_passwd_expired(log, user, login_profile, int(args['--opt-ttl'])):
-            disable_profile(log, user, login_profile)
+            delete_profile(log, user, login_profile)
 
     elif args['--reenable']:
         if not login_profile:
@@ -265,7 +260,7 @@ def main():
             prep_email(log, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-        enable_access_keys(log, user, True)
+        set_access_key_status(log, user, True)
         user_report(log, user, login_profile)
 
     else:

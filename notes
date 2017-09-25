@@ -91,6 +91,7 @@ recreate role,policy if path changes
 report unmanaged iam resources in all accounts
 when reporting roles, handle service roles as well as 'IAM' roles
 harvest unmanaged roles in accounts which have the default path
+incorporate create/send credentials for new users from awsorgs.loginprofile
 
 DONE require Team attribute for users
 DONE incorporate theading
@@ -145,10 +146,16 @@ awsloginprofile
 
 TODO:
 
-incorporate creation credentials for new users into auth.py
+prep_email(): don't just print() the email.  where should it write to?
+prep_email(): add aws-shelltools usage, infohelp to upload ssh pubkey
+prep_email(): make html version?
+disable/reenable ssh keys
 email credentials new users
   requires an ses resource?
+  require config file for email service?
 
+
+notes:
 
 subject = "Hello"
 html = "<b>Hello Consumer</b>"

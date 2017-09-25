@@ -32,7 +32,7 @@ setup(
     package_data={
         'awsorgs': [
             'samples/*.yaml',
-            'data/*.yaml',
+            'data/*',
         ],
     },
     entry_points={
@@ -40,6 +40,7 @@ setup(
             'awsorgs=awsorgs.orgs:main',
             'awsaccounts=awsorgs.accounts:main',
             'awsauth=awsorgs.auth:main',
+            'awsloginprofile=awsorgs.loginprofile:main',
         ],
     },
 

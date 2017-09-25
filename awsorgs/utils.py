@@ -13,6 +13,11 @@ import boto3
 import yaml
 import logging
 
+
+# Relative path within awsorgs project to spec validation patterns file
+PATTERN_FILE = 'data/spec-validation-patterns.yaml'
+
+
 def lookup(dlist, lkey, lvalue, rkey=None):
     """
     Use a known key:value pair to lookup a dictionary in a list of
@@ -143,15 +148,10 @@ def validate_spec_file(log, spec_file, pattern_name):
         sys.exit(1)
 
 
-# QUESTION: I'm loading a data file by name.  It is part of the project and
-# explicitly installed by setup.py.  but in code, should I define it as
-# a constant insted of just loading a str? where should I declare this 
-# constant?
 def load_validation_patterns(log):
     """
     Return dict of patterns for use when validating specification syntax
     """
-    PATTERN_FILE = 'data/spec-validation-patterns.yaml'
     log.debug("loading file: '%s'" % PATTERN_FILE)
     filename = os.path.abspath(pkg_resources.resource_filename(__name__, PATTERN_FILE))
             #__name__, '../data/spec-validation-patterns.yaml'))
