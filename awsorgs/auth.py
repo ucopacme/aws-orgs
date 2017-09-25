@@ -119,7 +119,8 @@ def display_provisioned_groups(credentials, log, deployed):
             for role_arn in assume_role_resources:
                 account_name = lookup(deployed['accounts'], 'Id',
                         role_arn.split(':')[4], 'Name')
-                profiles[account_name] =  role_arn
+                if account_name:
+                    profiles[account_name] = role_arn
             for account_name in sorted(profiles.keys()):
                 messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
         report[group_name] = messages
@@ -702,7 +703,7 @@ def main():
     if args['report']:
         display_provisioned_users(log, deployed)
         display_provisioned_groups(credentials, log, deployed)
-        display_roles_in_accounts(log, deployed, auth_spec)
+        #display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
         create_users(credentials, args, log, deployed, auth_spec)
