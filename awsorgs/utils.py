@@ -5,10 +5,9 @@ import sys
 import pkg_resources
 import threading
 try:
-    import Queue as queue
-except ImportError:
     import queue
-
+except ImportError:
+    import Queue as queue
 
 import boto3
 import yaml

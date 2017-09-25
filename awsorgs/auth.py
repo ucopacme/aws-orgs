@@ -127,7 +127,7 @@ def display_provisioned_groups(credentials, log, deployed):
     # gather report data from groups
     report = {}
     iam_resource = boto3.resource('iam', **credentials)
-    group_names = sorted(map(lambda g: g['GroupName'], deployed['groups']))
+    group_names = sorted([g['GroupName'] for g in deployed['groups']])
     log.debug('group_names: %s' % group_names)
     queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
             thread_count=10)
