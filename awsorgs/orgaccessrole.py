@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 """Generate default org access role in newly joined account.
 
-orgaccessrole --master_id ID [--exec]
+Usage:
+  orgaccessrole --help
+  orgaccessrole --master_id ID [--exec]
 
--m, --master_id     Master Account ID
+Options:
+  -h, --help            Show this help message and exit.
+  -m, --master_id ID    Master Account ID
 """
 
 import os
 import sys
 import yaml
+import json
 
 import boto3
 import botocore.exceptions
@@ -36,11 +41,11 @@ def main():
     policy_doc = json.dumps(dict(
             Version='2012-10-17', Statement=[statement]))
 
-    print("Creating role %s" % ROLENAME
-    if args['--exec'] and policy_arn:
+    print("Creating role %s" % ROLENAME)
+    if args['--exec']:
         iam_client.create_role(
                 Description=DESCRIPTION,
-                RoleName=ROLE_NAME,
+                RoleName=ROLENAME,
                 AssumeRolePolicyDocument=policy_doc)
 
     aws_policies = iam_client.list_policies(Scope='AWS',
@@ -49,11 +54,14 @@ def main():
 
     iam_resource = boto3.resource('iam')
     role = iam_resource.Role(ROLENAME)
-    role.load()
-
-    print("Attaching policy %s to %s" % (POLICYNAME, ROLENAME)
-    if args['--exec'] and policy_arn:
-        role.attach_policy(PolicyArn=policy_arn)
+    try:
+        role.load()
+    except:
+        pass
+    else:
+        print("Attaching policy %s to %s" % (POLICYNAME, ROLENAME))
+        if args['--exec'] and policy_arn:
+            role.attach_policy(PolicyArn=policy_arn)
 
 
 if __name__ == "__main__":
