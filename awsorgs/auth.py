@@ -45,15 +45,14 @@ import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
 
-def get_assume_role_credentials(account_id, role_name, path=None,
-        region_name=None):
+def get_assume_role_credentials(account_id, role_name, path=None, region_name=None):
     """
     Get temporary sts assume_role credentials for account.
     """
     if path:
-        role_arn = "arn:aws:iam::%s:role/%s/%s" % ( account_id, path, role_name)
+        role_arn = "arn:aws:iam::%s:role/%s/%s" % (account_id, path, role_name)
     else:
-        role_arn = "arn:aws:iam::%s:role/%s" % ( account_id, role_name)
+        role_arn = "arn:aws:iam::%s:role/%s" % (account_id, role_name)
     role_session_name = account_id + '-' + role_name
     sts_client = boto3.client('sts')
 
@@ -64,10 +63,16 @@ def get_assume_role_credentials(account_id, role_name, path=None,
                 aws_session_token=None,
                 region_name=None)
     else:
-        credentials = sts_client.assume_role(
-                RoleArn=role_arn,
-                RoleSessionName=role_session_name
-                )['Credentials']
+        try:
+            credentials = sts_client.assume_role(
+                    RoleArn=role_arn,
+                    RoleSessionName=role_session_name
+                    )['Credentials']
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'AccessDenied':
+                errmsg = ('cannot assume role %s in account %s' %
+                        (role_name, account_id))
+                return RuntimeError(errmsg)
         return dict(
                 aws_access_key_id=credentials['AccessKeyId'],
                 aws_secret_access_key=credentials['SecretAccessKey'],
@@ -150,33 +155,37 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     """
     # Thread worker function to gather report for each account
     def display_role(account, report, auth_spec):
+        messages = []
+        messages.append("\nAccount:\t%s" % account['Name'])
         credentials = get_assume_role_credentials(
                 account['Id'],
                 auth_spec['org_access_role'])
-        iam_client = boto3.client('iam', **credentials)
-        iam_resource = boto3.resource('iam', **credentials)
-        role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
-        custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-        messages = []
-        messages.append("\nAccount:\t%s" % account['Name'])
-        if custom_policies:
-            messages.append("Custom Policies:")
-            for policy in custom_policies:
-                messages.append("  %s" % policy['PolicyName'])
-        messages.append("Roles:")
-        for name in role_names:
-            role = iam_resource.Role(name)
-            principal = role.assume_role_policy_document['Statement'][0]['Principal']
-            if 'AWS' in principal:
-                messages.append("  %s" % name)
-                messages.append("    Arn:\t%s" % role.arn)
-                messages.append("    Principal:\t%s" % principal['AWS'])
-                attached = [p.policy_name for p in list(role.attached_policies.all())]
-                if attached:
-                    messages.append("    Attached Policies:")
-                    for policy in attached:
-                        messages.append("      %s" % policy)
+        if isinstance(credentials, RuntimeError):
+            messages.append(credentials)
+        else:
+            iam_client = boto3.client('iam', **credentials)
+            iam_resource = boto3.resource('iam', **credentials)
+            role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
+            custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+            if custom_policies:
+                messages.append("Custom Policies:")
+                for policy in custom_policies:
+                    messages.append("  %s" % policy['PolicyName'])
+            messages.append("Roles:")
+            for name in role_names:
+                role = iam_resource.Role(name)
+                principal = role.assume_role_policy_document['Statement'][0]['Principal']
+                if 'AWS' in principal:
+                    messages.append("  %s" % name)
+                    messages.append("    Arn:\t%s" % role.arn)
+                    messages.append("    Principal:\t%s" % principal['AWS'])
+                    attached = [p.policy_name for p in list(role.attached_policies.all())]
+                    if attached:
+                        messages.append("    Attached Policies:")
+                        for policy in attached:
+                            messages.append("      %s" % policy)
         report[account['Name']] = messages
+
     # gather report data from accounts
     report = {}
     queue_threads(log, deployed['accounts'], display_role, f_args=(report, auth_spec),
@@ -536,6 +545,9 @@ def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_s
     credentials = get_assume_role_credentials(
             account['Id'],
             auth_spec['org_access_role'])
+    if isinstance(credentials, RuntimeError):
+        log.error(credentials)
+        return
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
     role = iam_resource.Role(d_spec['RoleName'])
