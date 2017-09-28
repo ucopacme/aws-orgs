@@ -121,6 +121,14 @@ def display_provisioned_accounts(log, deployed_accounts):
         log.info(fmt_str.format(a_name, a_id, a_email, a_status))
 
 
+def unmanaged_accounts(log, deployed_accounts, account_spec):
+    deployed_account_names = [a['Name'] for a in deployed_accounts] 
+    spec_account_names = [a['Name'] for a in account_spec['accounts']]
+    log.debug('deployed_account_names: %s' % deployed_account_names)
+    log.debug('spec_account_names: %s' % spec_account_names)
+    return [a for a in deployed_account_names if a not in spec_account_names]
+
+
 def main():
     args = docopt(__doc__)
     log = get_logger(args)
@@ -137,9 +145,7 @@ def main():
 
     if args['create']:
         create_accounts(org_client, args, log, deployed_accounts, account_spec)
-        unmanaged= [a
-                for a in [a['Name'] for a in deployed_accounts]
-                if a not in [a['Name'] for a in account_spec['accounts']]]
+        unmanaged = unmanaged_accounts(log, deployed_accounts, account_spec)
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
 
