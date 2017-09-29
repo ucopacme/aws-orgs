@@ -41,6 +41,7 @@ setup(
             'awsaccounts=awsorgs.accounts:main',
             'awsauth=awsorgs.auth:main',
             'awsloginprofile=awsorgs.loginprofile:main',
+            'awsorgaccessrole=awsorgs.orgaccessrole:main',
         ],
     },
 
