@@ -110,32 +110,42 @@ def scan_invited_accounts(log, org_client):
     handshakes = org_client.list_handshakes_for_organization(
             Filter={'ActionType': 'INVITE'})['Handshakes']
     log.debug(handshakes)
-    return [h['Id'] for h in handshakes]
+    return handshakes
 
 
-def invite_account(log, args, org_client, deployed_accounts, invited_accounts):
+def invite_account(log, args, org_client, deployed_accounts):
     """Invite account_id to join Org"""
     account_id = args['--account-id']
     if lookup(deployed_accounts, 'Id', account_id):
         log.error("account %s already in organization" % account_id)
-    #if lookup(invited_accounts, 'Id', account_id):
-    #    log.error("account %s already in organization" % account_id)
-    #    return
+    invited_account_ids = [lookup(invite['Parties'], 'Type', 'ACCOUNT', 'Id')
+            for invite in scan_invited_accounts(log, org_client)]
+    log.debug('invited_account_ids: %s' % invited_account_ids)
+    if account_id in invited_account_ids:
+        log.error("account %s already in organization" % account_id)
+        return
     log.info("inviting account %s to join Org" % account_id)
     if args['--exec']:
         target = dict(Id=account_id , Type='ACCOUNT')
-        response = org_client.invite_account_to_organization(Target=target)
-        log.debug(response)
-        log.info('invite account handshake Id: %s' % response['Handshake']['Id'])
-        return response['Handshake']['Id']
+        handshake = org_client.invite_account_to_organization(Target=target)['Handshake']
+        log.info('account invite handshake Id: %s' % handshake['Id'])
+        return handshake
     return
 
 
-def display_invited_accounts(log, invited_accounts):
-    header = "Invited Accounts in Org:"
-    overbar = '_' * len(header)
-    log.info("\n%s\n%s\n" % (overbar, header))
-    log.info(invited_accounts)
+def display_invited_accounts(log, org_client):
+    invited_accounts = scan_invited_accounts(log, org_client)
+    if invited_accounts:
+        header = "Invited Accounts in Org:"
+        overbar = '_' * len(header)
+        log.info("\n%s\n%s\n" % (overbar, header))
+        fmt_str = "{:16}{:12}{}"
+        log.info(fmt_str.format('Id:', 'State:', 'Expires:'))
+        for invite in invited_accounts:
+            account_id = lookup(invite['Parties'], 'Type', 'ACCOUNT', 'Id')
+            invite_state = invite['State']
+            invite_expiration = invite['ExpirationTimestamp']
+            log.info(fmt_str.format(account_id, invite_state, invite_expiration))
 
 
 def display_provisioned_accounts(log, deployed_accounts):
@@ -169,7 +179,6 @@ def main():
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
     deployed_accounts = scan_deployed_accounts(log, org_client)
-    invited_accounts = scan_invited_accounts(log, org_client)
 
     if args['--spec-file']:
         account_spec = validate_spec_file(log, args['--spec-file'], 'account_spec')
@@ -177,8 +186,7 @@ def main():
 
     if args['report']:
         display_provisioned_accounts(log, deployed_accounts)
-        if invited_accounts:
-            display_invited_accounts(log, invited_accounts)
+        display_invited_accounts(log, org_client)
 
     if args['create']:
         create_accounts(org_client, args, log, deployed_accounts, account_spec)
@@ -187,9 +195,8 @@ def main():
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
 
     if args['invite']:
-        invite_account(log, args, org_client, deployed_accounts, invited_accounts)
+        invite_account(log, args, org_client, deployed_accounts)
         
-
 
 if __name__ == "__main__":
     main()
