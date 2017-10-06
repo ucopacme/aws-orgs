@@ -689,7 +689,7 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
             trusting_accounts.remove(account_name)
 
     # process groups in Auth account
-    if 'TrustedGroup' in d_spec and d_spec['TrustedGroup']:
+    if d_spec['TrustedGroup']:
         set_group_assume_role_policies(args, log, deployed, auth_spec,
                 trusting_accounts, d_spec)
     elif not d_spec['TrustedAccount']:
@@ -731,6 +731,7 @@ def main():
         manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['delegation']:
+        pass
         queue_threads(log, auth_spec['delegations'], manage_delegations,
             f_args=(args, log, deployed, auth_spec))
 

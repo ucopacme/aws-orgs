@@ -208,9 +208,11 @@ delegation:
     atype: list
   TrustedGroup:
     required: False
+    conflict: TrustedAccount
     atype: str
   TrustedAccount:
     required: False
+    conflict: TrustedGroup
     atype: str
   RequireMFA:
     required: False

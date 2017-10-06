@@ -103,6 +103,7 @@ groups:
 #                    excluded from the delegation.
 #  TrustedGroup:     The IAM group in the Auth account in which to assign
 #                    assume role policies for this delegation.
+#  TrustedAccount:   The account Id to use as principle in service roles.
 #  RequireMFA:       Type 'bool'.  When set to 'True' (the default), add
 #                    a condition to the trust policy requiring users 
 #                    assuming the delegation role to have valid MFA token.
