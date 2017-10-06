@@ -6,8 +6,8 @@ Creates role 'OrganizationAccountAccessRole' allowing users in
 Org Master account 'AdministratorAccess' in invited account.
 
 Usage:
-  orgaccessrole --help
-  orgaccessrole --master_id ID [--exec]
+  awsorgaccessrole --help
+  awsorgaccessrole --master_id ID [--exec]
 
 Options:
   -h, --help            Show this help message and exit.

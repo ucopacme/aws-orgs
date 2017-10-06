@@ -13,10 +13,15 @@ awsorgs
 awsaccounts
   Manage accounts in an AWS Organization.
 
+awsorgaccessrole
+  Generate default org access role in an invited account.
+
 awsauth
   Manage users, group, and roles for cross account access in an 
   AWS Organization.
 
+awsloginprofile
+  Manage AWS IAM user login profile.
 
 
 Run each of these with the '--help' option for usage documentation.
@@ -54,18 +59,17 @@ On RHEL6 you may need to update setuptools as well:
   # Run each command with -h option for full usage info.
 
   awsorgs report
-  awsorgs organization -v -s org-spec.yaml 
-  awsorgs organization -v -s org-spec.yaml --exec
+  awsorgs organization -v -s org-spec.yaml [--exec]
 
   awsaccounts report
-  awsaccounts create -v -s account-spec.yaml
-  awsaccounts create -v -s account-spec.yaml --exec
+  awsaccounts invite --account-id ID [--exec]
+  awsaccounts create -v -s account-spec.yaml [--exec]
+
+  awsorgaccessrole --master_id ID [--exec]
 
   awsauth report -s auth-spec.yaml 
-  awsauth users -v -s auth-spec.yaml
-  awsauth users -v -s auth-spec.yaml --exec
-  awsauth delegation -v -s auth-spec.yaml
-  awsauth delegation -v -s auth-spec.yaml --exec
+  awsauth users -v -s auth-spec.yaml [--exec]
+  awsauth delegation -v -s auth-spec.yaml [--exec]
 
   awsloginprofile maryanne
   awsloginprofile maryanne --new
@@ -80,5 +84,5 @@ On RHEL6 you may need to update setuptools as well:
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.0.5.rc1
+:Version: 0.0.6.rc1
 

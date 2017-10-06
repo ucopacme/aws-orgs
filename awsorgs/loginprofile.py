@@ -19,6 +19,7 @@ Options:
   --opt-ttl HOURS          One-time-password time to live in hours [default: 24].
   --password PASSWORD      Supply password, do not require user to reset.
   --email EMAIL            Supply user's email address for sending credentials.
+                           (not implemented yet)
   -h, --help               Show this help message and exit.
   -v, --verbose            Log to activity to STDOUT at log level INFO.
   -d, --debug              Increase log level to 'DEBUG'. Implies '--verbose'.

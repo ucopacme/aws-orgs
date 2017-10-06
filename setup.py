@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='aws-orgs',
-    version='0.0.5.rc1',
+    version='0.0.6.rc1',
     description='Tools to manage AWS Organizations',
     long_description=long_description,
     url='https://github.com/ashleygould/aws-orgs',
