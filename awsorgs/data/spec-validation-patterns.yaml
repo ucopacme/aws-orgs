@@ -207,7 +207,10 @@ delegation:
     required: False
     atype: list
   TrustedGroup:
-    required: True
+    required: False
+    atype: str
+  TrustedAccount:
+    required: False
     atype: str
   RequireMFA:
     required: False

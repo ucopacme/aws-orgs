@@ -535,7 +535,8 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                 group.Policy(policy_name).delete()
 
 
-def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_spec):
+def manage_delegation_role(account, args, log, auth_spec, deployed,
+            trusting_accounts, d_spec):
     """
     Create and manage a cross account access delegetion role in an
     account based on delegetion specification.
@@ -573,7 +574,12 @@ def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_s
         return
 
     # else: assemble assume role policy document for delegation role
-    principal = "arn:aws:iam::%s:root" % auth_spec['auth_account_id']
+    if 'TrustedAccount' in d_spec and d_spec['TrustedAccount']:
+        trusted_account = lookup(deployed['accounts'], 'Name',
+                d_spec['TrustedAccount'], 'Id')
+    else:
+        trusted_account = auth_spec['auth_account_id']
+    principal = "arn:aws:iam::%s:root" % trusted_account
     statement = dict(
             Effect='Allow',
             Principal=dict(AWS=principal),
@@ -635,25 +641,21 @@ def manage_delegation_role(account, args, log, auth_spec, trusting_accounts, d_s
                 Description=d_spec['Description'])
 
     # manage policy attachments
-    attached_policies = [p.policy_name for p
-            in list(role.attached_policies.all())]
+    attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
     for policy_name in d_spec['Policies']:
         # attach missing policies
         if not policy_name in attached_policies:
-            policy_arn = get_policy_arn(iam_client, policy_name, args,
-                    log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
             log.info("Attaching policy '%s' to role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
                 role.attach_policy(PolicyArn=policy_arn)
         elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
-            policy_arn = get_policy_arn(iam_client, policy_name, args,
-                    log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
     for policy_name in attached_policies:
         # datach obsolete policies
         if not policy_name in d_spec['Policies']:
-            policy_arn = get_policy_arn(iam_client, policy_name, args,
-                    log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
             log.info("Detaching policy '%s' from role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
@@ -687,12 +689,17 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
             trusting_accounts.remove(account_name)
 
     # process groups in Auth account
-    set_group_assume_role_policies(args, log, deployed, auth_spec,
-            trusting_accounts, d_spec)
+    if 'TrustedGroup' in d_spec and d_spec['TrustedGroup']:
+        set_group_assume_role_policies(args, log, deployed, auth_spec,
+                trusting_accounts, d_spec)
+    elif not d_spec['TrustedAccount']:
+        log.error("neither 'TrustedGroup' or 'TrustedAccount' declared in "
+                "delecation spec for role '%s'" % d_spec['RoleName'])
+        return
 
     # run manage_delegation_role() task in thread pool
     queue_threads(log, deployed['accounts'], manage_delegation_role,
-            f_args=(args, log, auth_spec, trusting_accounts, d_spec))
+            f_args=(args, log, auth_spec, deployed, trusting_accounts, d_spec))
 
 
 def main():
