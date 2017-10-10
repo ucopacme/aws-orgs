@@ -18,7 +18,7 @@ Modes of operation:
 
 Options:
   -h, --help                 Show this help message and exit.
-  --version                  Display version info and exit.
+  -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   --exec                     Execute proposed changes to AWS accounts.
   -v, --verbose              Log to activity to STDOUT at log level INFO.
@@ -34,14 +34,10 @@ import json
 import threading
 
 import boto3
-import botocore.exceptions
 from botocore.exceptions import ClientError
-import docopt
 from docopt import docopt
 
-import awsorgs.utils
 from awsorgs.utils import *
-import awsorgs.orgs
 from awsorgs.orgs import scan_deployed_accounts
 
 
@@ -696,7 +692,7 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
 
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
     auth_spec = validate_spec_file(log, args['--spec-file'], 'auth_spec')

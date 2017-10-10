@@ -65,7 +65,7 @@ On RHEL6 you may need to update setuptools as well:
   awsaccounts invite --account-id ID [--exec]
   awsaccounts create -v -s account-spec.yaml [--exec]
 
-  awsorgaccessrole --master_id ID [--exec]
+  awsorgs-accessrole --master_id ID [--exec]
 
   awsauth report -s auth-spec.yaml 
   awsauth users -v -s auth-spec.yaml [--exec]

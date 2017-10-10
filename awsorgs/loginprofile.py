@@ -21,6 +21,7 @@ Options:
   --email EMAIL            Supply user's email address for sending credentials.
                            (not implemented yet)
   -h, --help               Show this help message and exit.
+  -V, --version            Display version info and exit.
   -v, --verbose            Log to activity to STDOUT at log level INFO.
   -d, --debug              Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log               Include botocore and boto3 logs in log stream.
@@ -37,7 +38,6 @@ import datetime
 
 import boto3
 from botocore.exceptions import ClientError
-import docopt
 from docopt import docopt
 from passgen import passgen
 
@@ -211,7 +211,7 @@ def user_report(log, user, login_profile):
 
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     # HACK ALERT!
     # set '--exec' and 'report' args to make get_logger() happy
     args['--exec'] = True

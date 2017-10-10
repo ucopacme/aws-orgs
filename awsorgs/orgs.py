@@ -15,7 +15,7 @@ Modes of operation:
 
 Options:
   -h, --help                 Show this help message and exit.
-  --version                  Display version info and exit.
+  -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
   --exec                     Execute proposed changes to AWS Org.
   -v, --verbose              Log to activity to STDOUT at log level INFO.
@@ -398,7 +398,7 @@ def manage_ou(org_client, args, log, deployed, org_spec, ou_spec_list, parent_na
 
 
 def main():
-    args = docopt(__doc__, version='awsorgs 0.0.0')
+    args = docopt(__doc__, version='0.0.6.rc1')
     log = get_logger(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)

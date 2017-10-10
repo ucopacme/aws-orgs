@@ -18,7 +18,7 @@ Modes of operation:
 
 Options:
   -h, --help                 Show this help message and exit.
-  --version                  Display version info and exit.
+  -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   --account-id ID            Id of account being invited to join Org.
   --exec                     Execute proposed changes to AWS accounts.
@@ -173,7 +173,7 @@ def unmanaged_accounts(log, deployed_accounts, account_spec):
 
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     log = get_logger(args)
     log.debug(args)
     org_client = boto3.client('organizations')
