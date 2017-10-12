@@ -327,8 +327,9 @@ def manage_policy_attachments(org_client, args, log, deployed, org_spec, ou_spec
     # attach policies
     for policy_name in policies_to_attach:
         if not lookup(deployed['policies'],'Name',policy_name):
-            raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
-                    policy_name)
+            if args['--exec']:
+                raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
+                        policy_name)
         if not ensure_absent(ou_spec):
             log.info("Attaching policy '%s' to OU '%s'" % (policy_name, ou_spec['Name']))
             if args['--exec']:
