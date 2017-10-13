@@ -3,9 +3,6 @@
 # AWS account Id for the Organization master account.  This must be in quotes.
 master_account_id: 'XXXXXXXXXXXX'
 
-# Role to use when managing resources in accounts.
-org_access_role: OrganizationAccountAccessRole
-
 # Email domain to use for account creation if the accounts['Email'] field
 # is not explicitly specified.
 default_domain: example.com

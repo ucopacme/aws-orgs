@@ -22,9 +22,6 @@ account_spec:
   master_account_id:
     required: True
     atype: str
-  org_access_role:
-    required: True
-    atype: str
   default_domain:
     required: True
     atype: str
