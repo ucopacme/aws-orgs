@@ -6,6 +6,7 @@
 Usage:
   awsaccounts report [-d] [--boto-log]
   awsaccounts create (--spec-file FILE) [--exec] [-vd] [--boto-log]
+  awsaccounts alias (--spec-file FILE) [--exec] [-vd] [--boto-log]
   awsaccounts invite (--account-id ID --spec-file FILE)
                      [--exec] [-vd] [--boto-log]
   awsaccounts (-h | --help)
@@ -14,6 +15,7 @@ Usage:
 Modes of operation:
   report         Display organization status report only.
   create         Create new accounts in AWS Org per specifation.
+  alias          Set account alias for each account in Org per specifation.
   invite         Invite another account to join Org as a member account. 
 
 Options:
@@ -190,20 +192,26 @@ def display_invited_accounts(log, org_client):
             log.info(fmt_str.format(account_id, invite_state, invite_expiration))
 
 
-def display_provisioned_accounts(log, deployed_accounts):
+def display_provisioned_accounts(log, deployed_accounts, status):
     """
     Print report of currently deployed accounts in AWS Organization.
+    status::    matches account status (ACTIVE|SUSPENDED)
     """
-    header = "Provisioned Accounts in Org:"
-    overbar = '_' * len(header)
-    log.info("\n%s\n%s\n" % (overbar, header))
-    fmt_str = "{:20}{:16}{:24}{}"
-    log.info(fmt_str.format('Name:', 'Id:', 'Email:', 'Status:'))
-    for a_name in sorted([a['Name'] for a in deployed_accounts]):
-        a_status = lookup(deployed_accounts, 'Name', a_name, 'Status')
-        a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
-        a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
-        log.info(fmt_str.format(a_name, a_id, a_email, a_status))
+    if status not in ('ACTIVE', 'SUSPENDED'):
+        log.critical("'status' must be one of ('ACTIVE', 'SUSPENDED')")
+        sys.exit(1)
+    account_list = sorted([a['Name'] for a in deployed_accounts
+            if a['Status'] == status])
+    if account_list:
+        header = '%s Accounts in Org:' % status.capitalize()
+        overbar = '_' * len(header)
+        log.info("\n%s\n%s\n" % (overbar, header))
+        fmt_str = "{:20}{:16}{:24}"
+        log.info(fmt_str.format('Name:', 'Id:', 'Email:'))
+        for a_name in account_list:
+            a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
+            a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
+            log.info(fmt_str.format(a_name, a_id, a_email))
 
 
 def unmanaged_accounts(log, deployed_accounts, account_spec):
@@ -227,15 +235,17 @@ def main():
         validate_master_id(org_client, account_spec)
 
     if args['report']:
-        display_provisioned_accounts(log, deployed_accounts)
+        display_provisioned_accounts(log, deployed_accounts, 'ACTIVE')
         display_invited_accounts(log, org_client)
+        display_provisioned_accounts(log, deployed_accounts, 'SUSPENDED')
 
     if args['create']:
         create_accounts(org_client, args, log, deployed_accounts, account_spec)
         unmanaged = unmanaged_accounts(log, deployed_accounts, account_spec)
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
-        # manage account aliases (threaded)
+
+    if args['alias']:
         queue_threads(log, deployed_accounts, set_account_alias,
                 f_args=(log, args, account_spec), thread_count=10)
 
