@@ -17,16 +17,11 @@ teams:
       - tim@example.com
     TechnicalContacts:
       - ashely@example.com
-  - Name: project1
+  - Name: apps
     BusinessContacts:
       - mohan@example.com
     TechnicalContacts:
       - elena@example.com
-  - Name: project2
-    BusinessContacts:
-      - mary@example.com
-    TechnicalContacts:
-      - khalid@example.com
 
 
 # Accounts Specification.  List of managed AWS accounts in the Organization.
@@ -37,24 +32,24 @@ teams:
 #           omitted, we combine the account name and the default_email_domain.
 #   Team:   A label for tracking folks within your organization associated
 #           with a this account.
+#   Alias:  String to use for the account alias.  Defaults to 'Name' in 
+#           lower case.
 #
 accounts:
   - Name: Master
     Team: systems
+    Alias: org-master
   - Name: Auth
     Email: auth@example.com
     Team: systems
+    Alias: org-auth
   - Name: Management
     Email: management@example.com
     Team: systems
-  - Name: Security
-    Email: security@example.com
-    Team: systems
-  - Name: project1-poc
-    Team: project1
-  - Name: project1-prod
-    Team: project1
-  - Name: project2-poc
-    Team: project2
-  - Name: project2-prod
-    Team: project2
+    Alias: org-config
+  - Name: project1
+    Team: apps
+    Alias: jboss
+  - Name: project2
+    Team: apps
+    Alias: lampstack

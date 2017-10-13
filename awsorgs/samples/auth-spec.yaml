@@ -6,7 +6,7 @@ master_account_id: 'XXXXXXXXXXXX'
 # AWS account Id for the Central Auth account.  This must be in quotes.
 auth_account_id: 'XXXXXXXXXXXX'
 
-# Role to use when managing resources in account.  This must not itself
+# Role to use when managing resources in accounts.  This must not itself
 # be a managed delegation role.  This is the role created by Organizations
 # service when an account is created or invited into an Organization.
 org_access_role: OrganizationAccountAccessRole
