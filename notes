@@ -11,6 +11,7 @@ CONSIDER:
 a single interface executible with operation modes for all tasks:
   organization, accounts, users, delegation
 a single spec file awsorgs.conf which includes all the verious spec files
+allow per-account or per-team spec files for auth
 create a class to store args, logger, specs and 'deployed' dict for 
   passing to functions.  see branch 'named_tuple'
 

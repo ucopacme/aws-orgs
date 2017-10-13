@@ -105,6 +105,33 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                      log.warn("Account creation still pending. Moving on!")
 
 
+# Thread worker function to gather report for each account
+def set_account_alias(account, log, args, role):
+    alias_prefix = 'ashely'
+    if account['Status'] == 'ACTIVE':
+        #proposed_alias = alias_prefix + '-' + account['Name'].lower()
+        proposed_alias = account['Name'].lower()
+        credentials = get_assume_role_credentials(account['Id'], role)
+        if isinstance(credentials, RuntimeError):
+            log.error(credentials)
+        else:
+            iam_client = boto3.client('iam', **credentials)
+        aliases = iam_client.list_account_aliases()['AccountAliases']
+        log.debug('account_name: %s; aliases: %s' % (account['Name'], aliases))
+        if not aliases:
+            log.info("setting account alias to '%s' for account '%s'" %
+                    (proposed_alias, account['Name']))
+            if args['--exec']:
+                iam_client.create_account_alias(AccountAlias=proposed_alias)
+        elif aliases[0] != proposed_alias:
+            log.info("resetting account alias for account '%s' to '%s'; "
+                    "previous alias was '%s'" %
+                    (account['Name'], proposed_alias, aliases[0]))
+            if args['--exec']:
+                iam_client.delete_account_alias(AccountAlias=aliases[0])
+                iam_client.create_account_alias(AccountAlias=proposed_alias)
+        
+
 def scan_invited_accounts(log, org_client):
     """Return a list of handshake IDs"""
     handshakes = org_client.list_handshakes_for_organization(
@@ -193,6 +220,9 @@ def main():
         unmanaged = unmanaged_accounts(log, deployed_accounts, account_spec)
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
+        # manage account aliases (threaded)
+        queue_threads(log, deployed_accounts, set_account_alias,
+                f_args=(log, args, account_spec['org_access_role']), thread_count=10)
 
     if args['invite']:
         invite_account(log, args, org_client, deployed_accounts)
