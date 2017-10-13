@@ -139,6 +139,9 @@ account:
   Team:
     required: True
     atype: str
+  Alias:
+    required: False
+    atype: str
 
 
 user:
