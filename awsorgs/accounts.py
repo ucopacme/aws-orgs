@@ -161,7 +161,10 @@ def get_account_aliases(log, args, deployed_accounts):
                 log.error(credentials)
             else:
                 iam_client = boto3.client('iam', **credentials)
-            aliases[account['Name']] = iam_client.list_account_aliases()['AccountAliases'][0]
+            response = iam_client.list_account_aliases()['AccountAliases']
+            if response:
+                aliases[account['Name']] = response[0]
+
     # call workers
     aliases = {}
     queue_threads(log, deployed_accounts, get_account_alias,
