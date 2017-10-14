@@ -10,6 +10,7 @@ except ImportError:
     import Queue as queue
 
 import boto3
+from botocore.exceptions import ClientError
 import yaml
 import logging
 
@@ -250,15 +251,12 @@ def queue_threads(log, sequence, func, f_args=(), thread_count=20):
     q.join()
 
 
-def get_assume_role_credentials(account_id, role_name, path=None, region_name=None):
+def get_assume_role_credentials(account_id, role_name, region_name=None):
     """
     Get temporary sts assume_role credentials for account.
     """
-    if path:
-        role_arn = "arn:aws:iam::%s:role/%s/%s" % (account_id, path, role_name)
-    else:
-        role_arn = "arn:aws:iam::%s:role/%s" % (account_id, role_name)
-    role_session_name = account_id + '-' + role_name
+    role_arn = "arn:aws:iam::%s:role/%s" % (account_id, role_name)
+    role_session_name = account_id + '-' + role_name.split('/')[-1]
     sts_client = boto3.client('sts')
 
     if account_id == sts_client.get_caller_identity()['Account']:

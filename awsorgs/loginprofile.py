@@ -2,10 +2,10 @@
 """Manage AWS IAM user login profile.
 
 Usage:
-  awsloginprofile USER [-vd] [--boto-log]
-  awsloginprofile USER --disable [-vd] [--boto-log]
-  awsloginprofile USER --disable-expired [--opt-ttl HOURS] [-vd] [--boto-log]
-  awsloginprofile USER (--new | --reset | --reenable) [-vd] [--boto-log]
+  awsloginprofile USER [-vdr ROLE] [--boto-log]
+  awsloginprofile USER --disable [-vdr ROLE] [--boto-log]
+  awsloginprofile USER --disable-expired [--opt-ttl HOURS] [-vdr ROLE] [--boto-log]
+  awsloginprofile USER (--new | --reset | --reenable) [-vdr ROLE] [--boto-log]
                        [--password PASSWORD] [--email EMAIL]
   awsloginprofile --help
 
@@ -20,6 +20,7 @@ Options:
   --password PASSWORD      Supply password, do not require user to reset.
   --email EMAIL            Supply user's email address for sending credentials.
                            (not implemented yet)
+  -r ROLE, --role ROLE     Name of AWS IAM role to assume to access Org accounts.
   -h, --help               Show this help message and exit.
   -V, --version            Display version info and exit.
   -v, --verbose            Log to activity to STDOUT at log level INFO.
@@ -42,6 +43,8 @@ from docopt import docopt
 from passgen import passgen
 
 from awsorgs.utils import *
+from awsorgs.accounts import get_account_aliases
+from awsorgs.orgs import scan_deployed_accounts
 
 
 # Relative path within awsorgs project to template file used by prep_email()
@@ -225,6 +228,24 @@ def main():
         args['report'] = False
     log = get_logger(args)
     log.debug(args)
+
+    if args['--role']:
+        master_id = boto3.client('organizations').describe_organization(
+                )['Organization']['MasterAccountId']
+        log.debug('master_id: %s' % master_id)
+        credentials = get_assume_role_credentials(master_id, args['--role'])
+        if isinstance(credentials, RuntimeError):
+            log.critical(credentials)
+            sys.exit(1)
+        else:
+            try:
+                org_client = boto3.client('organizations', **credentials)
+            except ClientError as e:
+                log.error(e)
+        deployed_accounts = scan_deployed_accounts(log, org_client)
+        log.debug(deployed_accounts)
+        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
+        log.debug(aliases)
 
     user = validate_user(args['USER'])
     if not user:

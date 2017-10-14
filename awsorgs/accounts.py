@@ -149,14 +149,14 @@ def set_account_alias(account, log, args, account_spec):
                     log.error(e)
         
 
-def get_account_aliases(log, args, deployed_accounts):
+def get_account_aliases(log, deployed_accounts, role):
     """
     Return dict of {account_name:account_alias}
     """
     # worker function for threading
-    def get_account_alias(account, log, args, aliases):
+    def get_account_alias(account, log, role, aliases):
         if account['Status'] == 'ACTIVE':
-            credentials = get_assume_role_credentials(account['Id'], args['--role'])
+            credentials = get_assume_role_credentials(account['Id'], role)
             if isinstance(credentials, RuntimeError):
                 log.error(credentials)
             else:
@@ -168,7 +168,7 @@ def get_account_aliases(log, args, deployed_accounts):
     # call workers
     aliases = {}
     queue_threads(log, deployed_accounts, get_account_alias,
-            f_args=(log, args, aliases), thread_count=10)
+            f_args=(log, role, aliases), thread_count=10)
     log.debug(aliases)
     return aliases
 
@@ -260,7 +260,7 @@ def main():
         validate_master_id(org_client, account_spec)
 
     if args['report']:
-        aliases = get_account_aliases(log, args, deployed_accounts)
+        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
         display_provisioned_accounts(log, deployed_accounts, aliases, 'ACTIVE')
         display_provisioned_accounts(log, deployed_accounts, aliases, 'SUSPENDED')
         display_invited_accounts(log, org_client)
