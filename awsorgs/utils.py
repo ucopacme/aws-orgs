@@ -281,3 +281,44 @@ def get_assume_role_credentials(account_id, role_name, region_name=None):
                 aws_secret_access_key=credentials['SecretAccessKey'],
                 aws_session_token=credentials['SessionToken'],
                 region_name=region_name)
+
+
+def scan_deployed_accounts(log, org_client):
+    """
+    Query AWS Organization for deployed accounts.
+    Returns a list of dictionary.
+    """
+    log.debug('running')
+    accounts = org_client.list_accounts()
+    deployed_accounts = accounts['Accounts']
+    while 'NextToken' in accounts and accounts['NextToken']:
+        log.debug("NextToken: %s" % accounts['NextToken'])
+        accounts = org_client.list_accounts(NextToken=accounts['NextToken'])
+        deployed_accounts += accounts['Accounts']
+    # only return accounts that have an 'Name' key
+    return [d for d in deployed_accounts if 'Name' in d ]
+        
+
+def get_account_aliases(log, deployed_accounts, role):
+    """
+    Return dict of {account_name:account_alias} for all deployed accounts.
+
+    role::  name of IAM role to assume to query all deployed accounts.
+    """
+    # worker function for threading
+    def get_account_alias(account, log, role, aliases):
+        if account['Status'] == 'ACTIVE':
+            credentials = get_assume_role_credentials(account['Id'], role)
+            if isinstance(credentials, RuntimeError):
+                log.error(credentials)
+            else:
+                iam_client = boto3.client('iam', **credentials)
+            response = iam_client.list_account_aliases()['AccountAliases']
+            if response:
+                aliases[account['Name']] = response[0]
+    # call workers
+    aliases = {}
+    queue_threads(log, deployed_accounts, get_account_alias,
+            f_args=(log, role, aliases), thread_count=10)
+    log.debug(aliases)
+    return aliases

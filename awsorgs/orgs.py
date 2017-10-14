@@ -99,22 +99,6 @@ def list_policies_in_ou (org_client, ou_id):
     return sorted([ou['Name'] for ou in policies_in_ou])
 
 
-def scan_deployed_accounts(log, org_client):
-    """
-    Query AWS Organization for deployed accounts.
-    Returns a list of dictionary.
-    """
-    log.debug('running')
-    accounts = org_client.list_accounts()
-    deployed_accounts = accounts['Accounts']
-    while 'NextToken' in accounts and accounts['NextToken']:
-        log.debug("NextToken: %s" % accounts['NextToken'])
-        accounts = org_client.list_accounts(NextToken=accounts['NextToken'])
-        deployed_accounts += accounts['Accounts']
-    # only return accounts that have an 'Name' key
-    return [d for d in deployed_accounts if 'Name' in d ]
-
-
 def scan_created_accounts(org_client):
     """
     Query AWS Organization for accounts with creation status of 'SUCCEEDED'.

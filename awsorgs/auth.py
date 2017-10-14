@@ -38,7 +38,6 @@ from botocore.exceptions import ClientError
 from docopt import docopt
 
 from awsorgs.utils import *
-from awsorgs.orgs import scan_deployed_accounts
 
 
 def display_provisioned_users(log, deployed):

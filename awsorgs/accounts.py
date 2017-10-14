@@ -40,10 +40,8 @@ import boto3
 import botocore
 from botocore.exceptions import ClientError
 from docopt import docopt
-#botocore.errorfactory.EntityAlreadyExistsException 
 
 from awsorgs.utils import *
-from awsorgs.orgs import scan_deployed_accounts
 
 
 def scan_created_accounts(log, org_client):
@@ -147,30 +145,6 @@ def set_account_alias(account, log, args, account_spec):
                     iam_client.create_account_alias(AccountAlias=proposed_alias)
                 except Exception as e:
                     log.error(e)
-        
-
-def get_account_aliases(log, deployed_accounts, role):
-    """
-    Return dict of {account_name:account_alias}
-    """
-    # worker function for threading
-    def get_account_alias(account, log, role, aliases):
-        if account['Status'] == 'ACTIVE':
-            credentials = get_assume_role_credentials(account['Id'], role)
-            if isinstance(credentials, RuntimeError):
-                log.error(credentials)
-            else:
-                iam_client = boto3.client('iam', **credentials)
-            response = iam_client.list_account_aliases()['AccountAliases']
-            if response:
-                aliases[account['Name']] = response[0]
-
-    # call workers
-    aliases = {}
-    queue_threads(log, deployed_accounts, get_account_alias,
-            f_args=(log, role, aliases), thread_count=10)
-    log.debug(aliases)
-    return aliases
 
 
 def scan_invited_accounts(log, org_client):

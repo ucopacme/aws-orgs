@@ -43,8 +43,6 @@ from docopt import docopt
 from passgen import passgen
 
 from awsorgs.utils import *
-from awsorgs.accounts import get_account_aliases
-from awsorgs.orgs import scan_deployed_accounts
 
 
 # Relative path within awsorgs project to template file used by prep_email()
