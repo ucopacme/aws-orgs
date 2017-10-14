@@ -283,6 +283,22 @@ def get_assume_role_credentials(account_id, role_name, region_name=None):
                 region_name=region_name)
 
 
+def boto_client(log, credentials, service_name):
+    """
+    Return a boto3 client object for a named service.  Handle errors calmly.
+    """
+    if isinstance(credentials, RuntimeError):
+        log.critical(credentials)
+        sys.exit(1)
+    else:
+        try:
+            client = boto3.client(service_name, **credentials)
+        except ClientError as e:
+            log.error(e)
+            return
+    return client
+
+
 def scan_deployed_accounts(log, org_client):
     """
     Query AWS Organization for deployed accounts.
@@ -301,7 +317,7 @@ def scan_deployed_accounts(log, org_client):
 
 def get_account_aliases(log, deployed_accounts, role):
     """
-    Return dict of {account_name:account_alias} for all deployed accounts.
+    Return dict of {Id:Alias} for all deployed accounts.
 
     role::  name of IAM role to assume to query all deployed accounts.
     """
@@ -315,10 +331,20 @@ def get_account_aliases(log, deployed_accounts, role):
                 iam_client = boto3.client('iam', **credentials)
             response = iam_client.list_account_aliases()['AccountAliases']
             if response:
-                aliases[account['Name']] = response[0]
+                aliases[account['Id']] = response[0]
     # call workers
     aliases = {}
     queue_threads(log, deployed_accounts, get_account_alias,
             f_args=(log, role, aliases), thread_count=10)
     log.debug(aliases)
     return aliases
+
+
+def merge_aliases(log, deployed_accounts, aliases):
+    """
+    Merge account aliases into deployed_accounts lookup table.
+    """
+    for account in deployed_accounts:
+        account['Alias'] = aliases.get(account['Id'], '')
+        log.debug(account)
+    return deployed_accounts

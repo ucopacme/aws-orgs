@@ -232,18 +232,22 @@ def main():
                 )['Organization']['MasterAccountId']
         log.debug('master_id: %s' % master_id)
         credentials = get_assume_role_credentials(master_id, args['--role'])
-        if isinstance(credentials, RuntimeError):
-            log.critical(credentials)
-            sys.exit(1)
-        else:
-            try:
-                org_client = boto3.client('organizations', **credentials)
-            except ClientError as e:
-                log.error(e)
-        deployed_accounts = scan_deployed_accounts(log, org_client)
-        log.debug(deployed_accounts)
-        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
-        log.debug(aliases)
+        org_client = boto_client(log, credentials, 'organizations')
+        if org_client:
+            log.debug(org_client)
+            deployed_accounts = scan_deployed_accounts(log, org_client)
+            log.debug(deployed_accounts)
+        #    aliases = get_account_aliases(log, deployed_accounts, args['--role'])
+        #    deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
+
+        #if isinstance(credentials, RuntimeError):
+        #    log.critical(credentials)
+        #    sys.exit(1)
+        #else:
+        #    try:
+        #        org_client = boto3.client('organizations', **credentials)
+        #    except ClientError as e:
+        #        log.error(e)
 
     user = validate_user(args['USER'])
     if not user:

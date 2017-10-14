@@ -190,27 +190,28 @@ def display_invited_accounts(log, org_client):
             log.info(fmt_str.format(account_id, invite_state, invite_expiration))
 
 
-def display_provisioned_accounts(log, deployed_accounts, aliases, status):
+def display_provisioned_accounts(log, deployed_accounts, status):
     """
     Print report of currently deployed accounts in AWS Organization.
     status::    matches account status (ACTIVE|SUSPENDED)
     """
     if status not in ('ACTIVE', 'SUSPENDED'):
-        log.critical("'status' must be one of ('ACTIVE', 'SUSPENDED')")
-        sys.exit(1)
-    account_list = sorted([a['Name'] for a in deployed_accounts
+        raise RuntimeError("'status' must be one of ('ACTIVE', 'SUSPENDED')")
+    sorted_account_names = sorted([a['Name'] for a in deployed_accounts
             if a['Status'] == status])
-    if account_list:
+    if sorted_account_names:
         header = '%s Accounts in Org:' % status.capitalize()
         overbar = '_' * len(header)
         log.info("\n%s\n%s\n" % (overbar, header))
         fmt_str = "{:20}{:20}{:16}{}"
         log.info(fmt_str.format('Name:', 'Alias', 'Id:', 'Email:'))
-        for a_name in account_list:
-            a_alias = aliases.get(a_name, '')
-            a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
-            a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
-            log.info(fmt_str.format(a_name, a_alias, a_id, a_email))
+        for name in sorted_account_names:
+            account = lookup(deployed_accounts, 'Name', name)
+            log.info(fmt_str.format(
+                    name,
+                    account['Alias'],
+                    account['Id'],
+                    account['Email']))
 
 
 def unmanaged_accounts(log, deployed_accounts, account_spec):
@@ -235,8 +236,9 @@ def main():
 
     if args['report']:
         aliases = get_account_aliases(log, deployed_accounts, args['--role'])
-        display_provisioned_accounts(log, deployed_accounts, aliases, 'ACTIVE')
-        display_provisioned_accounts(log, deployed_accounts, aliases, 'SUSPENDED')
+        deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
+        display_provisioned_accounts(log, deployed_accounts, 'ACTIVE')
+        display_provisioned_accounts(log, deployed_accounts, 'SUSPENDED')
         display_invited_accounts(log, org_client)
 
     if args['create']:
