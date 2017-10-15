@@ -283,22 +283,6 @@ def get_assume_role_credentials(account_id, role_name, region_name=None):
                 region_name=region_name)
 
 
-def boto_client(log, credentials, service_name):
-    """
-    Return a boto3 client object for a named service.  Handle errors calmly.
-    """
-    if isinstance(credentials, RuntimeError):
-        log.critical(credentials)
-        sys.exit(1)
-    else:
-        try:
-            client = boto3.client(service_name, **credentials)
-        except ClientError as e:
-            log.error(e)
-            return
-    return client
-
-
 def scan_deployed_accounts(log, org_client):
     """
     Query AWS Organization for deployed accounts.

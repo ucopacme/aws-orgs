@@ -68,33 +68,45 @@ def list_delegations(user):
             in assume_role_policies]
 
 
-def format_delegation_table(delegation_arns):
+def format_delegation_table(delegation_arns, aliases):
     """Generate formatted list of delegation attributes as printable string"""
     tpl = """
-  account_id:   $account_id
-  role_name:    $role_name
-  role_arn:     $role_arn
+  account_alias:  $account_alias
+  account_id:     $account_id
+  role_name:      $role_name
+  role_arn:       $role_arn
 """
     delegation_string = ''
     for assume_role_arn in delegation_arns:
+        account_id = assume_role_arn.split(':')[4]
+        if aliases:
+            alias = aliases[account_id]
+        else:
+            alias = ''
         delegation_string += Template(tpl).substitute(dict(
                 role_arn=assume_role_arn,
                 role_name=assume_role_arn.partition('role/')[2],
-                account_id=assume_role_arn.split(':')[4]))
+                account_id=account_id,
+                account_alias=alias))
     return delegation_string
 
 
-def prep_email(log, user, passwd, email):
+def prep_email(log, aliases, user, passwd, email):
     """Generate email body from template"""
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
+    trusted_id=boto3.client('sts').get_caller_identity()['Account']
+    if aliases:
+        trusted_account = aliases[trusted_id]
+    else:
+        trusted_account = trusted_id
     delegation_table = list_delegations(user)
     log.debug('delegation_table: %s' % delegation_table)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
             user_name=user.name,
             onetimepw=passwd,
-            trusted_id=boto3.client('sts').get_caller_identity()['Account'],
-            delegations=format_delegation_table(delegation_table),
+            trusted_account=trusted_account,
+            delegations=format_delegation_table(delegation_table, aliases),
     )
     with open(template) as tpl:
         print(Template(tpl.read()).substitute(mapping))
@@ -232,22 +244,15 @@ def main():
                 )['Organization']['MasterAccountId']
         log.debug('master_id: %s' % master_id)
         credentials = get_assume_role_credentials(master_id, args['--role'])
-        org_client = boto_client(log, credentials, 'organizations')
-        if org_client:
-            log.debug(org_client)
-            deployed_accounts = scan_deployed_accounts(log, org_client)
-            log.debug(deployed_accounts)
-        #    aliases = get_account_aliases(log, deployed_accounts, args['--role'])
-        #    deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
-
-        #if isinstance(credentials, RuntimeError):
-        #    log.critical(credentials)
-        #    sys.exit(1)
-        #else:
-        #    try:
-        #        org_client = boto3.client('organizations', **credentials)
-        #    except ClientError as e:
-        #        log.error(e)
+        if isinstance(credentials, RuntimeError):
+            raise(credentials)
+        else:
+            org_client = boto3.client('organizations', **credentials)
+        deployed_accounts = scan_deployed_accounts(log, org_client)
+        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
+        log.debug(aliases)
+    else:
+        aliases = None
 
     user = validate_user(args['USER'])
     if not user:
@@ -260,14 +265,14 @@ def main():
     if args['--new']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, user, passwd, args['--email'])
+            prep_email(log, aliases, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         user_report(log, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
-        prep_email(log, user, passwd, args['--email'])
+        prep_email(log, aliases, user, passwd, args['--email'])
         user_report(log, user, login_profile)
 
     elif args['--disable']:
@@ -281,7 +286,7 @@ def main():
     elif args['--reenable']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, user, passwd, args['--email'])
+            prep_email(log, aliases, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)

@@ -13,7 +13,7 @@ password as you log in.
 
   IAM User Name:	$user_name
   One Time Password:	$onetimepw
-  Login URL:            https://${trusted_id}.signin.aws.amazon.com/console
+  Login URL:            https://${trusted_account}.signin.aws.amazon.com/console
 
 
 Once logged in take the time to set up a 'Virtual MFA Device' and 'AWS
