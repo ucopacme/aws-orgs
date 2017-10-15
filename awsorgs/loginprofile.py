@@ -57,15 +57,23 @@ def get_user_name():
     return sts.get_caller_identity()['Arn'].split('/')[-1]
 
 
-def list_delegations(user):
-    """Return list of assume_role resource arns for all groups for user"""
+def list_delegations(user, aliases=None):
+    """
+    Return list of assume_role resource arns for all groups for user.
+    If aliases are supplied, substitute an alias for account Id in each arn.
+    """
     groups = list(user.groups.all())
     assume_role_policies = []
     for group in user.groups.all():
         assume_role_policies += [p for p in list(group.policies.all())
                 if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-    return [policy.policy_document['Statement'][0]['Resource'] for policy
+    role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
             in assume_role_policies]
+    if aliases:
+        # what if an alias is empty string?
+        role_arns = [arn.replace(arn.split(':')[4], aliases[arn.split(':')[4]])
+                for arn in role_arns]
+    return role_arns
 
 
 def format_delegation_table(delegation_arns, aliases):
@@ -200,7 +208,7 @@ def onetime_passwd_expired(log, user, login_profile, hours):
     return False
 
 
-def user_report(log, user, login_profile):
+def user_report(log, aliases, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
@@ -218,7 +226,7 @@ def user_report(log, user, login_profile):
             log.info('Password last used:      %s' % user.password_last_used)
     else:
         log.info('User login profile:      %s' % login_profile)
-    assume_role_arns = list_delegations(user)
+    assume_role_arns = list_delegations(user, aliases)
     if assume_role_arns:
         log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
 
@@ -268,12 +276,12 @@ def main():
             prep_email(log, aliases, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
         prep_email(log, aliases, user, passwd, args['--email'])
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
@@ -290,10 +298,10 @@ def main():
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
     else:
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
 
 if __name__ == "__main__":
