@@ -57,7 +57,7 @@ def get_user_name():
     return sts.get_caller_identity()['Arn'].split('/')[-1]
 
 
-def list_delegations(user, aliases=None):
+def list_delegations(log, user, aliases=None):
     """
     Return list of assume_role resource arns for all groups for user.
     If aliases are supplied, substitute an alias for account Id in each arn.
@@ -70,12 +70,10 @@ def list_delegations(user, aliases=None):
     role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
             in assume_role_policies]
     if aliases:
-        # what if an alias is empty string?
-        for account_id, alias in aliases.items():
-            if not alias:
-                aliases[account_id] = account_id
-        role_arns = [arn.replace(arn.split(':')[4], aliases[arn.split(':')[4]])
-                for arn in role_arns]
+        for i in range(len(role_arns)):
+            account_id = role_arns[i].split(':')[4]
+            if account_id in aliases:
+                 role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
     return role_arns
 
 
@@ -110,7 +108,7 @@ def prep_email(log, aliases, user, passwd, email):
         trusted_account = aliases[trusted_id]
     else:
         trusted_account = trusted_id
-    delegation_table = list_delegations(user)
+    delegation_table = list_delegations(log, user)
     log.debug('delegation_table: %s' % delegation_table)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
@@ -229,7 +227,7 @@ def user_report(log, aliases, user, login_profile):
             log.info('Password last used:      %s' % user.password_last_used)
     else:
         log.info('User login profile:      %s' % login_profile)
-    assume_role_arns = list_delegations(user, aliases)
+    assume_role_arns = list_delegations(log, user, aliases)
     if assume_role_arns:
         log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
 
