@@ -4,7 +4,7 @@
 Usage:
   awsloginprofile USER [-vdr ROLE] [--boto-log]
   awsloginprofile USER --disable [-vdr ROLE] [--boto-log]
-  awsloginprofile USER --disable-expired [--opt-ttl HOURS] [-vdr ROLE] [--boto-log]
+  awsloginprofile USER --disable-expired [-vdr ROLE] [--opt-ttl HOURS] [--boto-log]
   awsloginprofile USER (--new | --reset | --reenable) [-vdr ROLE] [--boto-log]
                        [--password PASSWORD] [--email EMAIL]
   awsloginprofile --help
@@ -21,6 +21,7 @@ Options:
   --email EMAIL            Supply user's email address for sending credentials.
                            (not implemented yet)
   -r ROLE, --role ROLE     Name of AWS IAM role to assume to access Org accounts.
+                           Use this to substitute account aliases for IDs.
   -h, --help               Show this help message and exit.
   -V, --version            Display version info and exit.
   -v, --verbose            Log to activity to STDOUT at log level INFO.
