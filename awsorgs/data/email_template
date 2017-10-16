@@ -11,6 +11,8 @@ Please use the credentials below to log into the AWS console and
 complete your own user setup.  You will be required to change your
 password as you log in.
 
+Note: the one time password with expire after 24 hours if not reset.
+
   IAM User Name:	$user_name
   One Time Password:	$onetimepw
   Login URL:            https://${trusted_account}.signin.aws.amazon.com/console

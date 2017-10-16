@@ -71,6 +71,9 @@ def list_delegations(user, aliases=None):
             in assume_role_policies]
     if aliases:
         # what if an alias is empty string?
+        for account_id, alias in aliases.items():
+            if not alias:
+                aliases[account_id] = account_id
         role_arns = [arn.replace(arn.split(':')[4], aliases[arn.split(':')[4]])
                 for arn in role_arns]
     return role_arns
