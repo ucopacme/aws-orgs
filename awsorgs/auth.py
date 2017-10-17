@@ -5,8 +5,10 @@
 AWS Organization.
 
 Usage:
-  awsauth report --spec-file FILE [--user --group --role --full] [-d] [--boto-log]
-  awsauth users --spec-file FILE [--exec] [-vd] [--boto-log]
+  awsauth report --spec-file FILE [--user --group --role --full]
+          [-d] [--boto-log]
+  awsauth users --spec-file FILE [--disable-expired --opt-ttl HOURS] [--exec]
+          [-vd] [--boto-log]
   awsauth delegation --spec-file FILE [--exec] [-vd] [--boto-log]
   awsauth --version
   awsauth --help
@@ -28,6 +30,10 @@ Options:
   --group                    Print group report.
   --role                     Print delegation report.
   --full                     Print full details in reports.
+  --disable-expired          Delete profile if one-time-password
+                             exceeds --opt-ttl.
+  --opt-ttl HOURS            One-time-password time to live in hours
+                             [default: 24].
 
 """
 
@@ -65,6 +71,21 @@ def display_provisioned_users(log, args, deployed, auth_spec, credentials):
         else:
             spacer = ' ' * (12 - len(name))
             log.info("%s%s\t%s" % (name, spacer, arn))
+
+
+def expire_users(log, args, deployed, auth_spec, credentials):
+    """
+    Delete login profile for any users whose one-time-password has expired
+    """
+    for name in [u['UserName'] for u in deployed['users']]:
+        user = validate_user(name, credentials)
+        if user:
+            login_profile = validate_login_profile(user)
+            if login_profile and onetime_passwd_expired(log, user, login_profile,
+                    int(args['--opt-ttl'])):
+                log.info('deleting login profile for user %s' % user.name)
+                if args['--exec']:
+                    login_profile.delete()
 
 
 def display_provisioned_groups(credentials, log, deployed):
@@ -698,12 +719,14 @@ def main():
             display_provisioned_groups(credentials, log, deployed)
             display_roles_in_accounts(log, deployed, auth_spec)
 
-
     if args['users']:
-        create_users(credentials, args, log, deployed, auth_spec)
-        create_groups(credentials, args, log, deployed, auth_spec)
-        manage_group_members(credentials, args, log, deployed, auth_spec)
-        manage_group_policies(credentials, args, log, deployed, auth_spec)
+        if args['--disable-expired']:
+            expire_users(log, args, deployed, auth_spec, credentials)
+        else:
+            create_users(credentials, args, log, deployed, auth_spec)
+            create_groups(credentials, args, log, deployed, auth_spec)
+            manage_group_members(credentials, args, log, deployed, auth_spec)
+            manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['delegation']:
         queue_threads(log, auth_spec['delegations'], manage_delegations,
