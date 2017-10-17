@@ -88,7 +88,7 @@ def expire_users(log, args, deployed, auth_spec, credentials):
                     login_profile.delete()
 
 
-def display_provisioned_groups(credentials, log, deployed):
+def display_provisioned_groups(log, args, deployed, credentials):
     """
     Print report of currently deployed IAM groups in Auth account.
     List group memebers, attached policies and delegation assume role
@@ -125,21 +125,28 @@ def display_provisioned_groups(credentials, log, deployed):
                 messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
         report[group_name] = messages
 
-    # gather report data from groups
-    report = {}
-    iam_resource = boto3.resource('iam', **credentials)
     group_names = sorted([g['GroupName'] for g in deployed['groups']])
     log.debug('group_names: %s' % group_names)
-    queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
-            thread_count=10)
-
-    # log report
     header = "Provisioned IAM Groups in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
-    for group_name, messages in sorted(report.items()):
-        for msg in messages:
-            log.info(msg)
+
+    # log report
+    if args['--full']:
+        # gather report data from groups
+        report = {}
+        iam_resource = boto3.resource('iam', **credentials)
+        queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
+                thread_count=10)
+        for group_name, messages in sorted(report.items()):
+            for msg in messages:
+                log.info(msg)
+    else:
+        # just print the arns
+        for name in group_names:
+            arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
+            spacer = ' ' * (12 - len(name))
+            log.info("%s%s\t%s" % (name, spacer, arn))
 
 
 def display_roles_in_accounts(log, deployed, auth_spec):
@@ -711,12 +718,12 @@ def main():
         if args['--user']:
             display_provisioned_users(log, args, deployed, auth_spec, credentials)
         if args['--group']:
-            display_provisioned_groups(credentials, log, deployed)
+            display_provisioned_groups(log, args, deployed, credentials)
         if args['--role']:
             display_roles_in_accounts(log, deployed, auth_spec)
         if not (args['--user'] or args['--group'] or args['--role']):
             display_provisioned_users(log, args, deployed, auth_spec, credentials)
-            display_provisioned_groups(credentials, log, deployed)
+            display_provisioned_groups(log, args, deployed, credentials)
             display_roles_in_accounts(log, deployed, auth_spec)
 
     if args['users']:
