@@ -5,9 +5,9 @@
 AWS Organization.
 
 Usage:
-  awsauth report (--spec-file FILE) [-d] [--boto-log]
-  awsauth users (--spec-file FILE) [--exec] [-vd] [--boto-log]
-  awsauth delegation (--spec-file FILE) [--exec] [-vd] [--boto-log]
+  awsauth report --spec-file FILE [--user --group --role --full] [-d] [--boto-log]
+  awsauth users --spec-file FILE [--exec] [-vd] [--boto-log]
+  awsauth delegation --spec-file FILE [--exec] [-vd] [--boto-log]
   awsauth --version
   awsauth --help
 
@@ -24,6 +24,10 @@ Options:
   -v, --verbose              Log to activity to STDOUT at log level INFO.
   -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log                 Include botocore and boto3 logs in log stream.
+  --user                     Print user report.
+  --group                    Print group report.
+  --role                     Print delegation report.
+  --full                     Print full details in reports.
 
 """
 
@@ -38,19 +42,29 @@ from botocore.exceptions import ClientError
 from docopt import docopt
 
 from awsorgs.utils import *
+from awsorgs.loginprofile import *
 
 
-def display_provisioned_users(log, deployed):
+def display_provisioned_users(log, args, deployed, auth_spec, credentials):
     """
     Print report of currently deployed IAM users in Auth account.
     """
     header = "Provisioned IAM Users in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n%s\n%s\n" % (overbar, header))
+    if args['--full']:
+        aliases = get_account_aliases(log, deployed['accounts'],
+                auth_spec['org_access_role'])
     for name in sorted([u['UserName'] for u in deployed['users']]):
         arn = lookup(deployed['users'], 'UserName', name, 'Arn')
-        spacer = ' ' * (12 - len(name))
-        log.info("%s%s\t%s" % (name, spacer, arn))
+        if args['--full']:
+            user = validate_user(name, credentials)
+            if user:
+                login_profile = validate_login_profile(user)
+                user_report(log, aliases, user, login_profile)
+        else:
+            spacer = ' ' * (12 - len(name))
+            log.info("%s%s\t%s" % (name, spacer, arn))
 
 
 def display_provisioned_groups(credentials, log, deployed):
@@ -673,9 +687,17 @@ def main():
                     if a['Status'] == 'ACTIVE'])
 
     if args['report']:
-        display_provisioned_users(log, deployed)
-        display_provisioned_groups(credentials, log, deployed)
-        display_roles_in_accounts(log, deployed, auth_spec)
+        if args['--user']:
+            display_provisioned_users(log, args, deployed, auth_spec, credentials)
+        if args['--group']:
+            display_provisioned_groups(credentials, log, deployed)
+        if args['--role']:
+            display_roles_in_accounts(log, deployed, auth_spec)
+        if not (args['--user'] or args['--group'] or args['--role']):
+            display_provisioned_users(log, args, deployed, auth_spec, credentials)
+            display_provisioned_groups(credentials, log, deployed)
+            display_roles_in_accounts(log, deployed, auth_spec)
+
 
     if args['users']:
         create_users(credentials, args, log, deployed, auth_spec)
