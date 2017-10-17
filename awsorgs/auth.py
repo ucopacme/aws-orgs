@@ -104,7 +104,9 @@ def display_provisioned_groups(log, args, deployed, credentials):
         assume_role_resources = [p.policy_document['Statement'][0]['Resource']
                 for p in list(group.policies.all()) if
                 p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-        messages.append("\n%s\t%s" % ('Name:', group_name))
+        overbar = '_' * (8 + len(group_name))
+        messages.append('\n%s' % overbar)
+        messages.append("%s\t%s" % ('Name:', group_name))
         messages.append("%s\t%s" % ('Arn:', group.arn))
         if members:
             messages.append("Members:")
@@ -143,13 +145,14 @@ def display_provisioned_groups(log, args, deployed, credentials):
                 log.info(msg)
     else:
         # just print the arns
+        log.info('')
         for name in group_names:
             arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
             spacer = ' ' * (12 - len(name))
             log.info("%s%s\t%s" % (name, spacer, arn))
 
 
-def display_roles_in_accounts(log, deployed, auth_spec):
+def display_roles_in_accounts(log, args, deployed, auth_spec):
     """
     Print report of currently deployed delegation roles in each account
     in the Organization.
@@ -158,7 +161,9 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     # Thread worker function to gather report for each account
     def display_role(account, report, auth_spec):
         messages = []
-        messages.append("\nAccount:\t%s" % account['Name'])
+        overbar = '_' * (16 + len(account['Name']))
+        messages.append('\n%s' % overbar)
+        messages.append("Account:\t%s" % account['Name'])
         credentials = get_assume_role_credentials(
                 account['Id'],
                 auth_spec['org_access_role'])
@@ -167,25 +172,29 @@ def display_roles_in_accounts(log, deployed, auth_spec):
         else:
             iam_client = boto3.client('iam', **credentials)
             iam_resource = boto3.resource('iam', **credentials)
-            role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
+            roles = [r for r in iam_client.list_roles()['Roles']]
             custom_policies = iam_client.list_policies(Scope='Local')['Policies']
             if custom_policies:
                 messages.append("Custom Policies:")
                 for policy in custom_policies:
-                    messages.append("  %s" % policy['PolicyName'])
+                    messages.append("  %s" % policy['Arn'])
             messages.append("Roles:")
-            for name in role_names:
-                role = iam_resource.Role(name)
-                principal = role.assume_role_policy_document['Statement'][0]['Principal']
-                if 'AWS' in principal:
-                    messages.append("  %s" % name)
-                    messages.append("    Arn:\t%s" % role.arn)
-                    messages.append("    Principal:\t%s" % principal['AWS'])
-                    attached = [p.policy_name for p in list(role.attached_policies.all())]
-                    if attached:
-                        messages.append("    Attached Policies:")
-                        for policy in attached:
-                            messages.append("      %s" % policy)
+            for r in roles:
+                role = iam_resource.Role(r['RoleName'])
+                if not args['--full']:
+                    messages.append("  %s" % role.arn)
+                else:
+                    principal = role.assume_role_policy_document['Statement'][0]['Principal']
+                    if 'AWS' in principal:
+                        messages.append("  %s" % role.name)
+                        messages.append("    Arn:\t%s" % role.arn)
+                        messages.append("    Principal:\t%s" % principal['AWS'])
+                        attached = [p.policy_name for p
+                                in list(role.attached_policies.all())]
+                        if attached:
+                            messages.append("    Attached Policies:")
+                            for policy in attached:
+                                messages.append("      %s" % policy)
         report[account['Name']] = messages
 
     # gather report data from accounts
@@ -720,11 +729,11 @@ def main():
         if args['--group']:
             display_provisioned_groups(log, args, deployed, credentials)
         if args['--role']:
-            display_roles_in_accounts(log, deployed, auth_spec)
+            display_roles_in_accounts(log, args, deployed, auth_spec)
         if not (args['--user'] or args['--group'] or args['--role']):
             display_provisioned_users(log, args, deployed, auth_spec, credentials)
             display_provisioned_groups(log, args, deployed, credentials)
-            display_roles_in_accounts(log, deployed, auth_spec)
+            display_roles_in_accounts(log, args, deployed, auth_spec)
 
     if args['users']:
         if args['--disable-expired']:
