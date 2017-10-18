@@ -143,7 +143,7 @@ def scan_deployed_ou(log, org_client, root_id):
             log.debug("NextToken: %s" % response['NextToken'])
             response = org_client.list_accounts_for_parent(
                 ParentId=parent_id, NextToken=response['NextToken'])
-            child_ou += response['Accounts']
+            accounts += response['Accounts']
         log.debug('parent_name: %s; ou: %s' % (parent_name, child_ou))
         log.debug('parent_name: %s; accounts: %s' % (parent_name, accounts))
 
