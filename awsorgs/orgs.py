@@ -122,17 +122,31 @@ def scan_deployed_policies(org_client):
     return org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']
 
 
-def scan_deployed_ou(org_client, root_id):
+def scan_deployed_ou(log, org_client, root_id):
     """
     Recursively traverse deployed AWS Organization.  Return list of
     organizational unit dictionaries.  
     """
     def build_deployed_ou_table(org_client, parent_name, parent_id, deployed_ou):
         # recusive sub function to build the 'deployed_ou' table
-        child_ou = org_client.list_organizational_units_for_parent(
-                ParentId=parent_id)['OrganizationalUnits']
-        accounts = org_client.list_accounts_for_parent(
-                ParentId=parent_id)['Accounts']
+        response = org_client.list_organizational_units_for_parent( ParentId=parent_id)
+        child_ou = response['OrganizationalUnits']
+        while 'NextToken' in response and response['NextToken']:
+            log.debug("NextToken: %s" % response['NextToken'])
+            response = org_client.list_organizational_units_for_parent(
+                ParentId=parent_id, NextToken=response['NextToken'])
+            child_ou += response['OrganizationalUnits']
+
+        response = org_client.list_accounts_for_parent( ParentId=parent_id)
+        accounts = response['Accounts']
+        while 'NextToken' in response and response['NextToken']:
+            log.debug("NextToken: %s" % response['NextToken'])
+            response = org_client.list_accounts_for_parent(
+                ParentId=parent_id, NextToken=response['NextToken'])
+            child_ou += response['Accounts']
+        log.debug('parent_name: %s; ou: %s' % (parent_name, child_ou))
+        log.debug('parent_name: %s; accounts: %s' % (parent_name, accounts))
+
         if not deployed_ou:
             deployed_ou.append(dict(
                     Name = parent_name,
@@ -148,9 +162,11 @@ def scan_deployed_ou(org_client, root_id):
             ou['ParentId'] = parent_id
             deployed_ou.append(ou)
             build_deployed_ou_table(org_client, ou['Name'], ou['Id'], deployed_ou)
+
     # build the table 
     deployed_ou = []
     build_deployed_ou_table(org_client, 'root', root_id, deployed_ou)
+    log.debug(deployed_ou)
     return deployed_ou
 
 
@@ -390,7 +406,7 @@ def main():
     deployed = dict(
             policies = scan_deployed_policies(org_client),
             accounts = scan_deployed_accounts(log, org_client),
-            ou = scan_deployed_ou(org_client, root_id))
+            ou = scan_deployed_ou(log, org_client, root_id))
 
     if args['--spec-file']:
         org_spec = validate_spec_file(log, args['--spec-file'], 'org_spec')
