@@ -4,8 +4,9 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts report [-d] [--boto-log]
+  awsaccounts report [-d] [--role ROLENAME] [--boto-log]
   awsaccounts create (--spec-file FILE) [--exec] [-vd] [--boto-log]
+  awsaccounts alias (--spec-file FILE) [--role ROLENAME] [--exec] [-vd] [--boto-log]
   awsaccounts invite (--account-id ID --spec-file FILE)
                      [--exec] [-vd] [--boto-log]
   awsaccounts (-h | --help)
@@ -14,14 +15,17 @@ Usage:
 Modes of operation:
   report         Display organization status report only.
   create         Create new accounts in AWS Org per specifation.
+  alias          Set account alias for each account in Org per specifation.
   invite         Invite another account to join Org as a member account. 
 
 Options:
   -h, --help                 Show this help message and exit.
-  --version                  Display version info and exit.
+  -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   --account-id ID            Id of account being invited to join Org.
   --exec                     Execute proposed changes to AWS accounts.
+  --role ROLENAME            IAM role to use to access accounts.
+                             [default: OrganizationAccountAccessRole]
   -v, --verbose              Log to activity to STDOUT at log level INFO.
   -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log                 Include botocore and boto3 logs in log stream.
@@ -33,11 +37,11 @@ import yaml
 import time
 
 import boto3
+import botocore
 from botocore.exceptions import ClientError
 from docopt import docopt
 
 from awsorgs.utils import *
-from awsorgs.orgs import scan_deployed_accounts
 
 
 def scan_created_accounts(log, org_client):
@@ -105,6 +109,44 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                      log.warn("Account creation still pending. Moving on!")
 
 
+def set_account_alias(account, log, args, account_spec):
+    """
+    Set an alias on an account.  Use 'Alias' attribute from account spec
+    if provided.  Otherwise set the alias to the account name.
+    """
+    if account['Status'] == 'ACTIVE':
+        a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
+        if a_spec and 'Alias' in a_spec:
+            proposed_alias = a_spec['Alias']
+        else:
+            proposed_alias = account['Name'].lower()
+        credentials = get_assume_role_credentials(account['Id'], args['--role'])
+        if isinstance(credentials, RuntimeError):
+            log.error(credentials)
+        else:
+            iam_client = boto3.client('iam', **credentials)
+        aliases = iam_client.list_account_aliases()['AccountAliases']
+        log.debug('account_name: %s; aliases: %s' % (account['Name'], aliases))
+        if not aliases:
+            log.info("setting account alias to '%s' for account '%s'" %
+                    (proposed_alias, account['Name']))
+            if args['--exec']:
+                try:
+                    iam_client.create_account_alias(AccountAlias=proposed_alias)
+                except Exception as e:
+                    log.error(e)
+        elif aliases[0] != proposed_alias:
+            log.info("resetting account alias for account '%s' to '%s'; "
+                    "previous alias was '%s'" %
+                    (account['Name'], proposed_alias, aliases[0]))
+            if args['--exec']:
+                iam_client.delete_account_alias(AccountAlias=aliases[0])
+                try:
+                    iam_client.create_account_alias(AccountAlias=proposed_alias)
+                except Exception as e:
+                    log.error(e)
+
+
 def scan_invited_accounts(log, org_client):
     """Return a list of handshake IDs"""
     handshakes = org_client.list_handshakes_for_organization(
@@ -148,20 +190,28 @@ def display_invited_accounts(log, org_client):
             log.info(fmt_str.format(account_id, invite_state, invite_expiration))
 
 
-def display_provisioned_accounts(log, deployed_accounts):
+def display_provisioned_accounts(log, deployed_accounts, status):
     """
     Print report of currently deployed accounts in AWS Organization.
+    status::    matches account status (ACTIVE|SUSPENDED)
     """
-    header = "Provisioned Accounts in Org:"
-    overbar = '_' * len(header)
-    log.info("\n%s\n%s\n" % (overbar, header))
-    fmt_str = "{:20}{:16}{:24}{}"
-    log.info(fmt_str.format('Name:', 'Id:', 'Email:', 'Status:'))
-    for a_name in sorted([a['Name'] for a in deployed_accounts]):
-        a_status = lookup(deployed_accounts, 'Name', a_name, 'Status')
-        a_id = lookup(deployed_accounts, 'Name', a_name, 'Id')
-        a_email = lookup(deployed_accounts, 'Name', a_name, 'Email')
-        log.info(fmt_str.format(a_name, a_id, a_email, a_status))
+    if status not in ('ACTIVE', 'SUSPENDED'):
+        raise RuntimeError("'status' must be one of ('ACTIVE', 'SUSPENDED')")
+    sorted_account_names = sorted([a['Name'] for a in deployed_accounts
+            if a['Status'] == status])
+    if sorted_account_names:
+        header = '%s Accounts in Org:' % status.capitalize()
+        overbar = '_' * len(header)
+        log.info("\n%s\n%s\n" % (overbar, header))
+        fmt_str = "{:20}{:20}{:16}{}"
+        log.info(fmt_str.format('Name:', 'Alias', 'Id:', 'Email:'))
+        for name in sorted_account_names:
+            account = lookup(deployed_accounts, 'Name', name)
+            log.info(fmt_str.format(
+                    name,
+                    account['Alias'],
+                    account['Id'],
+                    account['Email']))
 
 
 def unmanaged_accounts(log, deployed_accounts, account_spec):
@@ -173,7 +223,7 @@ def unmanaged_accounts(log, deployed_accounts, account_spec):
 
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     log = get_logger(args)
     log.debug(args)
     org_client = boto3.client('organizations')
@@ -185,7 +235,10 @@ def main():
         validate_master_id(org_client, account_spec)
 
     if args['report']:
-        display_provisioned_accounts(log, deployed_accounts)
+        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
+        deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
+        display_provisioned_accounts(log, deployed_accounts, 'ACTIVE')
+        display_provisioned_accounts(log, deployed_accounts, 'SUSPENDED')
         display_invited_accounts(log, org_client)
 
     if args['create']:
@@ -193,6 +246,10 @@ def main():
         unmanaged = unmanaged_accounts(log, deployed_accounts, account_spec)
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
+
+    if args['alias']:
+        queue_threads(log, deployed_accounts, set_account_alias,
+                f_args=(log, args, account_spec), thread_count=10)
 
     if args['invite']:
         invite_account(log, args, org_client, deployed_accounts)

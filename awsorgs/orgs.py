@@ -15,7 +15,7 @@ Modes of operation:
 
 Options:
   -h, --help                 Show this help message and exit.
-  --version                  Display version info and exit.
+  -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
   --exec                     Execute proposed changes to AWS Org.
   -v, --verbose              Log to activity to STDOUT at log level INFO.
@@ -99,22 +99,6 @@ def list_policies_in_ou (org_client, ou_id):
     return sorted([ou['Name'] for ou in policies_in_ou])
 
 
-def scan_deployed_accounts(log, org_client):
-    """
-    Query AWS Organization for deployed accounts.
-    Returns a list of dictionary.
-    """
-    log.debug('running')
-    accounts = org_client.list_accounts()
-    deployed_accounts = accounts['Accounts']
-    while 'NextToken' in accounts and accounts['NextToken']:
-        log.debug("NextToken: %s" % accounts['NextToken'])
-        accounts = org_client.list_accounts(NextToken=accounts['NextToken'])
-        deployed_accounts += accounts['Accounts']
-    # only return accounts that have an 'Name' key
-    return [d for d in deployed_accounts if 'Name' in d ]
-
-
 def scan_created_accounts(org_client):
     """
     Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
@@ -138,17 +122,31 @@ def scan_deployed_policies(org_client):
     return org_client.list_policies(Filter='SERVICE_CONTROL_POLICY')['Policies']
 
 
-def scan_deployed_ou(org_client, root_id):
+def scan_deployed_ou(log, org_client, root_id):
     """
     Recursively traverse deployed AWS Organization.  Return list of
     organizational unit dictionaries.  
     """
     def build_deployed_ou_table(org_client, parent_name, parent_id, deployed_ou):
         # recusive sub function to build the 'deployed_ou' table
-        child_ou = org_client.list_organizational_units_for_parent(
-                ParentId=parent_id)['OrganizationalUnits']
-        accounts = org_client.list_accounts_for_parent(
-                ParentId=parent_id)['Accounts']
+        response = org_client.list_organizational_units_for_parent( ParentId=parent_id)
+        child_ou = response['OrganizationalUnits']
+        while 'NextToken' in response and response['NextToken']:
+            log.debug("NextToken: %s" % response['NextToken'])
+            response = org_client.list_organizational_units_for_parent(
+                ParentId=parent_id, NextToken=response['NextToken'])
+            child_ou += response['OrganizationalUnits']
+
+        response = org_client.list_accounts_for_parent( ParentId=parent_id)
+        accounts = response['Accounts']
+        while 'NextToken' in response and response['NextToken']:
+            log.debug("NextToken: %s" % response['NextToken'])
+            response = org_client.list_accounts_for_parent(
+                ParentId=parent_id, NextToken=response['NextToken'])
+            accounts += response['Accounts']
+        log.debug('parent_name: %s; ou: %s' % (parent_name, child_ou))
+        log.debug('parent_name: %s; accounts: %s' % (parent_name, accounts))
+
         if not deployed_ou:
             deployed_ou.append(dict(
                     Name = parent_name,
@@ -164,9 +162,11 @@ def scan_deployed_ou(org_client, root_id):
             ou['ParentId'] = parent_id
             deployed_ou.append(ou)
             build_deployed_ou_table(org_client, ou['Name'], ou['Id'], deployed_ou)
+
     # build the table 
     deployed_ou = []
     build_deployed_ou_table(org_client, 'root', root_id, deployed_ou)
+    log.debug(deployed_ou)
     return deployed_ou
 
 
@@ -328,8 +328,9 @@ def manage_policy_attachments(org_client, args, log, deployed, org_spec, ou_spec
     # attach policies
     for policy_name in policies_to_attach:
         if not lookup(deployed['policies'],'Name',policy_name):
-            raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
-                    policy_name)
+            if args['--exec']:
+                raise RuntimeError("spec-file: ou_spec: policy '%s' not defined" %
+                        policy_name)
         if not ensure_absent(ou_spec):
             log.info("Attaching policy '%s' to OU '%s'" % (policy_name, ou_spec['Name']))
             if args['--exec']:
@@ -398,14 +399,14 @@ def manage_ou(org_client, args, log, deployed, org_spec, ou_spec_list, parent_na
 
 
 def main():
-    args = docopt(__doc__, version='awsorgs 0.0.0')
+    args = docopt(__doc__, version='0.0.6.rc1')
     log = get_logger(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
     deployed = dict(
             policies = scan_deployed_policies(org_client),
             accounts = scan_deployed_accounts(log, org_client),
-            ou = scan_deployed_ou(org_client, root_id))
+            ou = scan_deployed_ou(log, org_client, root_id))
 
     if args['--spec-file']:
         org_spec = validate_spec_file(log, args['--spec-file'], 'org_spec')

@@ -65,16 +65,15 @@ On RHEL6 you may need to update setuptools as well:
   awsaccounts invite --account-id ID [--exec]
   awsaccounts create -v -s account-spec.yaml [--exec]
 
-  awsorgaccessrole --master_id ID [--exec]
+  awsorgs-accessrole --master_id ID [--exec]
 
   awsauth report -s auth-spec.yaml 
   awsauth users -v -s auth-spec.yaml [--exec]
   awsauth delegation -v -s auth-spec.yaml [--exec]
 
   awsloginprofile maryanne
-  awsloginprofile maryanne --new
-  awsloginprofile maryanne --new 2>&1 | mail -s 'Your login profile' maryanne@blee.red
-  awsloginprofile maryanne --reset
+  awsloginprofile maryanne --new --role ListOrgAccounts
+  awsloginprofile maryanne --reset --role ListOrgAccounts
   awsloginprofile maryanne --disable
   awsloginprofile maryanne --reenable
   awsloginprofile maryanne --disable-expired --opt-ttl 48

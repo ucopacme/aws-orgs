@@ -2,10 +2,10 @@
 """Manage AWS IAM user login profile.
 
 Usage:
-  awsloginprofile USER [-vd] [--boto-log]
-  awsloginprofile USER --disable [-vd] [--boto-log]
-  awsloginprofile USER --disable-expired [--opt-ttl HOURS] [-vd] [--boto-log]
-  awsloginprofile USER (--new | --reset | --reenable) [-vd] [--boto-log]
+  awsloginprofile USER [-vdr ROLE] [--boto-log]
+  awsloginprofile USER --disable [-vdr ROLE] [--boto-log]
+  awsloginprofile USER --disable-expired [-vdr ROLE] [--opt-ttl HOURS] [--boto-log]
+  awsloginprofile USER (--new | --reset | --reenable) [-vdr ROLE] [--boto-log]
                        [--password PASSWORD] [--email EMAIL]
   awsloginprofile --help
 
@@ -20,7 +20,10 @@ Options:
   --password PASSWORD      Supply password, do not require user to reset.
   --email EMAIL            Supply user's email address for sending credentials.
                            (not implemented yet)
+  -r ROLE, --role ROLE     Name of AWS IAM role to assume to access Org accounts.
+                           Use this to substitute account aliases for IDs.
   -h, --help               Show this help message and exit.
+  -V, --version            Display version info and exit.
   -v, --verbose            Log to activity to STDOUT at log level INFO.
   -d, --debug              Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log               Include botocore and boto3 logs in log stream.
@@ -37,7 +40,6 @@ import datetime
 
 import boto3
 from botocore.exceptions import ClientError
-import docopt
 from docopt import docopt
 from passgen import passgen
 
@@ -56,44 +58,65 @@ def get_user_name():
     return sts.get_caller_identity()['Arn'].split('/')[-1]
 
 
-def list_delegations(user):
-    """Return list of assume_role resource arns for all groups for user"""
+def list_delegations(log, user, aliases=None):
+    """
+    Return list of assume_role resource arns for all groups for user.
+    If aliases are supplied, substitute an alias for account Id in each arn.
+    """
     groups = list(user.groups.all())
     assume_role_policies = []
     for group in user.groups.all():
         assume_role_policies += [p for p in list(group.policies.all())
                 if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-    return [policy.policy_document['Statement'][0]['Resource'] for policy
+    role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
             in assume_role_policies]
+    if aliases:
+        for i in range(len(role_arns)):
+            account_id = role_arns[i].split(':')[4]
+            if account_id in aliases:
+                 role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
+    return role_arns
 
 
-def format_delegation_table(delegation_arns):
+def format_delegation_table(delegation_arns, aliases):
     """Generate formatted list of delegation attributes as printable string"""
     tpl = """
-  account_id:   $account_id
-  role_name:    $role_name
-  role_arn:     $role_arn
+  account_alias:  $account_alias
+  account_id:     $account_id
+  role_name:      $role_name
+  role_arn:       $role_arn
 """
     delegation_string = ''
     for assume_role_arn in delegation_arns:
+        account_id = assume_role_arn.split(':')[4]
+        if aliases:
+            alias = aliases[account_id]
+        else:
+            alias = ''
         delegation_string += Template(tpl).substitute(dict(
                 role_arn=assume_role_arn,
                 role_name=assume_role_arn.partition('role/')[2],
-                account_id=assume_role_arn.split(':')[4]))
+                account_id=account_id,
+                account_alias=alias))
     return delegation_string
 
 
-def prep_email(log, user, passwd, email):
+def prep_email(log, aliases, user, passwd, email):
     """Generate email body from template"""
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
-    delegation_table = list_delegations(user)
+    trusted_id=boto3.client('sts').get_caller_identity()['Account']
+    if aliases:
+        trusted_account = aliases[trusted_id]
+    else:
+        trusted_account = trusted_id
+    delegation_table = list_delegations(log, user)
     log.debug('delegation_table: %s' % delegation_table)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
             user_name=user.name,
             onetimepw=passwd,
-            trusted_id=boto3.client('sts').get_caller_identity()['Account'],
-            delegations=format_delegation_table(delegation_table),
+            trusted_account=trusted_account,
+            delegations=format_delegation_table(delegation_table, aliases),
     )
     with open(template) as tpl:
         print(Template(tpl.read()).substitute(mapping))
@@ -187,7 +210,7 @@ def onetime_passwd_expired(log, user, login_profile, hours):
     return False
 
 
-def user_report(log, user, login_profile):
+def user_report(log, aliases, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
@@ -205,13 +228,13 @@ def user_report(log, user, login_profile):
             log.info('Password last used:      %s' % user.password_last_used)
     else:
         log.info('User login profile:      %s' % login_profile)
-    assume_role_arns = list_delegations(user)
+    assume_role_arns = list_delegations(log, user, aliases)
     if assume_role_arns:
         log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
 
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     # HACK ALERT!
     # set '--exec' and 'report' args to make get_logger() happy
     args['--exec'] = True
@@ -226,6 +249,21 @@ def main():
     log = get_logger(args)
     log.debug(args)
 
+    if args['--role']:
+        master_id = boto3.client('organizations').describe_organization(
+                )['Organization']['MasterAccountId']
+        log.debug('master_id: %s' % master_id)
+        credentials = get_assume_role_credentials(master_id, args['--role'])
+        if isinstance(credentials, RuntimeError):
+            raise(credentials)
+        else:
+            org_client = boto3.client('organizations', **credentials)
+        deployed_accounts = scan_deployed_accounts(log, org_client)
+        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
+        log.debug(aliases)
+    else:
+        aliases = None
+
     user = validate_user(args['USER'])
     if not user:
         log.critical('no such user: %s' % args['USER'])
@@ -237,15 +275,15 @@ def main():
     if args['--new']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, user, passwd, args['--email'])
+            prep_email(log, aliases, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
-        prep_email(log, user, passwd, args['--email'])
-        user_report(log, user, login_profile)
+        prep_email(log, aliases, user, passwd, args['--email'])
+        user_report(log, aliases, user, login_profile)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
@@ -258,14 +296,14 @@ def main():
     elif args['--reenable']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, user, passwd, args['--email'])
+            prep_email(log, aliases, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
     else:
-        user_report(log, user, login_profile)
+        user_report(log, aliases, user, login_profile)
 
 
 if __name__ == "__main__":

@@ -6,12 +6,14 @@ Creates role 'OrganizationAccountAccessRole' allowing users in
 Org Master account 'AdministratorAccess' in invited account.
 
 Usage:
-  awsorgaccessrole --help
-  awsorgaccessrole --master_id ID [--exec]
+  awsorgs-accessrole --master_id ID [--exec]
+  awsorgs-accessrole --help
+  awsorgs-accessrole --version
 
 Options:
-  -h, --help            Show this help message and exit.
   -m, --master_id ID    Master Account ID
+  -h, --help            Show this help message and exit.
+  -V, --version         Display version info and exit.
 """
 
 import os
@@ -20,9 +22,7 @@ import yaml
 import json
 
 import boto3
-import botocore.exceptions
 from botocore.exceptions import ClientError
-import docopt
 from docopt import docopt
 
 import awsorgs.utils
@@ -33,7 +33,7 @@ DESCRIPTION = 'Organization Access Role'
 POLICYNAME = 'AdministratorAccess'
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     iam_client = boto3.client('iam')
     # assemble assume-role policy statement
     principal = "arn:aws:iam::%s:root" % args['--master_id']

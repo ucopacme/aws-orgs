@@ -10,6 +10,7 @@ except ImportError:
     import Queue as queue
 
 import boto3
+from botocore.exceptions import ClientError
 import yaml
 import logging
 
@@ -256,3 +257,85 @@ def queue_threads(log, sequence, func, f_args=(), thread_count=20):
         t.start()
     q.join()
 
+
+def get_assume_role_credentials(account_id, role_name, region_name=None):
+    """
+    Get temporary sts assume_role credentials for account.
+    """
+    role_arn = "arn:aws:iam::%s:role/%s" % (account_id, role_name)
+    role_session_name = account_id + '-' + role_name.split('/')[-1]
+    sts_client = boto3.client('sts')
+
+    if account_id == sts_client.get_caller_identity()['Account']:
+        return dict(
+                aws_access_key_id=None,
+                aws_secret_access_key=None,
+                aws_session_token=None,
+                region_name=None)
+    else:
+        try:
+            credentials = sts_client.assume_role(
+                    RoleArn=role_arn,
+                    RoleSessionName=role_session_name
+                    )['Credentials']
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'AccessDenied':
+                errmsg = ('cannot assume role %s in account %s' %
+                        (role_name, account_id))
+                return RuntimeError(errmsg)
+        return dict(
+                aws_access_key_id=credentials['AccessKeyId'],
+                aws_secret_access_key=credentials['SecretAccessKey'],
+                aws_session_token=credentials['SessionToken'],
+                region_name=region_name)
+
+
+def scan_deployed_accounts(log, org_client):
+    """
+    Query AWS Organization for deployed accounts.
+    Returns a list of dictionary.
+    """
+    log.debug('running')
+    accounts = org_client.list_accounts()
+    deployed_accounts = accounts['Accounts']
+    while 'NextToken' in accounts and accounts['NextToken']:
+        log.debug("NextToken: %s" % accounts['NextToken'])
+        accounts = org_client.list_accounts(NextToken=accounts['NextToken'])
+        deployed_accounts += accounts['Accounts']
+    # only return accounts that have an 'Name' key
+    return [d for d in deployed_accounts if 'Name' in d ]
+        
+
+def get_account_aliases(log, deployed_accounts, role):
+    """
+    Return dict of {Id:Alias} for all deployed accounts.
+
+    role::  name of IAM role to assume to query all deployed accounts.
+    """
+    # worker function for threading
+    def get_account_alias(account, log, role, aliases):
+        if account['Status'] == 'ACTIVE':
+            credentials = get_assume_role_credentials(account['Id'], role)
+            if isinstance(credentials, RuntimeError):
+                log.error(credentials)
+            else:
+                iam_client = boto3.client('iam', **credentials)
+            response = iam_client.list_account_aliases()['AccountAliases']
+            if response:
+                aliases[account['Id']] = response[0]
+    # call workers
+    aliases = {}
+    queue_threads(log, deployed_accounts, get_account_alias,
+            f_args=(log, role, aliases), thread_count=10)
+    log.debug(aliases)
+    return aliases
+
+
+def merge_aliases(log, deployed_accounts, aliases):
+    """
+    Merge account aliases into deployed_accounts lookup table.
+    """
+    for account in deployed_accounts:
+        account['Alias'] = aliases.get(account['Id'], '')
+        log.debug(account)
+    return deployed_accounts

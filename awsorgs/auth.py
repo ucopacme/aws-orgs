@@ -18,7 +18,7 @@ Modes of operation:
 
 Options:
   -h, --help                 Show this help message and exit.
-  --version                  Display version info and exit.
+  -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   --exec                     Execute proposed changes to AWS accounts.
   -v, --verbose              Log to activity to STDOUT at log level INFO.
@@ -34,50 +34,10 @@ import json
 import threading
 
 import boto3
-import botocore.exceptions
 from botocore.exceptions import ClientError
-import docopt
 from docopt import docopt
 
-import awsorgs.utils
 from awsorgs.utils import *
-import awsorgs.orgs
-from awsorgs.orgs import scan_deployed_accounts
-
-
-def get_assume_role_credentials(account_id, role_name, path=None, region_name=None):
-    """
-    Get temporary sts assume_role credentials for account.
-    """
-    if path:
-        role_arn = "arn:aws:iam::%s:role/%s/%s" % (account_id, path, role_name)
-    else:
-        role_arn = "arn:aws:iam::%s:role/%s" % (account_id, role_name)
-    role_session_name = account_id + '-' + role_name
-    sts_client = boto3.client('sts')
-
-    if account_id == sts_client.get_caller_identity()['Account']:
-        return dict(
-                aws_access_key_id=None,
-                aws_secret_access_key=None,
-                aws_session_token=None,
-                region_name=None)
-    else:
-        try:
-            credentials = sts_client.assume_role(
-                    RoleArn=role_arn,
-                    RoleSessionName=role_session_name
-                    )['Credentials']
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'AccessDenied':
-                errmsg = ('cannot assume role %s in account %s' %
-                        (role_name, account_id))
-                return RuntimeError(errmsg)
-        return dict(
-                aws_access_key_id=credentials['AccessKeyId'],
-                aws_secret_access_key=credentials['SecretAccessKey'],
-                aws_session_token=credentials['SessionToken'],
-                region_name=region_name)
 
 
 def display_provisioned_users(log, deployed):
@@ -703,7 +663,7 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
 
 
 def main():
-    args = docopt(__doc__)
+    args = docopt(__doc__, version='0.0.6.rc1')
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
     auth_spec = validate_spec_file(log, args['--spec-file'], 'auth_spec')
