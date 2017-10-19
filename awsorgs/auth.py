@@ -404,6 +404,7 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
     aws_policies = iam_client.list_policies(Scope='AWS',
             MaxItems=500)['Policies']
     policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
+    log.debug('policy_arn: %s' % policy_arn)
     if policy_arn:
         return policy_arn
     else:
@@ -423,11 +424,13 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 policy_name)
         log.error("Policy creation failed.")
         return None
+
+    # generate policy_doc
     policy_doc = json.dumps(dict(
             Version='2012-10-17',
             Statement=p_spec['Statement']))
-    log.debug("Policy document from auth_spec:\n'%s'" %
-            json.dumps(json.loads(policy_doc), indent=2, separators=(',', ': ')))
+
+    # check if custom policy exists
     custom_policies = iam_client.list_policies(Scope='Local')['Policies']
     log.debug("Custom policies:'%s'" % custom_policies)
     policy = lookup(custom_policies, 'PolicyName', policy_name)
@@ -440,14 +443,27 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
                 Description=p_spec['Description'],
                 PolicyDocument=policy_doc)['Policy']['Arn']
         return None
+
+    # check if custom policy needs updating
     else:
         current_doc = iam_client.get_policy_version(
                 PolicyArn=policy['Arn'],
                 VersionId=policy['DefaultVersionId']
                 )['PolicyVersion']['Document']
-        log.debug("Policy document from deployed policy:\n'%s'" %
-                json.dumps(current_doc, indent=2, separators=(',', ': ')))
-        if json.dumps(current_doc) != policy_doc:
+        log.debug("policy_doc: %s" % json.loads(policy_doc))
+                #json.dumps(json.loads(policy_doc), indent=2, separators=(',', ': ')))
+        log.debug("current_doc: %s" % current_doc)
+                #json.dumps(current_doc, indent=2, separators=(',', ': ')))
+
+        # compare each statement as dict
+        update_required = False
+        for i in range(len(current_doc['Statement'])):
+            if current_doc['Statement'][i] != json.loads(policy_doc)['Statement'][i]:
+                update_required = True
+        log.debug('update_required: %s' % update_required)
+
+        # update policy and set as default version
+        if update_required:
             log.info("Updating custom policy '%s'." % policy_name)
             if args['--exec']:
                 log.debug("check for non-default policy versions for '%s'" % policy_name)
