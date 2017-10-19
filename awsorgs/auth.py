@@ -648,14 +648,22 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
                     (d_spec['RoleName'], account_name, account_name))
             trusting_accounts.remove(account_name)
 
-    # process groups in Auth account
-    if d_spec['TrustedGroup']:
+    # is this a service role or a user role?
+    if 'TrustedGroup' in d_spec and 'TrustedAccount' in d_spec:
+        log.error("can not declare both 'TrustedGroup' or 'TrustedAccount' in "
+                "delegation spec for role '%s'" % d_spec['RoleName'])
+        return
+    elif 'TrustedGroup' not in d_spec and 'TrustedAccount' not in d_spec:
+        log.error("neither 'TrustedGroup' or 'TrustedAccount' declared in "
+                "delegation spec for role '%s'" % d_spec['RoleName'])
+        return
+    elif 'TrustedAccount' in d_spec and d_spec['TrustedAccount']:
+        # this is a service role. skip setting group policy
+        pass
+    else:
+        # this is a user role. set group policies in Auth account
         set_group_assume_role_policies(args, log, deployed, auth_spec,
                 trusting_accounts, d_spec)
-    elif not d_spec['TrustedAccount']:
-        log.error("neither 'TrustedGroup' or 'TrustedAccount' declared in "
-                "delecation spec for role '%s'" % d_spec['RoleName'])
-        return
 
     # run manage_delegation_role() task in thread pool
     queue_threads(log, deployed['accounts'], manage_delegation_role,

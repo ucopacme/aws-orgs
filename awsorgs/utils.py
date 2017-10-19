@@ -181,13 +181,6 @@ def validate_spec(log, validation_patterns, pattern_name, spec):
             log.warn("Attribute '%s' does not exist in validation pattern '%s'" %
                     (attr, pattern_name))
             continue
-        # handle conflicting attributes
-        conflicting_attr = pattern[attr].get('conflict')
-        if conflicting_attr and conflicting_attr in spec:
-            log.error("Attribute '%s' and '%s' are mutually exclusive.  Context: %s" %
-                    (attr, conflicting_attr, spec))
-            valid_spec = False
-            continue
         # handle recursive patterns
         if 'spec_pattern' in pattern[attr]:
             pattern_name = pattern[attr]['spec_pattern']
