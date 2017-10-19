@@ -76,9 +76,14 @@ def ensure_absent(spec):
 def munge_path(default_path, spec):
     """
     Return formated 'Path' attribute for use in iam client calls. 
-    Prepend the 'default_path'.
+    Unless specified path is fully qualified (i.e. starts with '/'),
+    prepend the 'default_path'.
     """
     if 'Path' in spec and spec['Path']:
+        if spec['Path'][0] == '/':
+            if spec['Path'][-1] != '/':
+                return spec['Path'] + '/'
+            return spec['Path']
         return "/%s/%s/" % (default_path, spec['Path'])
     return "/%s/" % default_path
 
