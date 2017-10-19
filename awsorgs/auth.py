@@ -5,9 +5,11 @@
 AWS Organization.
 
 Usage:
-  awsauth report (--spec-file FILE) [-d] [--boto-log]
-  awsauth users (--spec-file FILE) [--exec] [-vd] [--boto-log]
-  awsauth delegation (--spec-file FILE) [--exec] [-vd] [--boto-log]
+  awsauth report --spec-file FILE [--user --group --role --full]
+          [-d] [--boto-log]
+  awsauth users --spec-file FILE [--disable-expired --opt-ttl HOURS] [--exec]
+          [-vd] [--boto-log]
+  awsauth delegation --spec-file FILE [--exec] [-vd] [--boto-log]
   awsauth --version
   awsauth --help
 
@@ -24,6 +26,14 @@ Options:
   -v, --verbose              Log to activity to STDOUT at log level INFO.
   -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
   --boto-log                 Include botocore and boto3 logs in log stream.
+  --user                     Print user report.
+  --group                    Print group report.
+  --role                     Print delegation report.
+  --full                     Print full details in reports.
+  --disable-expired          Delete profile if one-time-password
+                             exceeds --opt-ttl.
+  --opt-ttl HOURS            One-time-password time to live in hours
+                             [default: 24].
 
 """
 
@@ -38,22 +48,47 @@ from botocore.exceptions import ClientError
 from docopt import docopt
 
 from awsorgs.utils import *
+from awsorgs.loginprofile import *
 
 
-def display_provisioned_users(log, deployed):
+def display_provisioned_users(log, args, deployed, auth_spec, credentials):
     """
     Print report of currently deployed IAM users in Auth account.
     """
     header = "Provisioned IAM Users in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n%s\n%s\n" % (overbar, header))
+    if args['--full']:
+        aliases = get_account_aliases(log, deployed['accounts'],
+                auth_spec['org_access_role'])
     for name in sorted([u['UserName'] for u in deployed['users']]):
         arn = lookup(deployed['users'], 'UserName', name, 'Arn')
-        spacer = ' ' * (12 - len(name))
-        log.info("%s%s\t%s" % (name, spacer, arn))
+        if args['--full']:
+            user = validate_user(name, credentials)
+            if user:
+                login_profile = validate_login_profile(user)
+                user_report(log, aliases, user, login_profile)
+        else:
+            spacer = ' ' * (12 - len(name))
+            log.info("%s%s\t%s" % (name, spacer, arn))
 
 
-def display_provisioned_groups(credentials, log, deployed):
+def expire_users(log, args, deployed, auth_spec, credentials):
+    """
+    Delete login profile for any users whose one-time-password has expired
+    """
+    for name in [u['UserName'] for u in deployed['users']]:
+        user = validate_user(name, credentials)
+        if user:
+            login_profile = validate_login_profile(user)
+            if login_profile and onetime_passwd_expired(log, user, login_profile,
+                    int(args['--opt-ttl'])):
+                log.info('deleting login profile for user %s' % user.name)
+                if args['--exec']:
+                    login_profile.delete()
+
+
+def display_provisioned_groups(log, args, deployed, credentials):
     """
     Print report of currently deployed IAM groups in Auth account.
     List group memebers, attached policies and delegation assume role
@@ -69,7 +104,9 @@ def display_provisioned_groups(credentials, log, deployed):
         assume_role_resources = [p.policy_document['Statement'][0]['Resource']
                 for p in list(group.policies.all()) if
                 p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-        messages.append("\n%s\t%s" % ('Name:', group_name))
+        overbar = '_' * (8 + len(group_name))
+        messages.append('\n%s' % overbar)
+        messages.append("%s\t%s" % ('Name:', group_name))
         messages.append("%s\t%s" % ('Arn:', group.arn))
         if members:
             messages.append("Members:")
@@ -90,24 +127,32 @@ def display_provisioned_groups(credentials, log, deployed):
                 messages.append("  %s:\t%s" % (account_name, profiles[account_name]))
         report[group_name] = messages
 
-    # gather report data from groups
-    report = {}
-    iam_resource = boto3.resource('iam', **credentials)
     group_names = sorted([g['GroupName'] for g in deployed['groups']])
     log.debug('group_names: %s' % group_names)
-    queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
-            thread_count=10)
-
-    # log report
     header = "Provisioned IAM Groups in Auth Account:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
-    for group_name, messages in sorted(report.items()):
-        for msg in messages:
-            log.info(msg)
+
+    # log report
+    if args['--full']:
+        # gather report data from groups
+        report = {}
+        iam_resource = boto3.resource('iam', **credentials)
+        queue_threads(log, group_names, display_group, f_args=(report, iam_resource),
+                thread_count=10)
+        for group_name, messages in sorted(report.items()):
+            for msg in messages:
+                log.info(msg)
+    else:
+        # just print the arns
+        log.info('')
+        for name in group_names:
+            arn = lookup(deployed['groups'], 'GroupName', name, 'Arn')
+            spacer = ' ' * (12 - len(name))
+            log.info("%s%s\t%s" % (name, spacer, arn))
 
 
-def display_roles_in_accounts(log, deployed, auth_spec):
+def display_roles_in_accounts(log, args, deployed, auth_spec):
     """
     Print report of currently deployed delegation roles in each account
     in the Organization.
@@ -116,7 +161,9 @@ def display_roles_in_accounts(log, deployed, auth_spec):
     # Thread worker function to gather report for each account
     def display_role(account, report, auth_spec):
         messages = []
-        messages.append("\nAccount:\t%s" % account['Name'])
+        overbar = '_' * (16 + len(account['Name']))
+        messages.append('\n%s' % overbar)
+        messages.append("Account:\t%s" % account['Name'])
         credentials = get_assume_role_credentials(
                 account['Id'],
                 auth_spec['org_access_role'])
@@ -125,25 +172,29 @@ def display_roles_in_accounts(log, deployed, auth_spec):
         else:
             iam_client = boto3.client('iam', **credentials)
             iam_resource = boto3.resource('iam', **credentials)
-            role_names = [r['RoleName'] for r in iam_client.list_roles()['Roles']]
+            roles = [r for r in iam_client.list_roles()['Roles']]
             custom_policies = iam_client.list_policies(Scope='Local')['Policies']
             if custom_policies:
                 messages.append("Custom Policies:")
                 for policy in custom_policies:
-                    messages.append("  %s" % policy['PolicyName'])
+                    messages.append("  %s" % policy['Arn'])
             messages.append("Roles:")
-            for name in role_names:
-                role = iam_resource.Role(name)
-                principal = role.assume_role_policy_document['Statement'][0]['Principal']
-                if 'AWS' in principal:
-                    messages.append("  %s" % name)
-                    messages.append("    Arn:\t%s" % role.arn)
-                    messages.append("    Principal:\t%s" % principal['AWS'])
-                    attached = [p.policy_name for p in list(role.attached_policies.all())]
-                    if attached:
-                        messages.append("    Attached Policies:")
-                        for policy in attached:
-                            messages.append("      %s" % policy)
+            for r in roles:
+                role = iam_resource.Role(r['RoleName'])
+                if not args['--full']:
+                    messages.append("  %s" % role.arn)
+                else:
+                    principal = role.assume_role_policy_document['Statement'][0]['Principal']
+                    if 'AWS' in principal:
+                        messages.append("  %s" % role.name)
+                        messages.append("    Arn:\t%s" % role.arn)
+                        messages.append("    Principal:\t%s" % principal['AWS'])
+                        attached = [p.policy_name for p
+                                in list(role.attached_policies.all())]
+                        if attached:
+                            messages.append("    Attached Policies:")
+                            for policy in attached:
+                                messages.append("      %s" % policy)
         report[account['Name']] = messages
 
     # gather report data from accounts
@@ -688,15 +739,25 @@ def main():
                     if a['Status'] == 'ACTIVE'])
 
     if args['report']:
-        display_provisioned_users(log, deployed)
-        display_provisioned_groups(credentials, log, deployed)
-        display_roles_in_accounts(log, deployed, auth_spec)
+        if args['--user']:
+            display_provisioned_users(log, args, deployed, auth_spec, credentials)
+        if args['--group']:
+            display_provisioned_groups(log, args, deployed, credentials)
+        if args['--role']:
+            display_roles_in_accounts(log, args, deployed, auth_spec)
+        if not (args['--user'] or args['--group'] or args['--role']):
+            display_provisioned_users(log, args, deployed, auth_spec, credentials)
+            display_provisioned_groups(log, args, deployed, credentials)
+            display_roles_in_accounts(log, args, deployed, auth_spec)
 
     if args['users']:
-        create_users(credentials, args, log, deployed, auth_spec)
-        create_groups(credentials, args, log, deployed, auth_spec)
-        manage_group_members(credentials, args, log, deployed, auth_spec)
-        manage_group_policies(credentials, args, log, deployed, auth_spec)
+        if args['--disable-expired']:
+            expire_users(log, args, deployed, auth_spec, credentials)
+        else:
+            create_users(credentials, args, log, deployed, auth_spec)
+            create_groups(credentials, args, log, deployed, auth_spec)
+            manage_group_members(credentials, args, log, deployed, auth_spec)
+            manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['delegation']:
         pass

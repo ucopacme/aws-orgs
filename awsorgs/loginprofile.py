@@ -122,9 +122,12 @@ def prep_email(log, aliases, user, passwd, email):
         print(Template(tpl.read()).substitute(mapping))
 
 
-def validate_user(user_name):
+def validate_user(user_name, credentials=None):
     """Return a valid IAM User object"""
-    iam = boto3.resource('iam')
+    if credentials:
+        iam = boto3.resource('iam', **credentials)
+    else:
+        iam = boto3.resource('iam')
     user = iam.User(user_name)
     try:
         user.load()
@@ -214,7 +217,8 @@ def user_report(log, aliases, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
-    log.info('User:                    %s' % user.name)
+    log.info('\nUser:                    %s' % user.name)
+    log.info('Arn:                     %s' % user.arn)
     log.info('User Id:                 %s' % user.user_id)
     log.info('User created:            %s' % user.create_date)
     if login_profile:
