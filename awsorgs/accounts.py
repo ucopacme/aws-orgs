@@ -149,8 +149,13 @@ def set_account_alias(account, log, args, account_spec):
 
 def scan_invited_accounts(log, org_client):
     """Return a list of handshake IDs"""
-    handshakes = org_client.list_handshakes_for_organization(
-            Filter={'ActionType': 'INVITE'})['Handshakes']
+    response = org_client.list_handshakes_for_organization(Filter={'ActionType': 'INVITE'})
+    handshakes = response['Handshakes']
+    while 'NextToken' in response:
+        response = org_client.list_handshakes_for_organization(
+                Filter={'ActionType': 'INVITE'},
+                NextToken=response['NextToken'])
+        handshakes += response['Handshakes']
     log.debug(handshakes)
     return handshakes
 
@@ -160,12 +165,19 @@ def invite_account(log, args, org_client, deployed_accounts):
     account_id = args['--account-id']
     if lookup(deployed_accounts, 'Id', account_id):
         log.error("account %s already in organization" % account_id)
-    invited_account_ids = [lookup(invite['Parties'], 'Type', 'ACCOUNT', 'Id')
-            for invite in scan_invited_accounts(log, org_client)]
-    log.debug('invited_account_ids: %s' % invited_account_ids)
-    if account_id in invited_account_ids:
-        log.error("account %s already in organization" % account_id)
         return
+    invited_accounts = scan_invited_accounts(log, org_client)
+    account_invite = [invite for invite in invited_accounts if lookup(invite['Parties'], 'Type', 'ACCOUNT', 'Id') == account_id]
+    if account_invite:
+        log.debug('account_invite: %s' % account_invite)
+        invite_state = account_invite[0]['State']
+        log.debug('invite_state: %s' % invite_state)
+        if invite_state == 'ACCEPTED':
+            log.error('Account %s has already accepted a previous invite' % account_id)
+            return
+        if invite_state in ['REQUESTED', 'OPEN']:
+            log.error('Account %s has already been invited to Org and status is %s' % (account_id, invite_state))
+            return
     log.info("inviting account %s to join Org" % account_id)
     if args['--exec']:
         target = dict(Id=account_id , Type='ACCOUNT')
