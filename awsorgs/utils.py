@@ -316,8 +316,8 @@ def get_account_aliases(log, deployed_accounts, role):
             credentials = get_assume_role_credentials(account['Id'], role)
             if isinstance(credentials, RuntimeError):
                 log.error(credentials)
-            else:
-                iam_client = boto3.client('iam', **credentials)
+                return
+            iam_client = boto3.client('iam', **credentials)
             response = iam_client.list_account_aliases()['AccountAliases']
             if response:
                 aliases[account['Id']] = response[0]
