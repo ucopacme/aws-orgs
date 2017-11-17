@@ -16,10 +16,13 @@ default_path: awsauth
 
 
 # Users Specification.  List of IAM users managed within the Auth account.
-# Each user has 3 attributes all of type 'str':
+# Each user has 5 attributes all of type 'str':
 #   Name:   The name of the user - required.
+#   Ensure: One of 'present' (default) or 'absent'.
+#           Setting to 'absent' will cause the user to be deleted.
 #   Email:  The email address with which the user can be contacted.
 #   Team:   A label for associating the IAM user with a project team.
+#   Path:   Set a path element to the IAM user resource.
 #
 users:
   - Name: ashely
