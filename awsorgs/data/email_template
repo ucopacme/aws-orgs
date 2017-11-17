@@ -1,38 +1,56 @@
-
-
-
 Dear User,
 
 You have been granted access to our central AWS authentication account.
 From here you can assume designated roles into other AWS accounts in
 our Organization.
 
-Please use the credentials below to log into the AWS console and
-complete your own user setup.  You will be required to change your
-password as you log in.
+You must complete the following tasks to configure your access:
 
-Note: the one time password with expire after 24 hours if not reset.
+
+1) Use the credentials below to log into the AWS console.  You will
+be required to change your password as you log in.
+
+IMPORTANT: the one time password will expire after 24 hours.
 
   IAM User Name:	$user_name
   One Time Password:	$onetimepw
   Login URL:            https://${trusted_account}.signin.aws.amazon.com/console
 
 
-Once logged in take the time to set up a 'Virtual MFA Device' and 'AWS
-Access Keys' for your IAM user.  We recommend you install 'Google
-Authenticator' app on your cell to use as your 'Virtual MFA Device'.
+2) Install 'Google Authenticator' app on your cell phone.
 
-For help see:
+Instructions:
 https://support.google.com/accounts/answer/1066447?co=GENIE.Platform%3DiOS&hl=en&oco=0
+
+
+3) Set up Google Authenticator as your 'Virtual MFA Device' in the
+AWS console.
+
+Instructions:
 http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html#enable-virt-mfa-for-iam-user
+
+
+4) Log out and log back in again.  You will be queried for your 6 digit
+token code.  
+
+
+5) Verify you can switch role into any accounts where you have cross
+account access.  From the delegation information listed below supply
+the account_alias or account_id in the 'Account' field.  Supply the
+role_name in the 'Role' field.
+
+Instructions:
+https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-console.html?icmpid=docs_iam_console
+
+
+6) (optional) Set up 'AWS Access Keys' for your IAM user.  
+
+Instructions:
 http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html#Using_CreateAccessKey
 
 
-
-After your MFA is set up, log out and log back in again.  You will be
-queried for your 6 digit token code.  Now you can assume role into any
-accounts where you have cross account access.
-
-Your IAM user has been granted cross account access to the following:
+Your IAM user has been delegated cross account access to the following
+accounts.  
 
 $delegations
+
