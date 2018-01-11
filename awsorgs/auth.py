@@ -335,14 +335,14 @@ def manage_group_members(credentials, args, log, deployed, auth_spec):
             if not ensure_absent(g_spec):
                 for username in spec_members:
                     if username not in current_members:
-                        log.info("Adding user '%s' to group '%s'." %
+                        log.info("Adding user '%s' to group '%s'" %
                                 (username, g_spec['Name']))
                         if args['--exec']:
                             group.add_user(UserName=username)
             # ensure no unspecified members are in group
             for username in current_members:
                 if username not in spec_members:
-                    log.info("Removing user '%s' from group '%s'." %
+                    log.info("Removing user '%s' from group '%s'" %
                             (username, g_spec['Name']))
                     if args['--exec']:
                         group.remove_user(UserName=username)
@@ -370,26 +370,25 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                 # attach missing policies
                 for policy_name in g_spec['Policies']:
                     if not policy_name in attached_policies:
-                        policy_arn = get_policy_arn(iam_client, account_name,
+                        policy_arn = get_policy_arn(iam_client, auth_account,
                                 policy_name, args, log, auth_spec)
                         log.debug("policy Arn for '%s': %s" % (policy_name, policy_arn))
                         log.info("Attaching policy '%s' to group '%s' in "
-                                "account '%s'." % (policy_name, g_spec['Name'],
+                                "account '%s'" % (policy_name, g_spec['Name'],
                                 auth_account))
                         if args['--exec']:
                             group.attach_policy(PolicyArn=policy_arn)
                     elif lookup(auth_spec['custom_policies'], 'PolicyName',
                             policy_name):
-                        policy_arn = get_policy_arn(iam_client, account_name,
+                        policy_arn = get_policy_arn(iam_client, auth_account,
                                 policy_name, args, log, auth_spec)
                 # datach obsolete policies
                 for policy_name in attached_policies:
                     if not policy_name in g_spec['Policies']:
-                        policy_arn = get_policy_arn(iam_client, account_name,
-                                policy_name, args,
-                                log, auth_spec)
+                        policy_arn = get_policy_arn(iam_client, auth_account,
+                                policy_name, args, log, auth_spec)
                         log.info("Detaching policy '%s' from group '%s' in "
-                                "account '%s'." % (policy_name, g_spec['Name'],
+                                "account '%s'" % (policy_name, g_spec['Name'],
                                 auth_account))
                         if args['--exec']:
                             group.detach_policy(PolicyArn=policy_arn)
@@ -436,7 +435,7 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
     log.debug("Custom policies:'%s'" % custom_policies)
     policy = lookup(custom_policies, 'PolicyName', policy_name)
     if not policy:
-        log.info("Creating custom policy '%s' in account '%s'." %
+        log.info("Creating custom policy '%s' in account '%s'" %
                 (policy_name, account_name))
         if args['--exec']:
             return iam_client.create_policy(
@@ -466,14 +465,16 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
 
         # update policy and set as default version
         if update_required:
-            log.info("Updating custom policy '%s'." % policy_name)
+            log.info("Updating custom policy '%s' in account '%s'" %
+                    (policy_name, account_name))
             if args['--exec']:
                 log.debug("check for non-default policy versions for '%s'" % policy_name)
                 for v in iam_client.list_policy_versions(
                         PolicyArn=policy['Arn'])['Versions']:
                     if not v['IsDefaultVersion']:
                         log.info("Deleting non-default policy version '%s' for "
-                                "policy '%s'" % (v['VersionId'], policy_name))
+                                "policy '%s' in account '%s'" %
+                                (v['VersionId'], policy_name, account_name))
                         iam_client.delete_policy_version(
                                 PolicyArn=policy['Arn'],
                                 VersionId=v['VersionId'])
@@ -541,7 +542,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
         # create or update group policy
         if not policy_name in group_policies_for_role:
             log.info("Creating assume role policy '%s' for group '%s' in "
-                    "account '%s'." % (policy_name, d_spec['TrustedGroup'],
+                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
                     auth_account))
             if args['--exec']:
                 group.create_policy(
@@ -549,7 +550,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                         PolicyDocument=policy_doc)
         elif json.dumps(group.Policy(policy_name).policy_document) != policy_doc:
             log.info("Updating assume role policy '%s' for group '%s' in "
-                    "account '%s'." % (policy_name, d_spec['TrustedGroup'],
+                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
                     auth_account))
             if args['--exec']:
                 group.Policy(policy_name).put(PolicyDocument=policy_doc)
@@ -558,7 +559,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     for policy_name in group_policies_for_role:
         if policy_name not in managed_policies:
             log.info("Deleting obsolete policy '%s' from group '%s' in "
-                    "account '%s'." % (policy_name, d_spec['TrustedGroup'],
+                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
                     auth_account))
             if args['--exec']:
                 group.Policy(policy_name).delete()
