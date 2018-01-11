@@ -370,8 +370,8 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                 # attach missing policies
                 for policy_name in g_spec['Policies']:
                     if not policy_name in attached_policies:
-                        policy_arn = get_policy_arn(iam_client, policy_name, args,
-                                log, auth_spec)
+                        policy_arn = get_policy_arn(iam_client, account_name,
+                                policy_name, args, log, auth_spec)
                         log.debug("policy Arn for '%s': %s" % (policy_name, policy_arn))
                         log.info("Attaching policy '%s' to group '%s' in "
                                 "account '%s'." % (policy_name, g_spec['Name'],
@@ -380,12 +380,13 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                             group.attach_policy(PolicyArn=policy_arn)
                     elif lookup(auth_spec['custom_policies'], 'PolicyName',
                             policy_name):
-                        policy_arn = get_policy_arn(iam_client, policy_name, args,
-                                log, auth_spec)
+                        policy_arn = get_policy_arn(iam_client, account_name,
+                                policy_name, args, log, auth_spec)
                 # datach obsolete policies
                 for policy_name in attached_policies:
                     if not policy_name in g_spec['Policies']:
-                        policy_arn = get_policy_arn(iam_client, policy_name, args,
+                        policy_arn = get_policy_arn(iam_client, account_name,
+                                policy_name, args,
                                 log, auth_spec)
                         log.info("Detaching policy '%s' from group '%s' in "
                                 "account '%s'." % (policy_name, g_spec['Name'],
@@ -394,7 +395,7 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                             group.detach_policy(PolicyArn=policy_arn)
 
 
-def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
+def get_policy_arn(iam_client, account_name, policy_name, args, log, auth_spec):
     """
     Return the policy arn of the named IAM policy in an account.
     Checks AWS scope first, then calls manage_custom_policy() for
@@ -408,11 +409,11 @@ def get_policy_arn(iam_client, policy_name, args, log, auth_spec):
     if policy_arn:
         return policy_arn
     else:
-        return manage_custom_policy(iam_client, policy_name, args,
+        return manage_custom_policy(iam_client, account_name, policy_name, args,
                 log, auth_spec)
 
 
-def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
+def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_spec):
     """
     Create or update a custom IAM policy in an account based on
     a policy specification.  Returns the policy arn.
@@ -435,7 +436,8 @@ def manage_custom_policy(iam_client, policy_name, args, log, auth_spec):
     log.debug("Custom policies:'%s'" % custom_policies)
     policy = lookup(custom_policies, 'PolicyName', policy_name)
     if not policy:
-        log.info("Creating custom policy '%s'." % policy_name)
+        log.info("Creating custom policy '%s' in account '%s'." %
+                (policy_name, account_name))
         if args['--exec']:
             return iam_client.create_policy(
                 PolicyName=p_spec['PolicyName'],
@@ -636,8 +638,8 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 if 'Policies' in d_spec and d_spec['Policies']:
                     role.load()
                     for policy_name in d_spec['Policies']:
-                        policy_arn = get_policy_arn(iam_client, policy_name,
-                                args, log, auth_spec)
+                        policy_arn = get_policy_arn(iam_client, account_name,
+                                policy_name, args, log, auth_spec)
                         log.info("Attaching policy '%s' to role '%s' "
                                 "in account '%s'" %
                                 (policy_name, d_spec['RoleName'], account_name))
@@ -672,17 +674,20 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
     for policy_name in d_spec['Policies']:
         # attach missing policies
         if not policy_name in attached_policies:
-            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
             log.info("Attaching policy '%s' to role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
                 role.attach_policy(PolicyArn=policy_arn)
         elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
-            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
     for policy_name in attached_policies:
         # datach obsolete policies
         if not policy_name in d_spec['Policies']:
-            policy_arn = get_policy_arn(iam_client, policy_name, args, log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, account_name, account_name,
+                    policy_name, args, log, auth_spec)
             log.info("Detaching policy '%s' from role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
