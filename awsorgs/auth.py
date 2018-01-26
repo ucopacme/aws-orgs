@@ -687,8 +687,8 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
     for policy_name in attached_policies:
         # datach obsolete policies
         if not policy_name in d_spec['Policies']:
-            policy_arn = get_policy_arn(iam_client, account_name, account_name,
-                    policy_name, args, log, auth_spec)
+            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
             log.info("Detaching policy '%s' from role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
