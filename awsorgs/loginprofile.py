@@ -2,7 +2,7 @@
 """Manage AWS IAM user login profile.
 
 Usage:
-  awsloginprofile USER [-vdr ROLE] [--boto-log]
+  awsloginprofile USER [--report] [-vdr ROLE] [--boto-log]
   awsloginprofile USER --disable [-vdr ROLE] [--boto-log]
   awsloginprofile USER --disable-expired [-vdr ROLE] [--opt-ttl HOURS] [--boto-log]
   awsloginprofile USER (--new | --reset | --reenable) [-vdr ROLE] [--boto-log]
@@ -11,6 +11,7 @@ Usage:
 
 Options:
   USER                     Name of IAM user.
+  --report                 Print user login profile report.  this is the default
   --new                    Create new login profile.
   --reset                  Reset password for existing login profile.
   --disable                Delete existing login profile, disable access keys.
@@ -80,24 +81,17 @@ def list_delegations(log, user, aliases=None):
 
 def format_delegation_table(delegation_arns, aliases):
     """Generate formatted list of delegation attributes as printable string"""
-    tpl = """
-  account_alias:  $account_alias
-  account_id:     $account_id
-  role_name:      $role_name
-  role_arn:       $role_arn
-"""
-    delegation_string = ''
+    template = "  {}    {}{}{}\n"
+    delegation_string = template.format('Account Id  ', 'Alias', ' '*19, 'Role')
     for assume_role_arn in delegation_arns:
         account_id = assume_role_arn.split(':')[4]
         if aliases:
             alias = aliases[account_id]
         else:
-            alias = ''
-        delegation_string += Template(tpl).substitute(dict(
-                role_arn=assume_role_arn,
-                role_name=assume_role_arn.partition('role/')[2],
-                account_id=account_id,
-                account_alias=alias))
+            alias = str()
+        spacer = (24 - len(alias)) * ' '
+        delegation_string += template.format(account_id, alias, spacer,
+                assume_role_arn.partition('role/')[2])
     return delegation_string
 
 
@@ -120,6 +114,33 @@ def prep_email(log, aliases, user, passwd, email):
     )
     with open(template) as tpl:
         print(Template(tpl.read()).substitute(mapping))
+
+
+def user_report(log, aliases, user, login_profile):
+    """Generate report of IAM user's login profile, password usage, and
+    assume_role delegations for any groups user is member of.
+    """
+    delegation_table = list_delegations(log, user)
+    log.info('\nUser:                    %s' % user.name)
+    log.info('Arn:                     %s' % user.arn)
+    log.info('User Id:                 %s' % user.user_id)
+    log.info('User created:            %s' % user.create_date)
+    if login_profile:
+        log.info('Login profile created:   %s' % login_profile.create_date)
+        log.info('Passwd reset required:   %s' % login_profile.password_reset_required)
+        if login_profile.password_reset_required:
+            log.info('One-time-passwd age:     %s' %
+                    (datetime.datetime.now(datetime.timezone.utc)
+                    - login_profile.create_date))
+        else:
+            log.info('Password last used:      %s' % user.password_last_used)
+    else:
+        log.info('User login profile:      %s' % login_profile)
+    assume_role_arns = list_delegations(log, user, aliases)
+    if assume_role_arns:
+        #log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
+        log.info('Delegations:\n%s' % 
+                format_delegation_table(delegation_table, aliases))
 
 
 def validate_user(user_name, credentials=None):
@@ -211,30 +232,6 @@ def onetime_passwd_expired(log, user, login_profile, hours):
         log.debug('delta: %s' % (now - login_profile.create_date))
         return (now - login_profile.create_date) > datetime.timedelta(hours=hours)
     return False
-
-
-def user_report(log, aliases, user, login_profile):
-    """Generate report of IAM user's login profile, password usage, and
-    assume_role delegations for any groups user is member of.
-    """
-    log.info('\nUser:                    %s' % user.name)
-    log.info('Arn:                     %s' % user.arn)
-    log.info('User Id:                 %s' % user.user_id)
-    log.info('User created:            %s' % user.create_date)
-    if login_profile:
-        log.info('Login profile created:   %s' % login_profile.create_date)
-        log.info('Passwd reset required:   %s' % login_profile.password_reset_required)
-        if login_profile.password_reset_required:
-            log.info('One-time-passwd age:     %s' %
-                    (datetime.datetime.now(datetime.timezone.utc)
-                    - login_profile.create_date))
-        else:
-            log.info('Password last used:      %s' % user.password_last_used)
-    else:
-        log.info('User login profile:      %s' % login_profile)
-    assume_role_arns = list_delegations(log, user, aliases)
-    if assume_role_arns:
-        log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
 
 
 def main():
