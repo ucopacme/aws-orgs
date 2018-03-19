@@ -144,6 +144,44 @@ delegations:
       - PowerUserAccess
 
 
+# Local Users Specification
+local_users:
+  - Name: eoc-monitor
+    Description: Service user for third party CA monitoring suite
+    Path: service
+    Contact: warm.body@ucop.edu
+    AuthMethod:
+      - access-key
+    TrustingAccount: All
+    TrustedGroup: monitoring
+    Policies:
+      - CloudWatchReadOnly
+  - Name: cbrothers
+    Description: Carol Brothers git user
+    Path: service
+    Contact: carol.brothers@ucop.edu
+    AuthMethod:
+      - ssh-key
+      - https-git
+    TrustingAccount:
+      - ppers-build
+      - ppers-poc
+    TrustedGroup: project1
+    Policies:
+      - CodeCommitPowerUser
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Custom Policy Specification.  List of IAM policy definitions.  Custom
 # policies are created in accounts in which the policy is attached to
 # least one group or delegation role.  Each custom_policy has 3 attributes:
