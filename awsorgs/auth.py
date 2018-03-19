@@ -9,6 +9,7 @@ Usage:
           [-d] [--boto-log]
   awsauth users --spec-file FILE [--disable-expired --opt-ttl HOURS] [--exec]
           [-vd] [--boto-log]
+  awsauth local-users --spec-file FILE [--exec] [-vd] [--boto-log]
   awsauth delegation --spec-file FILE [--exec] [-vd] [--boto-log]
   awsauth --version
   awsauth --help
@@ -16,6 +17,7 @@ Usage:
 Modes of operation:
   report        Display provisioned resources (Implies '--verbose').
   users         Provision users, groups and group membership.
+  local-users   Provision local IAM users and policies in accounts.
   delegation    Provision policies and roles for cross account access.
 
 Options:
@@ -695,6 +697,15 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 role.detach_policy(PolicyArn=policy_arn)
 
 
+def manage_local_users(lu_spec, args, log, deployed, auth_spec):
+    """
+    Create and manage cross account access delegations based on 
+    delegation specifications.  Manages delegation roles in 
+    trusting accounts and group policies in Auth (trusted) account.
+    """
+    pass
+
+
 def manage_delegations(d_spec, args, log, deployed, auth_spec):
     """
     Create and manage cross account access delegations based on 
@@ -781,8 +792,11 @@ def main():
             manage_group_members(credentials, args, log, deployed, auth_spec)
             manage_group_policies(credentials, args, log, deployed, auth_spec)
 
+    if args['local-users']:
+        queue_threads(log, auth_spec['local-users'], manage_local_users,
+            f_args=(args, log, deployed, auth_spec))
+
     if args['delegation']:
-        pass
         queue_threads(log, auth_spec['delegations'], manage_delegations,
             f_args=(args, log, deployed, auth_spec))
 

@@ -146,19 +146,21 @@ delegations:
 
 # Local Users Specification
 local_users:
+  # service user
   - Name: eoc-monitor
     Description: Service user for third party CA monitoring suite
-    Path: service
-    Contact: warm.body@ucop.edu
+    Path: service/ca
+    Team: eoc
     AuthMethod:
       - access-key
     TrustingAccount: All
     TrustedGroup: monitoring
     Policies:
-      - CloudWatchReadOnly
+      - CloudWatchLogsReadOnlyAccess
+  # codecommit user
   - Name: cbrothers
     Description: Carol Brothers git user
-    Path: service
+    Path: codecommit
     Contact: carol.brothers@ucop.edu
     AuthMethod:
       - ssh-key
@@ -169,6 +171,7 @@ local_users:
     TrustedGroup: project1
     Policies:
       - CodeCommitPowerUser
+  # s3 content user
 
 
 
