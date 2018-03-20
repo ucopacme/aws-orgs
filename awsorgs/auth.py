@@ -567,6 +567,122 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                 group.Policy(policy_name).delete()
 
 
+def manage_local_user_in_accounts(account, args, log, auth_spec, deployed,
+            accounts, lu_spec):
+    """
+    """
+    account_name = account['Name']
+    log.debug('account: %s, role: %s' % (account_name, lu_spec['Name']))
+    credentials = get_assume_role_credentials(
+            account['Id'],
+            auth_spec['org_access_role'])
+    if isinstance(credentials, RuntimeError):
+        log.error(credentials)
+        return
+    iam_client = boto3.client('iam', **credentials)
+    iam_resource = boto3.resource('iam', **credentials)
+    user = iam_resource.User(lu_spec['Name'])
+
+    # check if local user should not exist
+    if account_name not in accounts or ensure_absent(lu_spec):
+        try:
+            user.load()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchEntity':
+                return
+            else:
+                raise e
+        except:
+            raise
+        # delete local user
+        log.info("Deleting local user '%s' from account '%s'" %
+                (lu_spec['Name'], account_name))
+        if args['--exec']:
+            for p in list(user.attached_policies.all()):
+                user.detach_policy(PolicyArn=p.arn)
+            user.delete()
+        return
+
+    # get iam user object.  create local user if it does not exist (i.e. won't load)
+    try:
+        user.load()
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchEntity':
+            log.info("Creating local user '%s' in account '%s'" %
+                    (lu_spec['Name'], account_name))
+            if args['--exec']:
+                user.create(Path=munge_path(auth_spec['default_path'], lu_spec))
+                if 'Policies' in lu_spec and lu_spec['Policies']:
+                    user.load()
+                    for policy_name in lu_spec['Policies']:
+                        policy_arn = get_policy_arn(iam_client, account_name,
+                                policy_name, args, log, auth_spec)
+                        log.info("Attaching policy '%s' to local user '%s' "
+                                "in account '%s'" %
+                                (policy_name, lu_spec['Name'], account_name))
+                        if args['--exec'] and policy_arn:
+                            user.attach_policy(PolicyArn=policy_arn)
+                return
+            else:
+                return
+        else:
+            raise e
+    except:
+        raise
+
+    ### validate path ###
+
+    # manage policy attachments
+    attached_policies = [p.policy_name for p in list(user.attached_policies.all())]
+    for policy_name in lu_spec['Policies']:
+        # attach missing policies
+        if not policy_name in attached_policies:
+            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
+            log.info("Attaching policy '%s' to local user '%s' in account '%s'" %
+                    (policy_name, lu_spec['Name'], account_name))
+            if args['--exec'] and policy_arn:
+                user.attach_policy(PolicyArn=policy_arn)
+        elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
+            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
+    for policy_name in attached_policies:
+        # datach obsolete policies
+        if not policy_name in lu_spec['Policies']:
+            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
+            log.info("Detaching policy '%s' from local user '%s' in account '%s'" %
+                    (policy_name, lu_spec['Name'], account_name))
+            if args['--exec'] and policy_arn:
+                user.detach_policy(PolicyArn=policy_arn)
+
+
+
+def manage_local_users(lu_spec, args, log, deployed, auth_spec):
+    """
+    Create and manage local IAM users in specified accounts and 
+    attach policies to users based on local_user specifications.
+    """
+    log.debug('considering %s' % lu_spec['Name'])
+    # munge accounts list
+    if lu_spec['Account'] == 'ALL':
+        accounts = [a['Name'] for a in deployed['accounts']]
+        if 'ExcludeAccounts' in lu_spec and lu_spec['ExcludeAccounts']:
+            accounts = [a for a in accounts
+                    if a not in lu_spec['ExcludeAccounts']]
+    else:
+        accounts = lu_spec['Account']
+    for account_name in accounts:
+        if not lookup(deployed['accounts'], 'Name', account_name):
+            log.error("Can not manage local user '%s' in account "
+                    "'%s'.  Account '%s' not found in Organization" %
+                    (lu_spec['Name'], account_name, account_name))
+            accounts.remove(account_name)
+    # run manage_local_user_in_accounts() task in thread pool
+    queue_threads(log, deployed['accounts'], manage_local_user_in_accounts,
+            f_args=(args, log, auth_spec, deployed, accounts, lu_spec))
+
+
 def manage_delegation_role(account, args, log, auth_spec, deployed,
             trusting_accounts, d_spec):
     """
@@ -697,15 +813,6 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 role.detach_policy(PolicyArn=policy_arn)
 
 
-def manage_local_users(lu_spec, args, log, deployed, auth_spec):
-    """
-    Create and manage cross account access delegations based on 
-    delegation specifications.  Manages delegation roles in 
-    trusting accounts and group policies in Auth (trusted) account.
-    """
-    pass
-
-
 def manage_delegations(d_spec, args, log, deployed, auth_spec):
     """
     Create and manage cross account access delegations based on 
@@ -793,7 +900,7 @@ def main():
             manage_group_policies(credentials, args, log, deployed, auth_spec)
 
     if args['local-users']:
-        queue_threads(log, auth_spec['local-users'], manage_local_users,
+        queue_threads(log, auth_spec['local_users'], manage_local_users,
             f_args=(args, log, deployed, auth_spec))
 
     if args['delegation']:

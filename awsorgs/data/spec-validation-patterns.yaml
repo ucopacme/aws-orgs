@@ -56,6 +56,10 @@ auth_spec:
     required: False
     atype: list
     spec_pattern: group
+  local_users:
+    required: False
+    atype: list
+    spec_pattern: local_user
   delegations:
     required: False
     atype: list
@@ -180,6 +184,47 @@ group:
   ExcludeMembers:
     required: False
     atype: list
+  Policies:
+    required: False
+    atype: list
+  Ensure:
+    required: False
+    atype:
+      str:
+        values:
+          - present
+          - absent
+
+
+local_user:
+  Name:
+    required: True
+    atype: str
+  Description:
+    required: False
+    atype: str
+  Team:
+    required: True
+    atype: str
+  Path:
+    required: False
+    atype: str
+  #AuthMethod:
+  #  required: False
+  #  atype: str
+  Account:
+    required: True
+    atype: 
+      str:
+        values:
+          - ALL
+      list:
+  ExcludeAccounts:
+    required: False
+    atype: list
+  #TrustedGroup:
+  #  required: False
+  #  atype: str
   Policies:
     required: False
     atype: list
