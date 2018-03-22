@@ -212,7 +212,38 @@ def display_roles_in_accounts(log, args, deployed, auth_spec):
             log.info(msg)
 
 
-# ISSUE: deleting user: may need to delete user policy and signing keys as well.
+def delete_user(user):
+    """
+    Strip user attributes and delete user
+
+    :param: user
+    :type:  boto3 iam User resource object
+    """
+    try:
+        user.load()
+    except user.meta.client.exceptions.NoSuchEntityException:
+        return
+    for x in user.access_keys.all():
+        x.delete()
+    for x in user.attached_policies.all():
+        x.detach_user(UserName=user.name)
+    for x in user.groups.all():
+        x.remove_user(UserName=user.name)
+    for x in user.mfa_devices.all():
+        x.disassociate()
+    for x in user.policies.all():
+        x.delete()
+    for x in user.signing_certificates.all():
+        x.delete()
+    profile = user.LoginProfile()
+    try:
+        profile.load()
+        profile.delete()
+    except profile.meta.client.exceptions.NoSuchEntityException:
+        pass
+    user.delete()
+
+
 def create_users(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM users based on user specification
@@ -226,22 +257,9 @@ def create_users(credentials, args, log, deployed, auth_spec):
             user = iam_resource.User(u_spec['Name'])
             # delete user
             if ensure_absent(u_spec):
-                log.info("Deleting user '%s'" % u_spec['Name'])
+                log.info("Deleting user '%s'" % user.name)
                 if args['--exec']:
-                    for group in user.groups.all():
-                        user.remove_group(GroupName=group.name)
-                    for policy in user.attached_policies.all():
-                        policy.detach_user(UserName=u_spec['Name'])
-                    for key in user.access_keys.all():
-                        key.delete()
-                    for mfa in user.mfa_devices.all():
-                        mfa.disassociate()
-                    try:
-                        user.LoginProfile().delete()
-                    except ClientError as e:
-                        if e.response['Error']['Code'] == 'NoSuchEntity':
-                            pass
-                    user.delete()
+                    delete_user(user)
             # update user
             elif user.path != path:
                 log.info("Updating path on user '%s'" % u_spec['Name'])
@@ -567,95 +585,99 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                 group.Policy(policy_name).delete()
 
 
-def manage_local_user_in_accounts(account, args, log, auth_spec, deployed,
-            accounts, lu_spec):
+def manage_local_user_in_accounts(
+            account, args, log, auth_spec, deployed, accounts, lu_spec):
     """
+    Create and manage a local user in an account per user specification.
     """
+
     account_name = account['Name']
-    log.debug('account: %s, role: %s' % (account_name, lu_spec['Name']))
-    credentials = get_assume_role_credentials(
-            account['Id'],
-            auth_spec['org_access_role'])
+    log.debug('account: %s, local user: %s' % (account_name, lu_spec['Name']))
+    path_spec = munge_path(auth_spec['default_path'], lu_spec)
+    credentials = get_assume_role_credentials(account['Id'], auth_spec['org_access_role'])
     if isinstance(credentials, RuntimeError):
         log.error(credentials)
         return
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
+
+    # get iam user object.
     user = iam_resource.User(lu_spec['Name'])
+    try:
+        user.load()
+    except user.meta.client.exceptions.NoSuchEntityException:
+        user_exists = False
+    else:
+        user_exists = True
+        log.debug('account: %s, local user exists: %s' % (account_name, user.arn))
+
+    # check for unmanaged user in account
+    if user_exists:
+        if not user.path.startswith('/' + auth_spec['default_path']):
+            log.error(
+                    "Can not manage local user '%s' in account '%s'. "
+                    " Unmanaged user with the same name already exists: %s" % 
+                    (user.name, account_name, user.arn))
+            return
 
     # check if local user should not exist
     if account_name not in accounts or ensure_absent(lu_spec):
-        try:
-            user.load()
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchEntity':
-                return
-            else:
-                raise e
-        except:
-            raise
-        # delete local user
-        log.info("Deleting local user '%s' from account '%s'" %
-                (lu_spec['Name'], account_name))
-        if args['--exec']:
-            for p in list(user.attached_policies.all()):
-                user.detach_policy(PolicyArn=p.arn)
-            user.delete()
+        if user_exists:
+            log.info("Deleting local user '%s' from account '%s'" %
+                    (user.name, account_name))
+            if args['--exec']:
+                delete_user(user)
         return
 
-    # get iam user object.  create local user if it does not exist (i.e. won't load)
-    try:
-        user.load()
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchEntity':
-            log.info("Creating local user '%s' in account '%s'" %
-                    (lu_spec['Name'], account_name))
+    # create local user and attach policies
+    if not user_exists:
+        log.info("Creating local user '%s' in account '%s'" %
+                (lu_spec['Name'], account_name))
+        if args['--exec']:
+            user.create(Path=path_spec)
+            if 'Policies' in lu_spec and lu_spec['Policies']:
+                user.load()
+                for policy_name in lu_spec['Policies']:
+                    policy_arn = get_policy_arn(iam_client, account_name,
+                            policy_name, args, log, auth_spec)
+                    log.info("Attaching policy '%s' to local user '%s' "
+                            "in account '%s'" %
+                            (policy_name, user.name, account_name))
+                    if args['--exec'] and policy_arn:
+                        user.attach_policy(PolicyArn=policy_arn)
+    else:
+        # validate path
+        if user.path != path_spec:
+            log.info("Updating path for local user '%s'" % user.arn)
             if args['--exec']:
-                user.create(Path=munge_path(auth_spec['default_path'], lu_spec))
-                if 'Policies' in lu_spec and lu_spec['Policies']:
-                    user.load()
-                    for policy_name in lu_spec['Policies']:
-                        policy_arn = get_policy_arn(iam_client, account_name,
-                                policy_name, args, log, auth_spec)
-                        log.info("Attaching policy '%s' to local user '%s' "
-                                "in account '%s'" %
-                                (policy_name, lu_spec['Name'], account_name))
-                        if args['--exec'] and policy_arn:
-                            user.attach_policy(PolicyArn=policy_arn)
-                return
-            else:
-                return
-        else:
-            raise e
-    except:
-        raise
+                # hack around bug in boto3
+                try:
+                    user.update(NewPath=path_spec)
+                except AttributeError as e:
+                    log.debug('boto3 error when calling user.update(): %s' % e)
 
-    ### validate path ###
-
-    # manage policy attachments
-    attached_policies = [p.policy_name for p in list(user.attached_policies.all())]
-    for policy_name in lu_spec['Policies']:
-        # attach missing policies
-        if not policy_name in attached_policies:
-            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
-            log.info("Attaching policy '%s' to local user '%s' in account '%s'" %
-                    (policy_name, lu_spec['Name'], account_name))
-            if args['--exec'] and policy_arn:
-                user.attach_policy(PolicyArn=policy_arn)
-        elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
-            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
-    for policy_name in attached_policies:
+        # manage policy attachments
+        attached_policies = [p.policy_name for p in list(user.attached_policies.all())]
+        for policy_name in lu_spec['Policies']:
+            if not policy_name in attached_policies:
+                policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                                            args, log, auth_spec)
+                log.info("Attaching policy '%s' to local user '%s' in account '%s'" %
+                        (policy_name, user.name, account_name))
+                if args['--exec'] and policy_arn:
+                    user.attach_policy(PolicyArn=policy_arn)
+            elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
+                policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                                            args, log, auth_spec)
         # datach obsolete policies
-        if not policy_name in lu_spec['Policies']:
-            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
-            log.info("Detaching policy '%s' from local user '%s' in account '%s'" %
-                    (policy_name, lu_spec['Name'], account_name))
-            if args['--exec'] and policy_arn:
-                user.detach_policy(PolicyArn=policy_arn)
-
+        for policy_name in attached_policies:
+            if not policy_name in lu_spec['Policies']:
+                policy_arn = get_policy_arn(iam_client, account_name, policy_name,
+                        args, log, auth_spec)
+                log.info("Detaching policy '%s' from local user '%s' in account '%s'" %
+                        (policy_name, user.name, account_name))
+                if args['--exec'] and policy_arn:
+                    user.detach_policy(PolicyArn=policy_arn)
 
 
 def manage_local_users(lu_spec, args, log, deployed, auth_spec):
