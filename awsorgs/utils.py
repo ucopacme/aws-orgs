@@ -3,6 +3,7 @@
 import os
 import sys
 import pkg_resources
+import difflib
 import threading
 try:
     import queue
@@ -337,3 +338,15 @@ def merge_aliases(log, deployed_accounts, aliases):
         account['Alias'] = aliases.get(account['Id'], '')
         log.debug(account)
     return deployed_accounts
+
+
+def string_differ(string1, string2, label1=None, label2=None):
+    diff = difflib.unified_diff(
+            string1.splitlines(keepends=True),
+            string2.splitlines(keepends=True),
+            fromfile=label1,
+            tofile=label2)
+    return ''.join(list(diff))
+
+    
+

@@ -488,12 +488,20 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
 
         # update policy and set as default version
         if update_required:
-            log.info("Updating custom policy '%s' in account '%s'.\n"
-                    "Current policy:\n%s\nProposed policy:\n%s" % (
-                            policy_name,
-                            account_name, 
+            log.info("Updating custom policy '%s' in account '%s':\n%s" % (
+                    policy_name,
+                    account_name, 
+                    string_differ(
                             yaml.dump(current_doc, default_flow_style=False),
-                            yaml.dump(json.loads(policy_doc), default_flow_style=False)))
+                            yaml.dump(json.loads(policy_doc), default_flow_style=False),
+                            'current_policy_doc',
+                            'proposed_policy_doc')))
+
+                    #"Current policy:\n%s\nProposed policy:\n%s" % (
+                    #        policy_name,
+                    #        account_name, 
+                    #        yaml.dump(current_doc, default_flow_style=False),
+                    #        yaml.dump(json.loads(policy_doc), default_flow_style=False)))
             if args['--exec']:
                 log.debug("check for non-default policy versions for '%s'" % policy_name)
                 for v in iam_client.list_policy_versions(
