@@ -437,11 +437,10 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
     Create or update a custom IAM policy in an account based on
     a policy specification.  Returns the policy arn.
     """
-    log.debug("policyName: '%s'" % policy_name)
+    log.debug("account: '%s', policyName: '%s'" % (account_name, policy_name))
     p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
     if not p_spec:
-        log.error("Custom Policy spec for '%s' not found in auth-spec." %
-                policy_name)
+        log.error("Custom Policy spec for '%s' not found in auth-spec." % policy_name)
         log.error("Policy creation failed.")
         return None
 
@@ -452,7 +451,9 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
 
     # check if custom policy exists
     custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-    log.debug("Custom policies:'%s'" % custom_policies)
+    log.debug("account: '%s', custom policies: '%s'" % (
+            account_name,
+            [p['Arn'] for p in custom_policies]))
     policy = lookup(custom_policies, 'PolicyName', policy_name)
     if not policy:
         log.info("Creating custom policy '%s' in account '%s'" %
@@ -471,9 +472,10 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
                 PolicyArn=policy['Arn'],
                 VersionId=policy['DefaultVersionId']
                 )['PolicyVersion']['Document']
-        log.debug("policy_doc: %s" % json.loads(policy_doc))
+        log.debug("account: '%s', policy_doc: %s" %
+                (account_name, json.loads(policy_doc)))
                 #json.dumps(json.loads(policy_doc), indent=2, separators=(',', ': ')))
-        log.debug("current_doc: %s" % current_doc)
+        log.debug("account: '%s', current_doc: %s" % (account_name, current_doc))
                 #json.dumps(current_doc, indent=2, separators=(',', ': ')))
 
         # compare each statement as dict
@@ -481,12 +483,17 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
         for i in range(len(current_doc['Statement'])):
             if current_doc['Statement'][i] != json.loads(policy_doc)['Statement'][i]:
                 update_required = True
-        log.debug('update_required: %s' % update_required)
+                log.debug('account: %s, update_required: %s' %
+                        (account_name, update_required))
 
         # update policy and set as default version
         if update_required:
-            log.info("Updating custom policy '%s' in account '%s'" %
-                    (policy_name, account_name))
+            log.info("Updating custom policy '%s' in account '%s'.\n"
+                    "Current policy:\n%s\nProposed policy:\n%s" % (
+                            policy_name,
+                            account_name, 
+                            yaml.dump(current_doc, default_flow_style=False),
+                            yaml.dump(json.loads(policy_doc), default_flow_style=False)))
             if args['--exec']:
                 log.debug("check for non-default policy versions for '%s'" % policy_name)
                 for v in iam_client.list_policy_versions(
