@@ -445,9 +445,7 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
         return None
 
     # generate policy_doc
-    policy_doc = json.dumps(dict(
-            Version='2012-10-17',
-            Statement=p_spec['Statement']))
+    policy_doc = dict(Version='2012-10-17', Statement=p_spec['Statement'])
 
     # check if custom policy exists
     custom_policies = iam_client.list_policies(Scope='Local')['Policies']
@@ -456,14 +454,15 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
             [p['Arn'] for p in custom_policies]))
     policy = lookup(custom_policies, 'PolicyName', policy_name)
     if not policy:
-        log.info("Creating custom policy '%s' in account '%s'" %
-                (policy_name, account_name))
+        log.info("Creating custom policy '%s' in account '%s':\n%s" %
+                (policy_name, account_name, yamlfmt(policy_doc)))
         if args['--exec']:
             return iam_client.create_policy(
                 PolicyName=p_spec['PolicyName'],
                 Path=munge_path(auth_spec['default_path'], p_spec),
                 Description=p_spec['Description'],
-                PolicyDocument=policy_doc)['Policy']['Arn']
+                PolicyDocument=json.dumps(policy_doc),
+            )['Policy']['Arn']
         return None
 
     # check if custom policy needs updating
@@ -472,16 +471,13 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
                 PolicyArn=policy['Arn'],
                 VersionId=policy['DefaultVersionId']
                 )['PolicyVersion']['Document']
-        log.debug("account: '%s', policy_doc: %s" %
-                (account_name, json.loads(policy_doc)))
-                #json.dumps(json.loads(policy_doc), indent=2, separators=(',', ': ')))
+        log.debug("account: '%s', policy_doc: %s" % (account_name, policy_doc))
         log.debug("account: '%s', current_doc: %s" % (account_name, current_doc))
-                #json.dumps(current_doc, indent=2, separators=(',', ': ')))
 
         # compare each statement as dict
         update_required = False
         for i in range(len(current_doc['Statement'])):
-            if current_doc['Statement'][i] != json.loads(policy_doc)['Statement'][i]:
+            if current_doc['Statement'][i] != policy_doc['Statement'][i]:
                 update_required = True
                 log.debug('account: %s, update_required: %s' %
                         (account_name, update_required))
@@ -491,17 +487,7 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
             log.info("Updating custom policy '%s' in account '%s':\n%s" % (
                     policy_name,
                     account_name, 
-                    string_differ(
-                            yaml.dump(current_doc, default_flow_style=False),
-                            yaml.dump(json.loads(policy_doc), default_flow_style=False),
-                            'current_policy_doc',
-                            'proposed_policy_doc')))
-
-                    #"Current policy:\n%s\nProposed policy:\n%s" % (
-                    #        policy_name,
-                    #        account_name, 
-                    #        yaml.dump(current_doc, default_flow_style=False),
-                    #        yaml.dump(json.loads(policy_doc), default_flow_style=False)))
+                    string_differ(yamlfmt(current_doc), yamlfmt(policy_doc))))
             if args['--exec']:
                 log.debug("check for non-default policy versions for '%s'" % policy_name)
                 for v in iam_client.list_policy_versions(
@@ -515,7 +501,7 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
                                 VersionId=v['VersionId'])
                 iam_client.create_policy_version(
                         PolicyArn=policy['Arn'],
-                        PolicyDocument=policy_doc,
+                        PolicyDocument=json.dumps(policy_doc),
                         SetAsDefault=True)
         return policy['Arn']
 
@@ -570,25 +556,30 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                         account_id,
                         munge_path(auth_spec['default_path'], d_spec),
                         d_spec['RoleName'])) 
-        policy_doc = json.dumps(dict(
-                Version='2012-10-17',
-                Statement=[statement]))
+        policy_doc = dict(Version='2012-10-17', Statement=[statement])
 
         # create or update group policy
         if not policy_name in group_policies_for_role:
             log.info("Creating assume role policy '%s' for group '%s' in "
-                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
-                    auth_account))
+                    "account '%s':\n%s" % (
+                            policy_name, 
+                            d_spec['TrustedGroup'],
+                            auth_account, 
+                            yamlfmt(policy_doc)))
             if args['--exec']:
                 group.create_policy(
                         PolicyName=policy_name,
-                        PolicyDocument=policy_doc)
-        elif json.dumps(group.Policy(policy_name).policy_document) != policy_doc:
-            log.info("Updating assume role policy '%s' for group '%s' in "
-                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
-                    auth_account))
+                        PolicyDocument=json.dumps(policy_doc))
+        elif group.Policy(policy_name).policy_document != policy_doc:
+            log.info("Updating policy '%s' for group '%s' in account '%s':\n%s" % (
+                   policy_name, 
+                   d_spec['TrustedGroup'],
+                   auth_account,
+                   string_differ(
+                           yamlfmt(group.Policy(policy_name).policy_document), 
+                           yamlfmt(policy_doc))))
             if args['--exec']:
-                group.Policy(policy_name).put(PolicyDocument=policy_doc)
+                group.Policy(policy_name).put(PolicyDocument=json.dumps(policy_doc))
 
     # purge any policies for this role that are no longer being managed
     for policy_name in group_policies_for_role:
@@ -775,8 +766,7 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
     if mfa:
         statement['Condition'] = {
                 'Bool':{'aws:MultiFactorAuthPresent':'true'}}
-    policy_doc = json.dumps(dict(
-            Version='2012-10-17', Statement=[statement]))
+    policy_doc = dict(Version='2012-10-17', Statement=[statement])
 
     # get iam role object.  create role if it does not exist (i.e. won't load)
     try:
@@ -790,15 +780,18 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                         Description=d_spec['Description'],
                         Path=munge_path(auth_spec['default_path'], d_spec),
                         RoleName=d_spec['RoleName'],
-                        AssumeRolePolicyDocument=policy_doc)
+                        AssumeRolePolicyDocument=json.dumps(policy_doc))
                 if 'Policies' in d_spec and d_spec['Policies']:
                     role.load()
                     for policy_name in d_spec['Policies']:
                         policy_arn = get_policy_arn(iam_client, account_name,
                                 policy_name, args, log, auth_spec)
                         log.info("Attaching policy '%s' to role '%s' "
-                                "in account '%s'" %
-                                (policy_name, d_spec['RoleName'], account_name))
+                                "in account '%s':\n%s" % (
+                                        policy_name, 
+                                        d_spec['RoleName'], 
+                                        account_name,
+                                        yamlfmt(policy_doc)))
                         if args['--exec'] and policy_arn:
                             role.attach_policy(PolicyArn=policy_arn)
                 return
@@ -810,13 +803,17 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
         raise
 
     # update delegation role if needed
-    if json.dumps(role.assume_role_policy_document) != policy_doc:
-        log.info("Updating policy document in role '%s' in account '%s'" %
-                (d_spec['RoleName'], account_name))
+    if role.assume_role_policy_document != policy_doc:
+        log.info("Updating policy document in role '%s' in account '%s':\n%s" % (
+                d_spec['RoleName'], 
+                account_name,
+                string_differ(
+                        yamlfmt(role.assume_role_policy_document),
+                        yamlfmt(policy_doc))))
         if args['--exec']:
             iam_client.update_assume_role_policy(
                 RoleName=role.role_name,
-                PolicyDocument=policy_doc)
+                PolicyDocument=json.dumps(policy_doc))
     if role.description != d_spec['Description']:
         log.info("Updating description in role '%s' in account '%s'" %
                 (d_spec['RoleName'], account_name))

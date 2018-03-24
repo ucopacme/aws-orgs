@@ -340,13 +340,18 @@ def merge_aliases(log, deployed_accounts, aliases):
     return deployed_accounts
 
 
-def string_differ(string1, string2, label1=None, label2=None):
-    diff = difflib.unified_diff(
-            string1.splitlines(keepends=True),
-            string2.splitlines(keepends=True),
-            fromfile=label1,
-            tofile=label2)
+def string_differ(string1, string2):
+    """Returns the diff of 2 strings"""
+    diff = difflib.ndiff(
+        string1.splitlines(keepends=True),
+        string2.splitlines(keepends=True),
+    )
     return ''.join(list(diff))
+
+
+def yamlfmt(dict_obj):
+    """Convert a dictionary object into a yaml formated string"""
+    return yaml.dump(dict_obj, default_flow_style=False)
 
     
 
