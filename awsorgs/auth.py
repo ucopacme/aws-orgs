@@ -73,6 +73,61 @@ def display_provisioned_users(log, args, deployed, auth_spec, credentials):
         else:
             spacer = ' ' * (12 - len(name))
             log.info("%s%s\t%s" % (name, spacer, arn))
+        
+
+def display_users_and_groups_in_accounts(log, args, deployed, auth_spec):
+    """
+    Print report of currently deployed IAM users and groups in each account
+    in the Organization.
+
+    ISSUE: need to check for IsTruncated when gathering users/groups
+    ISSUE: report access keys, ssh keys, mfa devices, http users
+    """
+    # Thread worker function to gather report for each account
+    def display_users_and_groups(account, report, auth_spec):
+        messages = []
+        overbar = '_' * (16 + len(account['Name']))
+        messages.append('\n%s' % overbar)
+        messages.append("Account:\t%s" % account['Name'])
+        credentials = get_assume_role_credentials(
+                account['Id'],
+                auth_spec['org_access_role'])
+        if isinstance(credentials, RuntimeError):
+            messages.append(credentials)
+        else:
+            iam_client = boto3.client('iam', **credentials)
+            iam_resource = boto3.resource('iam', **credentials)
+            users = [u for u in iam_client.list_users()['Users']]
+            groups = iam_client.list_groups()['Groups']
+            if users:
+                messages.append("Users:")
+                if not args['--full']:
+                    for user in users:
+                        messages.append("  %s" % user['Arn'])
+                else:
+                    messages.append(yamlfmt(users))
+            if groups:
+                messages.append("Groups:")
+                if not args['--full']:
+                    for group in groups:
+                        messages.append("  %s" % group['Arn'])
+                else:
+                    messages.append(yamlfmt(groups))
+        report[account['Name']] = messages
+    # gather report data from accounts
+    report = {}
+    queue_threads(
+            log, deployed['accounts'],
+            display_users_and_groups,
+            f_args=(report, auth_spec),
+            thread_count=10)
+    # process the reports
+    header = "Provisioned IAM Users and Groups in all Org Accounts:"
+    overbar = '_' * len(header)
+    log.info("\n\n%s\n%s" % (overbar, header))
+    for account, messages in sorted(report.items()):
+        for msg in messages:
+            log.info(msg)
 
 
 def expire_users(log, args, deployed, auth_spec, credentials):
@@ -914,13 +969,15 @@ def main():
 
     if args['report']:
         if args['--user']:
-            display_provisioned_users(log, args, deployed, auth_spec, credentials)
+            display_users_and_groups_in_accounts(log, args, deployed, auth_spec)
+            #display_provisioned_users(log, args, deployed, auth_spec, credentials)
         if args['--group']:
             display_provisioned_groups(log, args, deployed, credentials)
         if args['--role']:
             display_roles_in_accounts(log, args, deployed, auth_spec)
         if not (args['--user'] or args['--group'] or args['--role']):
-            display_provisioned_users(log, args, deployed, auth_spec, credentials)
+            display_users_and_groups_in_accounts(log, args, deployed, auth_spec)
+            #display_provisioned_users(log, args, deployed, auth_spec, credentials)
             display_provisioned_groups(log, args, deployed, credentials)
             display_roles_in_accounts(log, args, deployed, auth_spec)
 
