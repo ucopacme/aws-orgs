@@ -73,7 +73,7 @@ def display_provisioned_users(log, args, deployed, auth_spec, credentials):
         else:
             spacer = ' ' * (12 - len(name))
             log.info("%s%s\t%s" % (name, spacer, arn))
-        
+
 
 def display_users_and_groups_in_accounts(log, args, deployed, auth_spec):
     """
@@ -125,6 +125,65 @@ def display_users_and_groups_in_accounts(log, args, deployed, auth_spec):
     header = "Provisioned IAM Users and Groups in all Org Accounts:"
     overbar = '_' * len(header)
     log.info("\n\n%s\n%s" % (overbar, header))
+    for account, messages in sorted(report.items()):
+        for msg in messages:
+            log.info(msg)
+
+def user_group_report(credentials):
+    iam_client = boto3.client('iam', **credentials)
+    users = iam_client.list_users()['Users']
+    groups = iam_client.list_groups()['Groups']
+    messages = []
+    if users:
+        messages.append("Users:")
+        for user in users:
+            messages.append("  %s" % user['Arn'])
+    if groups:
+        messages.append("Groups:")
+        for group in groups:
+            messages.append("  %s" % group['Arn'])
+    return messages
+
+def user_group_report_full(credentials):
+    iam_client = boto3.client('iam', **credentials)
+    users = iam_client.list_users()['Users']
+    groups = iam_client.list_groups()['Groups']
+    messages = []
+    if users:
+        messages.append("Users:")
+        messages.append(yamlfmt(users))
+    if groups:
+        messages.append("Groups:")
+        messages.append(yamlfmt(groups))
+    return messages
+
+
+def report_maker(log, accounts, role, report_function, header=None):
+    """
+    """
+    # Thread worker function to gather report for each account
+    def make_account_report(account, report, role):
+        messages = []
+        overbar = '_' * (16 + len(account['Name']))
+        messages.append('\n%s' % overbar)
+        messages.append("Account:\t%s" % account['Name'])
+        credentials = get_assume_role_credentials(account['Id'], role)
+        if isinstance(credentials, RuntimeError):
+            messages.append(credentials)
+        else:
+            messages += report_function(credentials)
+        report[account['Name']] = messages
+    # gather report data from accounts
+    report = {}
+    queue_threads(
+            log, accounts,
+            make_account_report,
+            f_args=(report, role),
+            thread_count=10)
+    # process the reports
+    if header:
+        overbar = '_' * len(header)
+        log.info("\n\n%s\n%s" % (overbar, header))
     for account, messages in sorted(report.items()):
         for msg in messages:
             log.info(msg)
@@ -969,7 +1028,11 @@ def main():
 
     if args['report']:
         if args['--user']:
-            display_users_and_groups_in_accounts(log, args, deployed, auth_spec)
+            report_maker(log, deployed['accounts'], 
+                              auth_spec['org_access_role'], 
+                              user_group_report_full, 
+                              "Provisioned IAM Users and Groups in all Org Accounts:")
+            #display_users_and_groups_in_accounts(log, args, deployed, auth_spec)
             #display_provisioned_users(log, args, deployed, auth_spec, credentials)
         if args['--group']:
             display_provisioned_groups(log, args, deployed, credentials)
@@ -978,7 +1041,7 @@ def main():
         if not (args['--user'] or args['--group'] or args['--role']):
             display_users_and_groups_in_accounts(log, args, deployed, auth_spec)
             #display_provisioned_users(log, args, deployed, auth_spec, credentials)
-            display_provisioned_groups(log, args, deployed, credentials)
+            #display_provisioned_groups(log, args, deployed, credentials)
             display_roles_in_accounts(log, args, deployed, auth_spec)
 
     if args['users']:
