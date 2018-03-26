@@ -44,35 +44,17 @@ from docopt import docopt
 from awsorgs.utils import *
 
 
-def scan_created_accounts(log, org_client):
-    """
-    Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
-    Returns a list of dictionary.
-    """
-    log.debug('running')
-    status = org_client.list_create_account_status(States=['SUCCEEDED'])
-    created_accounts = status['CreateAccountStatuses']
-    while 'NextToken' in status and status['NextToken']:
-        log.debug("NextToken: %s" % status['NextToken'])
-        status = org_client.list_create_account_status(
-                States=['SUCCEEDED'],
-                NextToken=status['NextToken'])
-        created_accounts += status['CreateAccountStatuses']
-    return created_accounts
-
-
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
     Compare deployed_accounts to list of accounts in the accounts spec.
     Create accounts not found in deployed_accounts.
     """
     for a_spec in account_spec['accounts']:
-        if not lookup(deployed_accounts, 'Name', a_spec['Name'],):
+        if not lookup(deployed_accounts, 'Name', a_spec['Name']):
             # check if it is still being provisioned
             created_accounts = scan_created_accounts(log, org_client)
             if lookup(created_accounts, 'AccountName', a_spec['Name']):
-                log.warn("New account '%s' is not yet available" %
-                        a_spec['Name'])
+                log.warn("New account '%s' is not yet available" % a_spec['Name'])
                 break
             # create a new account
             if 'Email' in a_spec and a_spec['Email']:
@@ -83,7 +65,8 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
             log.debug('account email: %s' % email_addr)
             if args['--exec']:
                 new_account = org_client.create_account(
-                        AccountName=a_spec['Name'], Email=email_addr)
+                        AccountName=a_spec['Name'],
+                        Email=email_addr)
                 create_id = new_account['CreateAccountStatus']['Id']
                 log.info("CreateAccountStatus Id: %s" % (create_id))
                 # validate creation status
@@ -149,7 +132,8 @@ def set_account_alias(account, log, args, account_spec):
 
 def scan_invited_accounts(log, org_client):
     """Return a list of handshake IDs"""
-    response = org_client.list_handshakes_for_organization(Filter={'ActionType': 'INVITE'})
+    response = org_client.list_handshakes_for_organization(
+            Filter={'ActionType': 'INVITE'})
     handshakes = response['Handshakes']
     while 'NextToken' in response:
         response = org_client.list_handshakes_for_organization(
@@ -167,7 +151,8 @@ def invite_account(log, args, org_client, deployed_accounts):
         log.error("account %s already in organization" % account_id)
         return
     invited_accounts = scan_invited_accounts(log, org_client)
-    account_invite = [invite for invite in invited_accounts if lookup(invite['Parties'], 'Type', 'ACCOUNT', 'Id') == account_id]
+    account_invite = [invite for invite in invited_accounts 
+            if lookup(invite['Parties'], 'Type', 'ACCOUNT', 'Id') == account_id]
     if account_invite:
         log.debug('account_invite: %s' % account_invite)
         invite_state = account_invite[0]['State']
@@ -176,7 +161,8 @@ def invite_account(log, args, org_client, deployed_accounts):
             log.error('Account %s has already accepted a previous invite' % account_id)
             return
         if invite_state in ['REQUESTED', 'OPEN']:
-            log.error('Account %s has already been invited to Org and status is %s' % (account_id, invite_state))
+            log.error('Account %s has already been invited to Org and status is %s' % (
+                    account_id, invite_state))
             return
     log.info("inviting account %s to join Org" % account_id)
     if args['--exec']:

@@ -99,22 +99,6 @@ def list_policies_in_ou (org_client, ou_id):
     return sorted([ou['Name'] for ou in policies_in_ou])
 
 
-def scan_created_accounts(org_client):
-    """
-    Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
-    Returns a list of dictionary.
-    """
-    status = org_client.list_create_account_status(
-            States=['SUCCEEDED'])
-    created_accounts = status['CreateAccountStatuses']
-    while 'NextToken' in status and status['NextToken']:
-        status = org_client.list_create_account_status(
-                States=['SUCCEEDED'],
-                NextToken=status['NextToken'])
-        created_accounts += status['CreateAccountStatuses']
-    return created_accounts
-
-
 def scan_deployed_policies(org_client):
     """
     Return list of Service Control Policies deployed in Organization

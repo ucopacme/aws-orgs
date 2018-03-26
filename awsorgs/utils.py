@@ -303,6 +303,23 @@ def scan_deployed_accounts(log, org_client):
         deployed_accounts += accounts['Accounts']
     # only return accounts that have an 'Name' key
     return [d for d in deployed_accounts if 'Name' in d ]
+
+
+def scan_created_accounts(log, org_client):
+    """
+    Query AWS Organization for accounts with creation status of 'SUCCEEDED'.
+    Returns a list of dictionary.
+    """
+    log.debug('running')
+    status = org_client.list_create_account_status(States=['SUCCEEDED'])
+    created_accounts = status['CreateAccountStatuses']
+    while 'NextToken' in status and status['NextToken']:
+        log.debug("NextToken: %s" % status['NextToken'])
+        status = org_client.list_create_account_status(
+                States=['SUCCEEDED'],
+                NextToken=status['NextToken'])
+        created_accounts += status['CreateAccountStatuses']
+    return created_accounts
         
 
 def get_account_aliases(log, deployed_accounts, role):
