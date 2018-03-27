@@ -40,9 +40,11 @@ Options:
 """
 
 import os
+import io
 import sys
 import yaml
 import json
+import csv
 
 import boto3
 from botocore.exceptions import ClientError
@@ -85,20 +87,60 @@ def user_group_report(credentials, verbose=False):
     messages = []
     iam_client = boto3.client('iam', **credentials)
 
+    user_info = []
     users = get_iam_objects(iam_client.list_users, 'Users')
-    if users:
-        messages.append("Users:")
+    for u in users:
         if verbose:
-            messages.append(yamlfmt(users))
+            user_info.append(u)
         else:
-            messages += ["  %s" % user['Arn'] for user in users]
+            user_info.append(u['Arn'])
+    if user_info:
+        messages.append(yamlfmt(dict(Users=user_info)))
+
+    group_info = []
     groups = get_iam_objects(iam_client.list_groups, 'Groups')
-    if groups:
-        messages.append("Groups:")
+    for g in groups:
         if verbose:
-            messages.append(yamlfmt(groups))
+            group_info.append(g)
         else:
-            messages += ["  %s" % group['Arn'] for group in groups]
+            group_info.append(g['Arn'])
+    if group_info:
+        messages.append(yamlfmt(dict(Groups=group_info)))
+    #if groups:
+    #    messages.append("Groups:")
+    #    if verbose:
+    #        messages.append(yamlfmt(groups))
+    #    else:
+    #        messages += ["  %s" % group['Arn'] for group in groups]
+    return messages
+
+
+#botocore.errorfactory.CredentialReportNotPresentException: An error occurred (ReportNotPresent) when calling the GetCredentialReport operation: Unknown
+def credentials_report(credentials):
+    messages = []
+    iam_client = boto3.client('iam', **credentials)
+    try:
+        response = iam_client.get_credential_report()
+    except Exception as e:
+        response = iam_client.generate_credential_report()
+        messages.append(yamlfmt(response))
+        return messages
+
+    report_file_object = io.StringIO(response['Content'].decode())
+    reader = csv.DictReader(report_file_object)
+    user_info = []
+    for row in reader:
+        user = dict()
+        for key in reader.fieldnames:
+            user['UserName'] = row['user']
+            user['Arn'] = row['arn']
+            if (key not in ['user', 'arn'] and 
+                    row[key] not in ['N/A', 'not_supported', 'no_information', 'false']):
+                user[key] = row[key]
+        user_info.append(user)
+
+    if user_info:
+        messages.append(yamlfmt(dict(Users=user_info)))
     return messages
 
 
@@ -992,7 +1034,10 @@ def main():
             #display_users_and_groups_in_accounts(log, args, deployed, auth_spec)
             #display_provisioned_users(log, args, deployed, auth_spec, credentials)
         if args['--group']:
-            display_provisioned_groups(log, args, deployed, credentials)
+            #display_provisioned_groups(log, args, deployed, credentials)
+            report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
+                credentials_report,
+            )
         if args['--role']:
             #display_roles_in_accounts(log, args, deployed, auth_spec)
             report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
