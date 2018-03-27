@@ -143,6 +143,34 @@ def user_report(log, aliases, user, login_profile):
                 format_delegation_table(delegation_table, aliases))
 
 
+#def user_report(log, aliases, user, login_profile):
+#    """Generate report of IAM user's login profile, password usage, and
+#    assume_role delegations for any groups user is member of.
+#    """
+#    delegation_table = list_delegations(log, user)
+#    user_info = dict(
+#        User=user.name,
+#        Arn=user.arn,
+#        UserID=user.user_id,
+#        UserCreated=user.create_date,
+#    )
+#    if login_profile:
+#        user_info['Login profile created'] = login_profile.create_date
+#        user_info['Passwd reset required'] = login_profile.password_reset_required
+#        if login_profile.password_reset_required:
+#            user_info['One-time-passwd age'] = (
+#                datetime.datetime.now(datetime.timezone.utc) - login_profile.create_date
+#            )
+#        else:
+#            user_info['Password last used'] = user.password_last_used
+#    else:
+#        user_info['User login profile'] = login_profile
+#    assume_role_arns = list_delegations(log, user, aliases)
+#    if assume_role_arns:
+#        user_info['Delegations'] = format_delegation_table(delegation_table, aliases)
+#    log.info(yamlfmt(user_info))
+
+
 def validate_user(user_name, credentials=None):
     """Return a valid IAM User object"""
     if credentials:
