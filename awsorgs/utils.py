@@ -370,5 +370,45 @@ def yamlfmt(dict_obj):
     """Convert a dictionary object into a yaml formated string"""
     return yaml.dump(dict_obj, default_flow_style=False)
 
+
+def overbar(string):
+    """
+    Returns string preceeded by an overbar of the same length:
+    >>> print(overbar('blee'))
+    ____
+    blee
+    """
+    return "%s\n%s" % ('_' * len(string), string)
+
+
+def report_maker(log, accounts, role, query_func, report_header=None, **qf_args):
+    """
+    Generate a report by running a arbitrary query function in each account.
+    The query function must return a list of strings.
+    """
+    # Thread worker function to gather report for each account
+    def make_account_report(account, report, role):
+        messages = []
+        messages.append(overbar("Account:    %s" % account['Name']))
+        credentials = get_assume_role_credentials(account['Id'], role)
+        if isinstance(credentials, RuntimeError):
+            messages.append(credentials)
+        else:
+            messages += query_func(credentials, **qf_args)
+        report[account['Name']] = messages
+    # gather report data from accounts
+    report = {}
+    queue_threads(
+            log, accounts,
+            make_account_report,
+            f_args=(report, role),
+            thread_count=10)
+    # process the reports
+    if report_header:
+        log.info("\n\n%s" % overbar(report_header))
+    for account, messages in sorted(report.items()):
+        for msg in messages:
+            log.info(msg)
+
     
 

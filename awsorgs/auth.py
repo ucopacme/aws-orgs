@@ -102,83 +102,46 @@ def user_group_report(credentials, verbose=False):
 
 
 def role_report(credentials, verbose=False):
+    """
+    A report_maker query function.
+    Reports IAM custom policies and roles in an account.
+    """
     messages = []
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
 
     custom_policies = iam_client.list_policies(Scope='Local')['Policies']
-    if custom_policies:
-        messages.append("Custom Policies:")
+    policy_info = []
+    for p in custom_policies:
         if verbose:
-            #messages.append(yamlfmt(custom_policies))
-            for p in custom_policies:
-               policy = iam_resource.Policy(p['Arn'])
-               version =  policy.default_version_id
-               document = iam_resource.PolicyVersion(p['Arn'], version).document
-               messages.append(p['Arn'])
-               messages.append(yamlfmt(document))
+            policy_version_id = iam_resource.Policy(p['Arn']).default_version_id
+            policy_info.append(dict(
+                Arn=p['Arn'],
+                Statement=iam_resource.PolicyVersion(
+                    p['Arn'], 
+                    policy_version_id
+                ).document['Statement'],
+            ))
         else:
-            messages += ["  %s" % p['Arn'] for p in custom_policies]
+            policy_info.append(p['Arn'])
+    if policy_info:
+        messages.append(yamlfmt(dict(CustomPolicies=policy_info)))
 
     roles = iam_client.list_roles()['Roles']
-    messages.append("Roles:")
+    role_info = []
     for r in roles:
         role = iam_resource.Role(r['RoleName'])
         if verbose:
-            principal = role.assume_role_policy_document['Statement'][0]['Principal']
-            if 'AWS' in principal:
-                messages.append("  %s" % role.name)
-                messages.append("    Arn:\t%s" % role.arn)
-                messages.append("    Principal:\t%s" % principal['AWS'])
-                attached = [p.policy_name for p
-                        in list(role.attached_policies.all())]
-                if attached:
-                    messages.append("    Attached Policies:")
-                    for policy in attached:
-                        messages.append("      %s" % policy)
+            role_info.append(dict(
+                Arn=role.arn,
+                Statement=role.assume_role_policy_document['Statement'],
+                AttachedPolicies=[p.policy_name for p in list(role.attached_policies.all())],
+            ))
         else:
-            messages.append("  %s" % role.arn)
+            role_info.append(role.arn)
+    if role_info:
+        messages.append(yamlfmt(dict(Roles=role_info)))
     return messages
-
-
-def overbar(string):
-    """
-    Returns string preceeded by an overbar of the same length:
-    >>> print(overbar('blee'))
-    ____
-    blee
-    """
-    return "%s\n%s" % ('_' * len(string), string)
-
-
-def report_maker(log, accounts, role, query_func, report_header=None, **qf_args):
-    """
-    Generate a report by running a arbitrary query function in each account.
-    The query function must return a list of strings.
-    """
-    # Thread worker function to gather report for each account
-    def make_account_report(account, report, role):
-        messages = []
-        messages.append(overbar("Account:    %s" % account['Name']))
-        credentials = get_assume_role_credentials(account['Id'], role)
-        if isinstance(credentials, RuntimeError):
-            messages.append(credentials)
-        else:
-            messages += query_func(credentials, **qf_args)
-        report[account['Name']] = messages
-    # gather report data from accounts
-    report = {}
-    queue_threads(
-            log, accounts,
-            make_account_report,
-            f_args=(report, role),
-            thread_count=10)
-    # process the reports
-    if report_header:
-        log.info("\n\n%s" % overbar(report_header))
-    for account, messages in sorted(report.items()):
-        for msg in messages:
-            log.info(msg)
 
 
 def expire_users(log, args, deployed, auth_spec, credentials):
