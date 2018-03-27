@@ -79,19 +79,20 @@ def user_group_report(credentials, verbose=False):
     A report_maker query function.
     Reports IAM users and Groups in an account.
 
-    ISSUE: need to check for IsTruncated when gathering users/groups
     ISSUE: report access keys, ssh keys, mfa devices, http users
+
     """
     messages = []
     iam_client = boto3.client('iam', **credentials)
-    users = iam_client.list_users()['Users']
+
+    users = get_iam_objects(iam_client.list_users, 'Users')
     if users:
         messages.append("Users:")
         if verbose:
             messages.append(yamlfmt(users))
         else:
             messages += ["  %s" % user['Arn'] for user in users]
-    groups = iam_client.list_groups()['Groups']
+    groups = get_iam_objects(iam_client.list_groups, 'Groups')
     if groups:
         messages.append("Groups:")
         if verbose:
@@ -110,8 +111,9 @@ def role_report(credentials, verbose=False):
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
 
-    custom_policies = iam_client.list_policies(Scope='Local')['Policies']
     policy_info = []
+    custom_policies = get_iam_objects(iam_client.list_policies, 'Policies', 
+            dict(Scope='Local'))
     for p in custom_policies:
         if verbose:
             policy_version_id = iam_resource.Policy(p['Arn']).default_version_id
@@ -127,8 +129,8 @@ def role_report(credentials, verbose=False):
     if policy_info:
         messages.append(yamlfmt(dict(CustomPolicies=policy_info)))
 
-    roles = iam_client.list_roles()['Roles']
     role_info = []
+    roles = get_iam_objects(iam_client.list_roles, 'Roles')
     for r in roles:
         role = iam_resource.Role(r['RoleName'])
         if verbose:
