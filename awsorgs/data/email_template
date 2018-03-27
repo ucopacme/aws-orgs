@@ -17,24 +17,22 @@ IMPORTANT: the one time password will expire after 24 hours.
   Login URL:            https://${trusted_account}.signin.aws.amazon.com/console
 
 
-2) Install 'Google Authenticator' app on your cell phone.
-
-Instructions:
-https://support.google.com/accounts/answer/1066447?co=GENIE.Platform%3DiOS&hl=en&oco=0
-
-
-3) Set up Google Authenticator as your 'Virtual MFA Device' in the
-AWS console.
+2) Set up your 'Virtual MFA Device' in the AWS console.
 
 Instructions:
 http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html#enable-virt-mfa-for-iam-user
 
+You can use either Duo or Google Authenticator as your virtual MFA device.
 
-4) Log out and log back in again.  You will be queried for your 6 digit
+Instructions for installing Google Authenticator:
+https://support.google.com/accounts/answer/1066447?co=GENIE.Platform%3DiOS&hl=en&oco=0
+
+
+3) Log out and log back in again.  You will be queried for your 6 digit
 token code.  
 
 
-5) Verify you can switch role into any accounts where you have cross
+4) Verify you can switch role into any accounts where you have cross
 account access.  From the delegation information listed below supply
 the account_alias or account_id in the 'Account' field.  Supply the
 role_name in the 'Role' field.
@@ -43,7 +41,7 @@ Instructions:
 https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-console.html?icmpid=docs_iam_console
 
 
-6) (optional) Set up 'AWS Access Keys' for your IAM user.  
+5) (optional) Set up 'AWS Access Keys' for your IAM user.  
 
 Instructions:
 http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html#Using_CreateAccessKey
