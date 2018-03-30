@@ -95,11 +95,11 @@ def get_logger(args):
     Return logging.Logger object.
     """
     # log level
-    log_level = logging.CRITICAL
-    if args['--verbose'] or args['report'] or args['--boto-log']:
-        log_level = logging.INFO
+    log_level = logging.INFO
     if args['--debug']:
         log_level = logging.DEBUG
+    if args['--quiet']:
+        log_level = logging.CRITICAL
     # log format
     log_format = '%(name)s: %(levelname)-9s%(message)s'
     if args['report']:
@@ -111,7 +111,7 @@ def get_logger(args):
     if not args['--boto-log']:
         logging.getLogger('botocore').propagate = False
         logging.getLogger('boto3').propagate = False
-    logging.basicConfig(format=log_format, level=log_level)
+    logging.basicConfig(stream=sys.stdout, format=log_format, level=log_level)
     log = logging.getLogger(__name__)
     return log
 

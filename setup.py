@@ -1,5 +1,6 @@
 """aws-orgs setup"""
 
+from awsorgs import __version__
 from setuptools import setup, find_packages
 from codecs import open
 from os import path
@@ -10,7 +11,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='aws-orgs',
-    version='0.0.6.rc1',
+    version='0.0.7',
     description='Tools to manage AWS Organizations',
     long_description=long_description,
     url='https://github.com/ashleygould/aws-orgs',
@@ -22,7 +23,6 @@ setup(
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.6',
     ],

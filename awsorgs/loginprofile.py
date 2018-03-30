@@ -2,10 +2,10 @@
 """Manage AWS IAM user login profile.
 
 Usage:
-  awsloginprofile USER [--report] [-vdr ROLE] [--boto-log]
-  awsloginprofile USER --disable [-vdr ROLE] [--boto-log]
-  awsloginprofile USER --disable-expired [-vdr ROLE] [--opt-ttl HOURS] [--boto-log]
-  awsloginprofile USER (--new | --reset | --reenable) [-vdr ROLE] [--boto-log]
+  awsloginprofile USER [--report] [-qdr ROLE] [--boto-log]
+  awsloginprofile USER --disable [-qdr ROLE] [--boto-log]
+  awsloginprofile USER --disable-expired [-qdr ROLE] [--opt-ttl HOURS] [--boto-log]
+  awsloginprofile USER (--new | --reset | --reenable) [-qdr ROLE] [--boto-log]
                        [--password PASSWORD] [--email EMAIL]
   awsloginprofile --help
 
@@ -25,8 +25,8 @@ Options:
                            Use this to substitute account aliases for IDs.
   -h, --help               Show this help message and exit.
   -V, --version            Display version info and exit.
-  -v, --verbose            Log to activity to STDOUT at log level INFO.
-  -d, --debug              Increase log level to 'DEBUG'. Implies '--verbose'.
+  -q, --quiet              Repress log output.
+  -d, --debug              Increase log level to 'DEBUG'.
   --boto-log               Include botocore and boto3 logs in log stream.
 
 """
@@ -44,6 +44,7 @@ from botocore.exceptions import ClientError
 from docopt import docopt
 from passgen import passgen
 
+import awsorgs
 from awsorgs.utils import *
 
 
@@ -263,7 +264,7 @@ def onetime_passwd_expired(log, user, login_profile, hours):
 
 
 def main():
-    args = docopt(__doc__, version='0.0.6.rc1')
+    args = docopt(__doc__, version=awsorgs.__version__)
     # HACK ALERT!
     # set '--exec' and 'report' args to make get_logger() happy
     args['--exec'] = True

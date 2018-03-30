@@ -25,7 +25,7 @@ import boto3
 from botocore.exceptions import ClientError
 from docopt import docopt
 
-import awsorgs.utils
+import awsorgs
 from awsorgs.utils import *
 
 ROLENAME = 'OrganizationAccountAccessRole'
@@ -33,7 +33,7 @@ DESCRIPTION = 'Organization Access Role'
 POLICYNAME = 'AdministratorAccess'
 
 def main():
-    args = docopt(__doc__, version='0.0.6.rc1')
+    args = docopt(__doc__, version=awsorgs.__version__)
     iam_client = boto3.client('iam')
     # assemble assume-role policy statement
     principal = "arn:aws:iam::%s:root" % args['--master_id']

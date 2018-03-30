@@ -5,7 +5,7 @@ aws-orgs
 This project is an attempt to provision AWS Oranizations IAM resources
 based on structured imput files.
 
-aws-orgs installation provides three python executibles:  
+aws-orgs installation provides the following python executibles:  
 
 awsorgs
   Manage recources in an AWS Organization.
@@ -31,16 +31,22 @@ See the ``samples/`` directory for anotated examples of spec-file syntax.
 
 **Install**
 
-Site installation::
+Python virtual environment (recommended)::
 
-  sudo pip install git+https://www.github.com/ashleygould/aws-orgs.git 
+  git clone https://github.com/ashleygould/aws-orgs
+  source ~/path_to_my_venv/bin/activate
+  pip install -e aws-orgs/
 
 Local user installation::
 
   git clone https://github.com/ashleygould/aws-orgs
   pip install --user -e aws-orgs/
 
-On RHEL6 you may need to update setuptools as well:
+Site installation::
+
+  sudo pip install git+https://www.github.com/ashleygould/aws-orgs.git 
+
+Note: On RHEL6 you may need to update setuptools as well::
 
   sudo pip install -U setuptools
 
@@ -59,17 +65,18 @@ On RHEL6 you may need to update setuptools as well:
   # Run each command with -h option for full usage info.
 
   awsorgs report
-  awsorgs organization -v -s org-spec.yaml [--exec]
+  awsorgs organization -s org-spec.yaml [--exec]
 
   awsaccounts report
   awsaccounts invite --account-id ID [--exec]
-  awsaccounts create -v -s account-spec.yaml [--exec]
+  awsaccounts create -s account-spec.yaml [--exec]
 
   awsorgs-accessrole --master_id ID [--exec]
 
   awsauth report -s auth-spec.yaml 
-  awsauth users -v -s auth-spec.yaml [--exec]
-  awsauth delegation -v -s auth-spec.yaml [--exec]
+  awsauth users -s auth-spec.yaml [--exec]
+  awsauth delegations -s auth-spec.yaml [--exec]
+  awsauth local-users -s auth-spec.yaml [--exec]
 
   awsloginprofile maryanne
   awsloginprofile maryanne --new --role ListOrgAccounts
@@ -83,5 +90,5 @@ On RHEL6 you may need to update setuptools as well:
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.0.6.rc1
+:Version: 0.0.7
 

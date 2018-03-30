@@ -5,10 +5,10 @@
 AWS Organization.
 
 Usage:
-  awsauth users --spec-file FILE [--exec] [-vd] [--boto-log]
+  awsauth users --spec-file FILE [--exec] [-qd] [--boto-log]
           [--disable-expired --opt-ttl HOURS]
-  awsauth delegations --spec-file FILE [--exec] [-vd] [--boto-log]
-  awsauth local-users --spec-file FILE [--exec] [-vd] [--boto-log]
+  awsauth delegations --spec-file FILE [--exec] [-qd] [--boto-log]
+  awsauth local-users --spec-file FILE [--exec] [-qd] [--boto-log]
   awsauth report --spec-file FILE [--users --roles --credentials]
           [--full] [--account NAME] [-d] [--boto-log]
   awsauth --version
@@ -18,15 +18,15 @@ Modes of operation:
   users         Provision users, groups and group membership.
   delegation    Provision policies and roles for cross account access.
   local-users   Provision local IAM users and policies in accounts.
-  report        Display provisioned resources (Implies '--verbose').
+  report        Display provisioned resources.
 
 Options:
   -h, --help                 Show this help message and exit.
   -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS account specification file in yaml format.
   --exec                     Execute proposed changes to AWS accounts.
-  -v, --verbose              Log to activity to STDOUT at log level INFO.
-  -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
+  -q, --quiet                Repress log output.
+  -d, --debug                Increase log level to 'DEBUG'.
   --boto-log                 Include botocore and boto3 logs in log stream.
   --disable-expired          Delete profile if one-time-password
                              exceeds --opt-ttl.
@@ -50,6 +50,7 @@ import boto3
 from botocore.exceptions import ClientError
 from docopt import docopt
 
+import awsorgs
 from awsorgs.utils import *
 from awsorgs.loginprofile import *
 from awsorgs.reports import *
@@ -754,7 +755,7 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
 
 
 def main():
-    args = docopt(__doc__, version='0.0.6.rc1')
+    args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
     auth_spec = validate_spec_file(log, args['--spec-file'], 'auth_spec')
@@ -794,12 +795,6 @@ def main():
                 account_authorization_report, "IAM Account Authorization:",
                 verbose=args['--full'],
             )
-            #report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
-            #    user_group_report, "IAM Roles in all Org Accounts:",
-            #)
-            #report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
-            #    role_report, "IAM Roles and Custom Policies in all Org Accounts:",
-            #)
 
     if args['users']:
         if args['--disable-expired']:

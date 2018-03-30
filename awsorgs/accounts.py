@@ -5,10 +5,10 @@
 
 Usage:
   awsaccounts report [-d] [--role ROLENAME] [--boto-log]
-  awsaccounts create (--spec-file FILE) [--exec] [-vd] [--boto-log]
-  awsaccounts alias (--spec-file FILE) [--role ROLENAME] [--exec] [-vd] [--boto-log]
+  awsaccounts create (--spec-file FILE) [--exec] [-qd] [--boto-log]
+  awsaccounts alias (--spec-file FILE) [--role ROLENAME] [--exec] [-qd] [--boto-log]
   awsaccounts invite (--account-id ID --spec-file FILE)
-                     [--exec] [-vd] [--boto-log]
+                     [--exec] [-qd] [--boto-log]
   awsaccounts (-h | --help)
   awsaccounts --version
 
@@ -26,8 +26,8 @@ Options:
   --exec                     Execute proposed changes to AWS accounts.
   --role ROLENAME            IAM role to use to access accounts.
                              [default: OrganizationAccountAccessRole]
-  -v, --verbose              Log to activity to STDOUT at log level INFO.
-  -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
+  -q, --quiet                Repress log output.
+  -d, --debug                Increase log level to 'DEBUG'.
   --boto-log                 Include botocore and boto3 logs in log stream.
 
 """
@@ -41,6 +41,7 @@ import botocore
 from botocore.exceptions import ClientError
 from docopt import docopt
 
+import awsorgs
 from awsorgs.utils import *
 
 
@@ -221,7 +222,7 @@ def unmanaged_accounts(log, deployed_accounts, account_spec):
 
 
 def main():
-    args = docopt(__doc__, version='0.0.6.rc1')
+    args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug(args)
     org_client = boto3.client('organizations')

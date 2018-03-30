@@ -5,7 +5,7 @@
 
 Usage:
   awsorgs report [-d] [--boto-log]
-  awsorgs organization (--spec-file FILE) [--exec] [-vd] [--boto-log]
+  awsorgs organization (--spec-file FILE) [--exec] [-qd] [--boto-log]
   awsorgs --version
   awsorgs --help
 
@@ -18,8 +18,8 @@ Options:
   -V, --version              Display version info and exit.
   -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
   --exec                     Execute proposed changes to AWS Org.
-  -v, --verbose              Log to activity to STDOUT at log level INFO.
-  -d, --debug                Increase log level to 'DEBUG'. Implies '--verbose'.
+  -q, --quiet                Repress log output.
+  -d, --debug                Increase log level to 'DEBUG'.
   --boto-log                 Include botocore and boto3 logs in log stream.
 
 """
@@ -32,6 +32,7 @@ import time
 import boto3
 from docopt import docopt
 
+import awsorgs
 import awsorgs.utils
 from awsorgs.utils import *
 
@@ -383,7 +384,7 @@ def manage_ou(org_client, args, log, deployed, org_spec, ou_spec_list, parent_na
 
 
 def main():
-    args = docopt(__doc__, version='0.0.6.rc1')
+    args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
