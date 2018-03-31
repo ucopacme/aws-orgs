@@ -52,6 +52,7 @@ from docopt import docopt
 
 import awsorgs
 from awsorgs.utils import *
+from awsorgs.spec import *
 from awsorgs.loginprofile import *
 from awsorgs.reports import *
 

@@ -4,8 +4,8 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs report [-d] [--boto-log]
-  awsorgs organization (--spec-file FILE) [--exec] [-qd] [--boto-log]
+  awsorgs report [--config FILE] [-d|-dd]
+  awsorgs organization [--config FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
   awsorgs --version
   awsorgs --help
 
@@ -16,11 +16,12 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   -V, --version              Display version info and exit.
-  -s FILE, --spec-file FILE  AWS Org specification file in yaml format.
+  -f, --config FILE          AWS Org config file in yaml format.
+  --spec-dir PATH            Location of AWS Org specification file directory.
   --exec                     Execute proposed changes to AWS Org.
   -q, --quiet                Repress log output.
   -d, --debug                Increase log level to 'DEBUG'.
-  --boto-log                 Include botocore and boto3 logs in log stream.
+  -dd                        Include botocore and boto3 logs in log stream.
 
 """
 
@@ -35,6 +36,7 @@ from docopt import docopt
 import awsorgs
 import awsorgs.utils
 from awsorgs.utils import *
+from awsorgs.spec import *
 
 
 def validate_accounts_unique_in_org(log, root_spec):
@@ -252,7 +254,7 @@ def manage_policies(org_client, args, log, deployed, org_spec):
         policy_name = p_spec['Name']
         log.debug("considering sc_policy: %s" % policy_name)
         # dont touch default policy
-        if policy_name == org_spec['default_policy']:
+        if policy_name == org_spec['default_sc_policy']:
             continue
         policy = lookup(deployed['policies'], 'Name', policy_name)
         # delete existing sc_policy
@@ -309,7 +311,7 @@ def manage_policy_attachments(org_client, args, log, deployed, org_spec, ou_spec
             if p not in attached_policy_list]
     policies_to_detach = [p for p in attached_policy_list
             if p not in spec_policy_list
-            and p != org_spec['default_policy']]
+            and p != org_spec['default_sc_policy']]
     # attach policies
     for policy_name in policies_to_attach:
         if not lookup(deployed['policies'],'Name',policy_name):
@@ -385,26 +387,14 @@ def manage_ou(org_client, args, log, deployed, org_spec, ou_spec_list, parent_na
 
 def main():
     args = docopt(__doc__, version=awsorgs.__version__)
+    print(args)
     log = get_logger(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
-    deployed = dict(
-            policies = scan_deployed_policies(org_client),
-            accounts = scan_deployed_accounts(log, org_client),
-            ou = scan_deployed_ou(log, org_client, root_id))
-
-    if args['--spec-file']:
-        org_spec = validate_spec_file(log, args['--spec-file'], 'org_spec')
-        root_spec = lookup(org_spec['organizational_units'], 'Name', 'root')
-        validate_master_id(org_client, org_spec)
-        validate_accounts_unique_in_org(log, root_spec)
-        managed = dict(
-                accounts = search_spec(root_spec, 'Accounts', 'Child_OU'),
-                ou = search_spec(root_spec, 'Name', 'Child_OU'),
-                policies = [p['Name'] for p in org_spec['sc_policies']])
-        # ensure default_policy is considered 'managed'
-        if org_spec['default_policy'] not in managed['policies']:
-            managed['policies'].append(org_spec['default_policy'])
+    #deployed = dict(
+    #        policies = scan_deployed_policies(org_client),
+    #        accounts = scan_deployed_accounts(log, org_client),
+    #        ou = scan_deployed_ou(log, org_client, root_id))
 
     if args['report']:
         header = 'Provisioned Organizational Units in Org:'
@@ -414,21 +404,33 @@ def main():
         display_provisioned_policies(org_client, log, deployed)
 
     if args['organization']:
-        enable_policy_type_in_root(org_client, root_id)
-        manage_policies(org_client, args, log, deployed, org_spec)
-        # rescan deployed policies
-        deployed['policies'] = scan_deployed_policies(org_client)
-        manage_ou(org_client, args, log, deployed, org_spec,
-                org_spec['organizational_units'], 'root')
-        # check for unmanaged resources
-        for key in list(managed.keys()):
-            unmanaged= [a['Name'] for a in deployed[key] if a['Name'] not in managed[key]]
-            if unmanaged:
-                log.warn("Unmanaged %s in Organization: %s" % (key,', '.join(unmanaged)))
-                if key ==  'accounts':
-                    # append unmanaged accounts to default_ou
-                    place_unmanged_accounts(org_client, args, log, deployed,
-                            unmanaged, org_spec['default_ou'])
+        config = load_config(log, args)
+        org_spec = load_spec_files(log, args, config)
+        root_spec = lookup(org_spec['organizational_units'], 'Name', 'root')
+    #    validate_master_id(org_client, org_spec)
+    #    validate_accounts_unique_in_org(log, root_spec)
+    #    managed = dict(
+    #            accounts = search_spec(root_spec, 'Accounts', 'Child_OU'),
+    #            ou = search_spec(root_spec, 'Name', 'Child_OU'),
+    #            policies = [p['Name'] for p in org_spec['sc_policies']])
+    #    # ensure default_sc_policy is considered 'managed'
+    #    if org_spec['default_sc_policy'] not in managed['policies']:
+    #        managed['policies'].append(org_spec['default_sc_policy'])
+    #    enable_policy_type_in_root(org_client, root_id)
+    #    manage_policies(org_client, args, log, deployed, org_spec)
+    #    # rescan deployed policies
+    #    deployed['policies'] = scan_deployed_policies(org_client)
+    #    manage_ou(org_client, args, log, deployed, org_spec,
+    #            org_spec['organizational_units'], 'root')
+    #    # check for unmanaged resources
+    #    for key in list(managed.keys()):
+    #        unmanaged= [a['Name'] for a in deployed[key] if a['Name'] not in managed[key]]
+    #        if unmanaged:
+    #            log.warn("Unmanaged %s in Organization: %s" % (key,', '.join(unmanaged)))
+    #            if key ==  'accounts':
+    #                # append unmanaged accounts to default_ou
+    #                place_unmanged_accounts(org_client, args, log, deployed,
+    #                        unmanaged, org_spec['default_ou'])
 
 
 if __name__ == "__main__":
