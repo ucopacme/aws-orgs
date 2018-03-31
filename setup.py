@@ -28,7 +28,13 @@ setup(
     ],
     keywords='aws organizations',
     packages=find_packages(exclude=['scratch', 'notes']),
-    install_requires=['boto3', 'docopt', 'PyYAML', 'passgen'],
+    install_requires=[
+        'boto3', 
+        'docopt', 
+        'PyYAML', 
+        'passgen',
+        'cerberus',
+    ],
     package_data={
         'awsorgs': [
             'samples/*.yaml',

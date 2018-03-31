@@ -1,7 +1,7 @@
 """Spec validations patterns data module"""
 
 
-spec_patterns = """
+"""
 org_spec:
   master_account_id:
     required: True
@@ -71,8 +71,9 @@ auth_spec:
     required: False
     atype: list
     spec_pattern: custom_policy
+"""
 
-
+spec_patterns = """
 organizational_unit:
   Name:
     required: True

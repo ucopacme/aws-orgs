@@ -405,7 +405,7 @@ def main():
 
     if args['organization']:
         config = load_config(log, args)
-        org_spec = load_spec_files(log, args, config)
+        org_spec = validate_spec(log, args, config)
         root_spec = lookup(org_spec['organizational_units'], 'Name', 'root')
     #    validate_master_id(org_client, org_spec)
     #    validate_accounts_unique_in_org(log, root_spec)
