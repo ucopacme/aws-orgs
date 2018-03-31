@@ -387,8 +387,8 @@ def manage_ou(org_client, args, log, deployed, org_spec, ou_spec_list, parent_na
 
 def main():
     args = docopt(__doc__, version=awsorgs.__version__)
-    print(args)
     log = get_logger(args)
+    log.debug(args)
     org_client = boto3.client('organizations')
     root_id = get_root_id(org_client)
     #deployed = dict(
