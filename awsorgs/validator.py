@@ -58,13 +58,13 @@ users:
   type: list
   schema:
     type: dict
-    schema: account
+    schema: user
 groups:
   required: False
   type: list
   schema:
     type: dict
-    schema: account
+    schema: group
 delegations:
   required: False
   type: list
@@ -148,15 +148,20 @@ Name:
   type: string
 Accounts:
   required: False
-  type: string
+  nullable: True
+  type: list
+  schema:
+    type: string
 Child_OU:
   required: False
+  nullable: True
   type: list
   schema:
     type: dict
     schema: organizational_unit
 SC_Policies:
   required: False
+  nullable: True
   type: list
   schema:
     type: string
