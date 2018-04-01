@@ -5,12 +5,12 @@
 AWS Organization.
 
 Usage:
-  awsauth users --spec-file FILE [--exec] [-qd] [--boto-log]
+  awsauth users [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
           [--disable-expired --opt-ttl HOURS]
-  awsauth delegations --spec-file FILE [--exec] [-qd] [--boto-log]
-  awsauth local-users --spec-file FILE [--exec] [-qd] [--boto-log]
-  awsauth report --spec-file FILE [--users --roles --credentials]
-          [--full] [--account NAME] [-d] [--boto-log]
+  awsauth delegations [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
+  awsauth local-users [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
+  awsauth report [-f FILE] [--users --roles --credentials]
+          [--full] [--account NAME] [-d|-dd]
   awsauth --version
   awsauth --help
 
@@ -23,11 +23,12 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   -V, --version              Display version info and exit.
-  -s FILE, --spec-file FILE  AWS account specification file in yaml format.
+  -f, --config FILE          AWS Org config file in yaml format.
+  --spec-dir PATH            Location of AWS Org specification file directory.
   --exec                     Execute proposed changes to AWS accounts.
   -q, --quiet                Repress log output.
   -d, --debug                Increase log level to 'DEBUG'.
-  --boto-log                 Include botocore and boto3 logs in log stream.
+  -dd                        Include botocore and boto3 logs in log stream.
   --disable-expired          Delete profile if one-time-password
                              exceeds --opt-ttl.
   --opt-ttl HOURS            One-time-password time to live in hours
@@ -759,7 +760,8 @@ def main():
     args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
-    auth_spec = validate_spec_file(log, args['--spec-file'], 'auth_spec')
+    config = load_config(log, args)
+    auth_spec = validate_spec(log, args, config)
     org_client = boto3.client('organizations')
     validate_master_id(org_client, auth_spec)
     credentials = get_assume_role_credentials(

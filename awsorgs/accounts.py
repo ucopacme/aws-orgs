@@ -4,11 +4,12 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts report [-d] [--role ROLENAME] [--boto-log]
-  awsaccounts create (--spec-file FILE) [--exec] [-qd] [--boto-log]
-  awsaccounts alias (--spec-file FILE) [--role ROLENAME] [--exec] [-qd] [--boto-log]
-  awsaccounts invite (--account-id ID --spec-file FILE)
-                     [--exec] [-qd] [--boto-log]
+  awsaccounts report [-f FILE] [--role ROLENAME] [-d|-dd]
+  awsaccounts create [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
+  awsaccounts alias  [-f FILE] [--spec-dir PATH] [--role ROLENAME]
+                     [--exec] [-q] [-d|-dd]
+  awsaccounts invite --account-id ID [-f FILE] [--spec-dir PATH]
+                     [--exec]  [-q] [-d|-dd]
   awsaccounts (-h | --help)
   awsaccounts --version
 
@@ -21,14 +22,15 @@ Modes of operation:
 Options:
   -h, --help                 Show this help message and exit.
   -V, --version              Display version info and exit.
-  -s FILE, --spec-file FILE  AWS account specification file in yaml format.
+  -f, --config FILE          AWS Org config file in yaml format.
+  --spec-dir PATH            Location of AWS Org specification file directory.
   --account-id ID            Id of account being invited to join Org.
   --exec                     Execute proposed changes to AWS accounts.
   --role ROLENAME            IAM role to use to access accounts.
                              [default: OrganizationAccountAccessRole]
   -q, --quiet                Repress log output.
   -d, --debug                Increase log level to 'DEBUG'.
-  --boto-log                 Include botocore and boto3 logs in log stream.
+  -dd                        Include botocore and boto3 logs in log stream.
 
 """
 
@@ -43,6 +45,7 @@ from docopt import docopt
 
 import awsorgs
 from awsorgs.utils import *
+from awsorgs.spec import *
 
 
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
@@ -229,16 +232,17 @@ def main():
     root_id = get_root_id(org_client)
     deployed_accounts = scan_deployed_accounts(log, org_client)
 
-    if args['--spec-file']:
-        account_spec = validate_spec_file(log, args['--spec-file'], 'account_spec')
-        validate_master_id(org_client, account_spec)
-
     if args['report']:
         aliases = get_account_aliases(log, deployed_accounts, args['--role'])
         deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
         display_provisioned_accounts(log, deployed_accounts, 'ACTIVE')
         display_provisioned_accounts(log, deployed_accounts, 'SUSPENDED')
         display_invited_accounts(log, org_client)
+        return
+
+    config = load_config(log, args)
+    account_spec = validate_spec(log, args, config)
+    validate_master_id(org_client, account_spec)
 
     if args['create']:
         create_accounts(org_client, args, log, deployed_accounts, account_spec)

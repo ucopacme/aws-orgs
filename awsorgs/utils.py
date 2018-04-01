@@ -200,7 +200,6 @@ def scan_deployed_accounts(log, org_client):
     accounts = org_client.list_accounts()
     deployed_accounts = accounts['Accounts']
     while 'NextToken' in accounts and accounts['NextToken']:
-        log.debug("NextToken: %s" % accounts['NextToken'])
         accounts = org_client.list_accounts(NextToken=accounts['NextToken'])
         deployed_accounts += accounts['Accounts']
     # only return accounts that have an 'Name' key
@@ -216,7 +215,6 @@ def scan_created_accounts(log, org_client):
     status = org_client.list_create_account_status(States=['SUCCEEDED'])
     created_accounts = status['CreateAccountStatuses']
     while 'NextToken' in status and status['NextToken']:
-        log.debug("NextToken: %s" % status['NextToken'])
         status = org_client.list_create_account_status(
                 States=['SUCCEEDED'],
                 NextToken=status['NextToken'])
@@ -245,7 +243,7 @@ def get_account_aliases(log, deployed_accounts, role):
     aliases = {}
     queue_threads(log, deployed_accounts, get_account_alias,
             f_args=(log, role, aliases), thread_count=10)
-    log.debug(aliases)
+    log.debug(yamlfmt(aliases))
     return aliases
 
 
