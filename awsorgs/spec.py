@@ -38,8 +38,11 @@ def validate_spec_file(log, spec_file, validator, errors):
     with open(spec_file) as f:
         try:
             spec_from_file = yaml.load(f.read())
-        except yaml.scanner.ScannerError:
+        except (yaml.scanner.ScannerError, UnicodeDecodeError):
             log.warn("{} not a valid yaml file. skipping".format(spec_file))
+            return (None, errors)
+        except Exception as e:
+            log.error("cant load spec_file '{}': {}".format(spec_file, e))
             return (None, errors)
     if validator.validate(spec_from_file):
         return (spec_from_file, errors)
