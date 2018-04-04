@@ -17,20 +17,36 @@ def load_config(log, args):
     else:
         config_file = DEFAULT_CONFIG_FILE
     config_file = os.path.expanduser(config_file)
+    #assert os.path.isfile(config_file)
+    if not os.path.isfile(config_file):
+        log.error("config_file not found: {}".format(config_file))
+        return None
     log.debug("loading config file: {}".format(config_file))
     with open(config_file) as f:
-        config = yaml.load(f.read())
+        try:
+            config = yaml.load(f.read())
+        except (yaml.scanner.ScannerError, UnicodeDecodeError):
+            log.error("{} not a valid yaml file".format(config_file))
+            return None
+        except Exception as e:
+            log.error("cant load config_file '{}': {}".format(config_file, e))
+            return None
     log.debug("config: {}".format(config))
     return config
 
 
 def get_spec_dir(log, args, config):
-    spec_dir = config.get('spec_dir', args.get('--spec-dir'))
+    if config:
+        spec_dir = config.get('spec_dir', args.get('--spec-dir'))
+    else:
+        spec_dir = args.get('--spec-dir')
     if not spec_dir:
         spec_dir = DEFAULT_SPEC_DIR
     spec_dir = os.path.expanduser(spec_dir)
+    if not os.path.isdir(spec_dir):
+        log.error("spec_dir not a directory: {}".format(spec_dir))
+        return None
     log.debug("spec_dir: %s" % spec_dir)
-    # ISSUE: test dir exists
     return spec_dir
 
 
@@ -60,6 +76,9 @@ def validate_spec(log, args, config):
 
     # validate spec_files
     spec_dir = get_spec_dir(log, args, config)
+    if not spec_dir:
+        log.critical("no spec found. exiting")
+        sys.exit(1)
     validator = file_validator(log)
     spec_object = {}
     errors = 0
