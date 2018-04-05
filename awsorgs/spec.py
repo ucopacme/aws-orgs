@@ -1,7 +1,11 @@
 import sys
 import os
 import yaml
+
+import boto3
+from botocore.exceptions import ClientError
 from cerberus import Validator, schema_registry
+
 from awsorgs.utils import yamlfmt
 from awsorgs.validator import file_validator, spec_validator
 
@@ -11,13 +15,12 @@ DEFAULT_SPEC_DIR = '~/.awsorgs/spec.d'
 
 
 
-def load_config(log, args):
+def scan_config_file(log, args):
     if args['--config']:
         config_file = args['--config']
     else:
         config_file = DEFAULT_CONFIG_FILE
     config_file = os.path.expanduser(config_file)
-    #assert os.path.isfile(config_file)
     if not os.path.isfile(config_file):
         log.error("config_file not found: {}".format(config_file))
         return None
@@ -35,6 +38,25 @@ def load_config(log, args):
     return config
 
 
+def get_master_account_id(log, args, config):
+    """
+    Determine the Org Master account id.  Try in order:
+    cli option, config file, client.describe_organization()
+    """
+    master_account_id = args.get('--master-id', config.get('master_account_id'))
+    if not master_account_id:
+        log.debug("'master_account_id' not set in config_file or as cli option")
+        try:
+            master_account_id = boto3.client(
+                    'organizations'
+                    ).describe_organization()['Organization']['MasterAccountId']
+        except ClientError as e:
+            log.critical("can not determine master_account_id: {}".format(e))
+            sys.exit(1)
+    log.debug("master_account_id: %s" % master_account_id)
+    return master_account_id
+
+
 def get_spec_dir(log, args, config):
     if config:
         spec_dir = config.get('spec_dir', args.get('--spec-dir'))
@@ -48,6 +70,27 @@ def get_spec_dir(log, args, config):
         return None
     log.debug("spec_dir: %s" % spec_dir)
     return spec_dir
+
+
+def load_config(log, args):
+    """
+    Assemble config options from various sources: cli options, config_file 
+    params, defaults, etc., and merge them into 'args' dict.
+    When we are done we should have found all of the following:
+
+    master_account_id
+    org_access_role
+    spec_dir (except when handling reports)
+    auth_account_id (except when called by awsorgs)
+    """
+    config = scan_config_file(log, args)
+    args['--master-account-id'] = get_master_account_id(log, args, config)
+    args['--spec-dir'] = get_spec_dir(log, args, config)
+    if not args['--org-access-role']:
+        args['--org-access-role'] =  config.get('org_access_role')
+    if not args['--auth-account-id']:
+        args['--auth-account-id'] =  config.get('auth_account_id')
+    return args
 
 
 def validate_spec_file(log, spec_file, validator, errors):

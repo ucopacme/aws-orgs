@@ -4,13 +4,14 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts report [-f FILE] [--role ROLENAME] [-d|-dd]
-  awsaccounts create [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
-  awsaccounts alias  [-f FILE] [--spec-dir PATH] [--role ROLENAME]
-                     [--exec] [-q] [-d|-dd]
-  awsaccounts invite --account-id ID [-f FILE] [--spec-dir PATH]
-                     [--exec]  [-q] [-d|-dd]
-  awsaccounts (-h | --help)
+  awsaccounts (report|create|alias|invite) [--exec]  [-q] [-d|-dd]
+                                           [--config FILE]
+                                           [--spec-dir PATH] 
+                                           [--master-account-id ID]
+                                           [--auth-account-id ID]
+                                           [--org-access-role ROLE]
+                                           [--invite-account-id ID]
+  awsaccounts --help
   awsaccounts --version
 
 Modes of operation:
@@ -20,17 +21,19 @@ Modes of operation:
   invite         Invite another account to join Org as a member account. 
 
 Options:
-  -h, --help                 Show this help message and exit.
-  -V, --version              Display version info and exit.
-  -f, --config FILE          AWS Org config file in yaml format.
-  --spec-dir PATH            Location of AWS Org specification file directory.
-  --account-id ID            Id of account being invited to join Org.
-  --exec                     Execute proposed changes to AWS accounts.
-  --role ROLENAME            IAM role to use to access accounts.
-                             [default: OrganizationAccountAccessRole]
-  -q, --quiet                Repress log output.
-  -d, --debug                Increase log level to 'DEBUG'.
-  -dd                        Include botocore and boto3 logs in log stream.
+  -h, --help                Show this help message and exit.
+  -V, --version             Display version info and exit.
+  -f, --config FILE         AWS Org config file in yaml format.
+  --spec-dir PATH           Location of AWS Org specification file directory.
+  --master-account-id ID    AWS account Id of the Org master account.    
+  --auth-account-id ID      AWS account Id of the authentication account.
+  --org-access-role ROLE    IAM role for traversing accounts in the Org.
+  --invite-account-id ID    Id of account being invited to join Org.
+  --exec                    Execute proposed changes to AWS accounts.
+  --role ROLENAME           IAM role to use to access accounts.
+  -q, --quiet               Repress log output.
+  -d, --debug               Increase log level to 'DEBUG'.
+  -dd                       Include botocore and boto3 logs in log stream.
 
 """
 
@@ -96,7 +99,7 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                      log.warn("Account creation still pending. Moving on!")
 
 
-def set_account_alias(account, log, args, account_spec):
+def set_account_alias(account, log, args, account_spec, role):
     """
     Set an alias on an account.  Use 'Alias' attribute from account spec
     if provided.  Otherwise set the alias to the account name.
@@ -107,7 +110,8 @@ def set_account_alias(account, log, args, account_spec):
             proposed_alias = a_spec['Alias']
         else:
             proposed_alias = account['Name'].lower()
-        credentials = get_assume_role_credentials(account['Id'], args['--role'])
+        credentials = get_assume_role_credentials(
+                account['Id'], args['--org-access-role'])
         if isinstance(credentials, RuntimeError):
             log.error(credentials)
         else:
@@ -228,7 +232,14 @@ def main():
     args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug(args)
-    org_client = boto3.client('organizations')
+    config = load_config(log, args)
+    credentials = get_assume_role_credentials(
+            config['master_account_id'],
+            config['org_access_role'])
+    if isinstance(credentials, RuntimeError):
+        log.critical(credentials)
+        sys.exit(1)
+    org_client = boto3.client('organizations', **credentials)
     root_id = get_root_id(org_client)
     deployed_accounts = scan_deployed_accounts(log, org_client)
 
@@ -252,7 +263,8 @@ def main():
 
     if args['alias']:
         queue_threads(log, deployed_accounts, set_account_alias,
-                f_args=(log, args, account_spec), thread_count=10)
+                f_args=(log, args, account_spec, config['org_access_role']),
+                thread_count=10)
 
     if args['invite']:
         invite_account(log, args, org_client, deployed_accounts)

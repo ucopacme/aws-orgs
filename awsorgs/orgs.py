@@ -4,8 +4,12 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs report [-f FILE] [-d|-dd]
-  awsorgs organization [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
+  awsorgs (report|organization) [--exec] [-q] [-d|-dd]
+                                [--config FILE]
+                                [--spec-dir PATH] 
+                                [--master-account-id ID]
+                                [--auth-account-id ID]
+                                [--org-access-role ROLE]
   awsorgs --version
   awsorgs --help
 
@@ -14,14 +18,17 @@ Modes of operation:
   orgnanizaion   Run AWS Org management tasks per specification.
 
 Options:
-  -h, --help                 Show this help message and exit.
-  -V, --version              Display version info and exit.
-  -f, --config FILE          AWS Org config file in yaml format.
-  --spec-dir PATH            Location of AWS Org specification file directory.
-  --exec                     Execute proposed changes to AWS Org.
-  -q, --quiet                Repress log output.
-  -d, --debug                Increase log level to 'DEBUG'.
-  -dd                        Include botocore and boto3 logs in log stream.
+  -h, --help                Show this help message and exit.
+  -V, --version             Display version info and exit.
+  -f, --config FILE         AWS Org config file in yaml format.
+  --spec-dir PATH           Location of AWS Org specification file directory.
+  --master-account-id ID    AWS account Id of the Org master account.    
+  --auth-account-id ID      AWS account Id of the authentication account.
+  --org-access-role ROLE    IAM role for traversing accounts in the Org.
+  --exec                    Execute proposed changes to AWS Org.
+  -q, --quiet               Repress log output.
+  -d, --debug               Increase log level to 'DEBUG'.
+  -dd                       Include botocore and boto3 logs in log stream.
 
 """
 
@@ -387,7 +394,14 @@ def main():
     args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug(args)
-    org_client = boto3.client('organizations')
+    args = load_config(log, args)
+    credentials = get_assume_role_credentials(
+            args['--master-account-id'],
+            args['--org-access-role'])
+    if isinstance(credentials, RuntimeError):
+        log.critical(credentials)
+        sys.exit(1)
+    org_client = boto3.client('organizations', **credentials)
     root_id = get_root_id(org_client)
     deployed = dict(
             policies = scan_deployed_policies(org_client),
@@ -402,7 +416,6 @@ def main():
         display_provisioned_policies(org_client, log, deployed)
 
     if args['organization']:
-        config = load_config(log, args)
         org_spec = validate_spec(log, args, config)
         root_spec = lookup(org_spec['organizational_units'], 'Name', 'root')
         validate_master_id(org_client, org_spec)
@@ -411,15 +424,18 @@ def main():
                 accounts = search_spec(root_spec, 'Accounts', 'Child_OU'),
                 ou = search_spec(root_spec, 'Name', 'Child_OU'),
                 policies = [p['Name'] for p in org_spec['sc_policies']])
+
         # ensure default_sc_policy is considered 'managed'
         if org_spec['default_sc_policy'] not in managed['policies']:
             managed['policies'].append(org_spec['default_sc_policy'])
         enable_policy_type_in_root(org_client, root_id)
         manage_policies(org_client, args, log, deployed, org_spec)
+
         # rescan deployed policies
         deployed['policies'] = scan_deployed_policies(org_client)
         manage_ou(org_client, args, log, deployed, org_spec,
                 org_spec['organizational_units'], 'root')
+
         # check for unmanaged resources
         for key in list(managed.keys()):
             unmanaged= [a['Name'] for a in deployed[key] if a['Name'] not in managed[key]]
