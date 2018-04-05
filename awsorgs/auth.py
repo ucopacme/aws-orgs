@@ -5,14 +5,17 @@
 AWS Organization.
 
 Usage:
-  awsauth users [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
-          [--disable-expired --opt-ttl HOURS]
-  awsauth delegations [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
-  awsauth local-users [-f FILE] [--spec-dir PATH] [--exec] [-q] [-d|-dd]
-  awsauth report [-f FILE] [--users --roles --credentials]
-          [--full] [--account NAME] [-d|-dd]
-  awsauth --version
-  awsauth --help
+  awsorgs (users|delegations|local-users|report) [--config FILE]
+                                                 [--spec-dir PATH] 
+                                                 [--master-account-id ID]
+                                                 [--auth-account-id ID]
+                                                 [--org-access-role ROLE]
+                                                 [--disable-expired]
+                                                 [--opt-ttl HOURS]
+                                                 [--users --roles --credentials]
+                                                 [--account NAME] [--full]
+                                                 [--exec] [-q] [-d|-dd]
+  awsorgs (--help|--version)
 
 Modes of operation:
   users         Provision users, groups and group membership.
@@ -21,24 +24,29 @@ Modes of operation:
   report        Display provisioned resources.
 
 Options:
-  -h, --help                 Show this help message and exit.
-  -V, --version              Display version info and exit.
-  -f, --config FILE          AWS Org config file in yaml format.
-  --spec-dir PATH            Location of AWS Org specification file directory.
-  --exec                     Execute proposed changes to AWS accounts.
-  -q, --quiet                Repress log output.
-  -d, --debug                Increase log level to 'DEBUG'.
-  -dd                        Include botocore and boto3 logs in log stream.
-  --disable-expired          Delete profile if one-time-password
-                             exceeds --opt-ttl.
-  --opt-ttl HOURS            One-time-password time to live in hours
-                             [default: 24].
+  -h, --help                Show this help message and exit.
+  -V, --version             Display version info and exit.
+  --config FILE             AWS Org config file in yaml format.
+  --spec-dir PATH           Location of AWS Org specification file directory.
+  --master-account-id ID    AWS account Id of the Org master account.    
+  --auth-account-id ID      AWS account Id of the authentication account.
+  --org-access-role ROLE    IAM role for traversing accounts in the Org.
+  --exec                    Execute proposed changes to AWS accounts.
+  -q, --quiet               Repress log output.
+  -d, --debug               Increase log level to 'DEBUG'.
+  -dd                       Include botocore and boto3 logs in log stream.
 
-  --users                    Print user and groups report.
-  --roles                    Print roles and custom policies report.
-  --credentials              Print IAM credentials report.
-  --full                     Print full details in reports.
-  --account NAME             Just report for a single named account.
+  users options:
+  --disable-expired         Delete profile if one-time-password
+                            exceeds --opt-ttl.
+  --opt-ttl HOURS           One-time-password time to live in hours
+                            [default: 24].
+  report options:
+  --users                   Print user and groups report.
+  --roles                   Print roles and custom policies report.
+  --credentials             Print IAM credentials report.
+  --full                    Print full details in reports.
+  --account NAME            Just report for a single named account.
 
 """
 
@@ -375,8 +383,8 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     """
     log.debug('role: %s' % d_spec['RoleName'])
     credentials = get_assume_role_credentials(
-            auth_spec['auth_account_id'],
-            auth_spec['org_access_role'])
+            args['--auth-account-id'],
+            args['--org-access-role'])
     iam_resource = boto3.resource('iam', **credentials)
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
@@ -461,7 +469,7 @@ def manage_local_user_in_accounts(
     account_name = account['Name']
     log.debug('account: %s, local user: %s' % (account_name, lu_spec['Name']))
     path_spec = munge_path(auth_spec['default_path'], lu_spec)
-    credentials = get_assume_role_credentials(account['Id'], auth_spec['org_access_role'])
+    credentials = get_assume_role_credentials(account['Id'], args['--org-access-role'])
     if isinstance(credentials, RuntimeError):
         log.error(credentials)
         return
@@ -582,7 +590,7 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
     log.debug('account: %s, role: %s' % (account_name, d_spec['RoleName']))
     credentials = get_assume_role_credentials(
             account['Id'],
-            auth_spec['org_access_role'])
+            args['--org-access-role'])
     if isinstance(credentials, RuntimeError):
         log.error(credentials)
         return
@@ -715,7 +723,7 @@ def manage_delegations(d_spec, args, log, deployed, auth_spec):
     trusting accounts and group policies in Auth (trusted) account.
     """
     log.debug('considering %s' % d_spec['RoleName'])
-    if d_spec['RoleName'] == auth_spec['org_access_role']:
+    if d_spec['RoleName'] == args['--org-access-role']:
         log.error("Refusing to manage delegation '%s'" % d_spec['RoleName'])
         return
 
@@ -760,14 +768,25 @@ def main():
     args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
-    config = load_config(log, args)
-    auth_spec = validate_spec(log, args, config)
-    org_client = boto3.client('organizations')
+    args = load_config(log, args)
+    auth_spec = validate_spec(log, args)
+
+    org_credentials = get_assume_role_credentials(
+            args['--master-account-id'],
+            args['--org-access-role'])
+    if isinstance(org_credentials, RuntimeError):
+        log.critical(org_credentials)
+        sys.exit(1)
+    org_client = boto3.client('organizations', **org_credentials)
     validate_master_id(org_client, auth_spec)
-    credentials = get_assume_role_credentials(
-            auth_spec['auth_account_id'],
-            auth_spec['org_access_role'])
-    iam_client = boto3.client('iam', **credentials)
+
+    auth_credentials = get_assume_role_credentials(
+            args['--auth-account-id'],
+            args['--org-access-role'])
+    if isinstance(auth_credentials, RuntimeError):
+        log.critical(auth_credentials)
+        sys.exit(1)
+    iam_client = boto3.client('iam', **auth_credentials)
     deployed = dict(
             users = iam_client.list_users()['Users'],
             groups = iam_client.list_groups()['Groups'],
@@ -780,21 +799,21 @@ def main():
                 deployed['accounts'], 'Name', args['--account']
             )]
         if args['--users']:
-            report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
+            report_maker(log, deployed['accounts'], args['--org-access-role'], 
                 user_group_report, "IAM Users and Groups in all Org Accounts:",
                 verbose=args['--full'],
             )
         if args['--roles']:
-            report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
+            report_maker(log, deployed['accounts'], args['--org-access-role'], 
                 role_report, "IAM Roles and Custom Policies in all Org Accounts:",
                 verbose=args['--full'],
             )
         if args['--credentials']:
-            report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
+            report_maker(log, deployed['accounts'], args['--org-access-role'], 
                 credentials_report, "IAM Credentials Report in all Org Accounts:"
             )
         if not (args['--users'] or args['--credentials'] or args['--roles']):
-            report_maker(log, deployed['accounts'], auth_spec['org_access_role'], 
+            report_maker(log, deployed['accounts'], args['--org-access-role'], 
                 account_authorization_report, "IAM Account Authorization:",
                 verbose=args['--full'],
             )
@@ -803,10 +822,10 @@ def main():
         if args['--disable-expired']:
             expire_users(log, args, deployed, auth_spec, credentials)
         else:
-            create_users(credentials, args, log, deployed, auth_spec)
-            create_groups(credentials, args, log, deployed, auth_spec)
-            manage_group_members(credentials, args, log, deployed, auth_spec)
-            manage_group_policies(credentials, args, log, deployed, auth_spec)
+            create_users(auth_credentials, args, log, deployed, auth_spec)
+            create_groups(auth_credentials, args, log, deployed, auth_spec)
+            manage_group_members(auth_credentials, args, log, deployed, auth_spec)
+            manage_group_policies(auth_credentials, args, log, deployed, auth_spec)
 
     if args['delegations']:
         queue_threads(log, auth_spec['delegations'], manage_delegations,

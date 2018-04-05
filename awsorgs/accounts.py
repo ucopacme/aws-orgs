@@ -4,18 +4,17 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts (report|create|alias|invite) [--exec]  [-q] [-d|-dd]
-                                           [--config FILE]
+  awsaccounts (report|create|alias|invite) [--config FILE]
                                            [--spec-dir PATH] 
                                            [--master-account-id ID]
                                            [--auth-account-id ID]
                                            [--org-access-role ROLE]
-                                           [--invite-account-id ID]
-  awsaccounts --help
-  awsaccounts --version
+                                           [--invited-account-id ID]
+                                           [--exec] [-q] [-d|-dd]
+  awsaccounts (--help|--version)
 
 Modes of operation:
-  report         Display organization status report only.
+  report         Display organization status report.
   create         Create new accounts in AWS Org per specifation.
   alias          Set account alias for each account in Org per specifation.
   invite         Invite another account to join Org as a member account. 
@@ -28,7 +27,8 @@ Options:
   --master-account-id ID    AWS account Id of the Org master account.    
   --auth-account-id ID      AWS account Id of the authentication account.
   --org-access-role ROLE    IAM role for traversing accounts in the Org.
-  --invite-account-id ID    Id of account being invited to join Org.
+  --invited-account-id ID   Id of account being invited to join Org.
+                            Required when running in 'invite' mode.
   --exec                    Execute proposed changes to AWS accounts.
   --role ROLENAME           IAM role to use to access accounts.
   -q, --quiet               Repress log output.
@@ -154,7 +154,13 @@ def scan_invited_accounts(log, org_client):
 
 def invite_account(log, args, org_client, deployed_accounts):
     """Invite account_id to join Org"""
-    account_id = args['--account-id']
+    account_id = args['--invited-account-id']
+    if not account_id:
+        log.critical("option '--invited-account-id' not defined")
+        sys.exit(1)
+    if not valid_account_id(log, account_id):
+        log.critical("option '--invited-account-id' must be a valid account Id")
+        sys.exit(1)
     if lookup(deployed_accounts, 'Id', account_id):
         log.error("account %s already in organization" % account_id)
         return
@@ -232,10 +238,10 @@ def main():
     args = docopt(__doc__, version=awsorgs.__version__)
     log = get_logger(args)
     log.debug(args)
-    config = load_config(log, args)
+    args = load_config(log, args)
     credentials = get_assume_role_credentials(
-            config['master_account_id'],
-            config['org_access_role'])
+            args['--master-account-id'],
+            args['--org-access-role'])
     if isinstance(credentials, RuntimeError):
         log.critical(credentials)
         sys.exit(1)
@@ -244,15 +250,14 @@ def main():
     deployed_accounts = scan_deployed_accounts(log, org_client)
 
     if args['report']:
-        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
+        aliases = get_account_aliases(log, deployed_accounts, args['--org-access-role'])
         deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
         display_provisioned_accounts(log, deployed_accounts, 'ACTIVE')
         display_provisioned_accounts(log, deployed_accounts, 'SUSPENDED')
         display_invited_accounts(log, org_client)
         return
 
-    config = load_config(log, args)
-    account_spec = validate_spec(log, args, config)
+    account_spec = validate_spec(log, args)
     validate_master_id(org_client, account_spec)
 
     if args['create']:
@@ -263,7 +268,7 @@ def main():
 
     if args['alias']:
         queue_threads(log, deployed_accounts, set_account_alias,
-                f_args=(log, args, account_spec, config['org_access_role']),
+                f_args=(log, args, account_spec, args['--org-access-role']),
                 thread_count=10)
 
     if args['invite']:

@@ -273,7 +273,7 @@ def display_provisioned_users(log, args, deployed, auth_spec, credentials):
     log.info("\n%s\n%s\n" % (overbar, header))
     if args['--full']:
         aliases = get_account_aliases(log, deployed['accounts'],
-                auth_spec['org_access_role'])
+                args['--org-access-role'])
     for name in sorted([u['UserName'] for u in deployed['users']]):
         arn = lookup(deployed['users'], 'UserName', name, 'Arn')
         if args['--full']:
@@ -364,7 +364,7 @@ def display_roles_in_accounts(log, args, deployed, auth_spec):
         messages.append("Account:\t%s" % account['Name'])
         credentials = get_assume_role_credentials(
                 account['Id'],
-                auth_spec['org_access_role'])
+                args['--org-access-role'])
         if isinstance(credentials, RuntimeError):
             messages.append(credentials)
         else:

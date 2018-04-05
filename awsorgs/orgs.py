@@ -4,14 +4,13 @@
 """Manage recources in an AWS Organization.
 
 Usage:
-  awsorgs (report|organization) [--exec] [-q] [-d|-dd]
-                                [--config FILE]
+  awsorgs (report|organization) [--config FILE]
                                 [--spec-dir PATH] 
                                 [--master-account-id ID]
                                 [--auth-account-id ID]
                                 [--org-access-role ROLE]
-  awsorgs --version
-  awsorgs --help
+                                [--exec] [-q] [-d|-dd]
+  awsorgs (--help|--version)
 
 Modes of operation:
   report         Display organization status report only.
@@ -20,7 +19,7 @@ Modes of operation:
 Options:
   -h, --help                Show this help message and exit.
   -V, --version             Display version info and exit.
-  -f, --config FILE         AWS Org config file in yaml format.
+  --config FILE             AWS Org config file in yaml format.
   --spec-dir PATH           Location of AWS Org specification file directory.
   --master-account-id ID    AWS account Id of the Org master account.    
   --auth-account-id ID      AWS account Id of the authentication account.
@@ -416,7 +415,7 @@ def main():
         display_provisioned_policies(org_client, log, deployed)
 
     if args['organization']:
-        org_spec = validate_spec(log, args, config)
+        org_spec = validate_spec(log, args)
         root_spec = lookup(org_spec['organizational_units'], 'Name', 'root')
         validate_master_id(org_client, org_spec)
         validate_accounts_unique_in_org(log, root_spec)

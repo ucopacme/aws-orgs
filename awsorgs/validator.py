@@ -25,8 +25,6 @@ default_sc_policy:
   type: string
 default_ou:
   type: string
-org_access_role:
-  type: string
 default_path:
   type: string
 organizational_units:
@@ -104,9 +102,6 @@ default_sc_policy:
   required: True
   type: string
 default_ou:
-  required: True
-  type: string
-org_access_role:
   required: True
   type: string
 default_path:

@@ -6,7 +6,7 @@ import boto3
 from botocore.exceptions import ClientError
 from cerberus import Validator, schema_registry
 
-from awsorgs.utils import yamlfmt
+from awsorgs.utils import *
 from awsorgs.validator import file_validator, spec_validator
 
 # Spec parser defaults
@@ -43,12 +43,18 @@ def get_master_account_id(log, args, config):
     Determine the Org Master account id.  Try in order:
     cli option, config file, client.describe_organization()
     """
-    master_account_id = args.get('--master-id', config.get('master_account_id'))
-    if not master_account_id:
+    if args['--master-account-id']:
+        master_account_id = args['--master-account-id']
+    else:
+        master_account_id = config.get('master_account_id')
+    if master_account_id:
+        if not valid_account_id(log, master_account_id):
+            log.critical("config option 'master_account_id' is not valid account Id")
+            sys.exit(1)
+    else:
         log.debug("'master_account_id' not set in config_file or as cli option")
         try:
-            master_account_id = boto3.client(
-                    'organizations'
+            master_account_id = boto3.client('organizations'
                     ).describe_organization()['Organization']['MasterAccountId']
         except ClientError as e:
             log.critical("can not determine master_account_id: {}".format(e))
@@ -58,11 +64,15 @@ def get_master_account_id(log, args, config):
 
 
 def get_spec_dir(log, args, config):
-    if config:
-        spec_dir = config.get('spec_dir', args.get('--spec-dir'))
+    """
+    Determine the spec directory.  Try in order:
+    cli option, config file, DEFAULT_SPEC_DIR.
+    """
+    if args['--spec-dir']:
+        spec_dir = args['--spec-dir']
+    elif config['spec_dir']:
+        spec_dir = config['spec_dir']
     else:
-        spec_dir = args.get('--spec-dir')
-    if not spec_dir:
         spec_dir = DEFAULT_SPEC_DIR
     spec_dir = os.path.expanduser(spec_dir)
     if not os.path.isdir(spec_dir):
@@ -112,13 +122,13 @@ def validate_spec_file(log, spec_file, validator, errors):
         return (None, errors)
 
 
-def validate_spec(log, args, config):
+def validate_spec(log, args):
     """
     Load all spec files in spec_dir and validate against spec schema
     """
 
     # validate spec_files
-    spec_dir = get_spec_dir(log, args, config)
+    spec_dir = args['--spec-dir']
     if not spec_dir:
         log.critical("no spec found. exiting")
         sys.exit(1)

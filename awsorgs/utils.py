@@ -2,6 +2,7 @@
 
 import os
 import sys
+import re
 import pkg_resources
 import difflib
 import threading
@@ -110,6 +111,18 @@ def get_logger(args):
     logging.basicConfig(stream=sys.stdout, format=log_format, level=log_level)
     log = logging.getLogger(__name__)
     return log
+
+
+def valid_account_id(log, account_id):
+    """Validate account Id is a 12 digit string"""
+    if not isinstance(account_id, str):
+        log.error("supplied account id {} is not a string".format(account_id))
+        return False
+    id_re = re.compile(r'^\d{12}$')
+    if not id_re.match(account_id):
+        log.error("supplied account id '{}' must be a 12 digit number".format(account_id))
+        return False
+    return True
 
 
 def get_root_id(org_client):
