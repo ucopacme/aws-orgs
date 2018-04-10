@@ -68,16 +68,13 @@ def get_spec_dir(log, args, config):
     Determine the spec directory.  Try in order:
     cli option, config file, DEFAULT_SPEC_DIR.
     """
-    if args['--spec-dir']:
+    if '--spec-dir' in args and args['--spec-dir']:
         spec_dir = args['--spec-dir']
     elif config['spec_dir']:
         spec_dir = config['spec_dir']
     else:
         spec_dir = DEFAULT_SPEC_DIR
     spec_dir = os.path.expanduser(spec_dir)
-    if not os.path.isdir(spec_dir):
-        log.error("spec_dir not a directory: {}".format(spec_dir))
-        return None
     log.debug("spec_dir: %s" % spec_dir)
     return spec_dir
 
@@ -129,8 +126,8 @@ def validate_spec(log, args):
 
     # validate spec_files
     spec_dir = args['--spec-dir']
-    if not spec_dir:
-        log.critical("no spec found. exiting")
+    if not os.path.isdir(spec_dir):
+        log.error("spec_dir not found or not a directory: {}".format(spec_dir))
         sys.exit(1)
     validator = file_validator(log)
     spec_object = {}

@@ -2,32 +2,41 @@
 """Manage AWS IAM user login profile.
 
 Usage:
-  awsloginprofile USER [--report] [-qdr ROLE] [--boto-log]
-  awsloginprofile USER --disable [-qdr ROLE] [--boto-log]
-  awsloginprofile USER --disable-expired [-qdr ROLE] [--opt-ttl HOURS] [--boto-log]
-  awsloginprofile USER (--new | --reset | --reenable) [-qdr ROLE] [--boto-log]
-                       [--password PASSWORD] [--email EMAIL]
-  awsloginprofile --help
+  awsloginprofile USER [--config FILE]
+                       [--master-account-id ID]
+                       [--auth-account-id ID]
+                       [--org-access-role ROLE]
+                       [--report]
+                       [--new | --reset | --reenable]
+                       [--disable]
+                       [--disable-expired]
+                       [--opt-ttl HOURS]
+                       [--password PASSWORD]
+                       [--email EMAIL]
+                       [-q] [-d|-dd]
+  awsloginprofile (--help|--version)
 
 Options:
-  USER                     Name of IAM user.
-  --report                 Print user login profile report.  this is the default
-  --new                    Create new login profile.
-  --reset                  Reset password for existing login profile.
-  --disable                Delete existing login profile, disable access keys.
-  --disable-expired        Delete profile if one-time-password exceeds --opt-ttl.
-  --reenable               Recreate login profile, reactivate access keys.
-  --opt-ttl HOURS          One-time-password time to live in hours [default: 24].
-  --password PASSWORD      Supply password, do not require user to reset.
-  --email EMAIL            Supply user's email address for sending credentials.
-                           (not implemented yet)
-  -r ROLE, --role ROLE     Name of AWS IAM role to assume to access Org accounts.
-                           Use this to substitute account aliases for IDs.
-  -h, --help               Show this help message and exit.
-  -V, --version            Display version info and exit.
-  -q, --quiet              Repress log output.
-  -d, --debug              Increase log level to 'DEBUG'.
-  --boto-log               Include botocore and boto3 logs in log stream.
+  USER                      Name of IAM user.
+  -h, --help                Show this help message and exit.
+  -V, --version             Display version info and exit.
+  --config FILE             AWS Org config file in yaml format.
+  --master-account-id ID    AWS account Id of the Org master account.
+  --auth-account-id ID      AWS account Id of the authentication account.
+  --org-access-role ROLE    IAM role for traversing accounts in the Org.
+  --report                  Print user login profile report.  this is the default
+  --new                     Create new login profile.
+  --reset                   Reset password for existing login profile.
+  --disable                 Delete existing login profile, disable access keys.
+  --disable-expired         Delete profile if one-time-password exceeds --opt-ttl.
+  --reenable                Recreate login profile, reactivate access keys.
+  --opt-ttl HOURS           One-time-password time to live in hours [default: 24].
+  --password PASSWORD       Supply password, do not require user to reset.
+  --email EMAIL             Supply user's email address for sending credentials.
+                            (not implemented yet)
+  -q, --quiet               Repress log output.
+  -d, --debug               Increase log level to 'DEBUG'.
+  -dd                       Include botocore and boto3 logs in log stream.
 
 """
 
@@ -46,6 +55,8 @@ from passgen import passgen
 
 import awsorgs
 from awsorgs.utils import *
+from awsorgs.spec import *
+from awsorgs.reports import *
 
 
 # Relative path within awsorgs project to template file used by prep_email()
@@ -277,30 +288,25 @@ def main():
     else:
         args['report'] = False
     log = get_logger(args)
-    log.debug(args)
-
-    if args['--role']:
-        master_id = boto3.client('organizations').describe_organization(
-                )['Organization']['MasterAccountId']
-        log.debug('master_id: %s' % master_id)
-        credentials = get_assume_role_credentials(master_id, args['--role'])
-        if isinstance(credentials, RuntimeError):
-            raise(credentials)
-        else:
-            org_client = boto3.client('organizations', **credentials)
-        deployed_accounts = scan_deployed_accounts(log, org_client)
-        aliases = get_account_aliases(log, deployed_accounts, args['--role'])
-        log.debug(aliases)
-    else:
-        aliases = None
+    log.debug("%s: args:\n%s" % (__name__, args))
+    args = load_config(log, args)
 
     user = validate_user(args['USER'])
     if not user:
         log.critical('no such user: %s' % args['USER'])
         sys.exit(1)
-
     login_profile = validate_login_profile(user)
     passwd, require_reset = munge_passwd(args['--password'])
+    org_credentials = get_assume_role_credentials(
+            args['--master-account-id'],
+            args['--org-access-role'])
+    if isinstance(org_credentials, RuntimeError):
+        log.critical(org_credentials)
+        sys.exit(1)
+    org_client = boto3.client('organizations', **org_credentials)
+    deployed_accounts = scan_deployed_accounts(log, org_client)
+    aliases = get_account_aliases(log, deployed_accounts, args['--org-access-role'])
+    log.debug(aliases)
 
     if args['--new']:
         if not login_profile:

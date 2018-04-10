@@ -5,7 +5,7 @@
 AWS Organization.
 
 Usage:
-  awsorgs (users|delegations|local-users|report) [--config FILE]
+  awsauth (users|delegations|local-users|report) [--config FILE]
                                                  [--spec-dir PATH] 
                                                  [--master-account-id ID]
                                                  [--auth-account-id ID]
@@ -15,7 +15,7 @@ Usage:
                                                  [--users --roles --credentials]
                                                  [--account NAME] [--full]
                                                  [--exec] [-q] [-d|-dd]
-  awsorgs (--help|--version)
+  awsauth (--help|--version)
 
 Modes of operation:
   users         Provision users, groups and group membership.
