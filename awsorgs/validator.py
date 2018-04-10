@@ -255,6 +255,7 @@ Path:
   type: string
 Members:
   required: False
+  nullable: True
   anyof:
   - type: string
     allowed:  
