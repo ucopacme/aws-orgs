@@ -1,4 +1,3 @@
-========
 aws-orgs
 ========
 
@@ -29,12 +28,18 @@ Run each of these with the '--help' option for usage documentation.
 See the ``samples/`` directory for anotated examples of spec-file syntax.
 
 
-**Install**
+Installation
+------------
 
 Python virtual environment (recommended)::
 
-  git clone https://github.com/ashleygould/aws-orgs
   source ~/path_to_my_venv/bin/activate
+  pip install https://github.com/ashleygould/aws-orgs/archive/master.zip
+
+
+Editable copy in venv::
+
+  git clone https://github.com/ashleygould/aws-orgs
   pip install -e aws-orgs/
 
 Local user installation::
@@ -42,17 +47,8 @@ Local user installation::
   git clone https://github.com/ashleygould/aws-orgs
   pip install --user -e aws-orgs/
 
-Site installation::
 
-  sudo pip install git+https://www.github.com/ashleygould/aws-orgs.git 
-
-Note: On RHEL6 you may need to update setuptools as well::
-
-  sudo pip install -U setuptools
-
-
-
-**Uninstall**::
+Uninstall::
 
   pip uninstall aws-orgs
 
@@ -60,29 +56,60 @@ Note: On RHEL6 you may need to update setuptools as well::
   rm ~/.local/bin/{awsorgs,awsaccounts,awsauth}
 
 
-**Usage**::
+Configuration
+-------------
 
-  # Run each command with -h option for full usage info.
+Copy example spec files into your `spec_dir` location and edit as appropriate
+to your site.  The default spec directory is `~/.awsorgs/spec.d`.
+
+Most CLI commands make use of a config file for basic paramaters.  
+The default location is `~/.awsorgs/config.yaml`.  Example::
+
+  # Path to yaml spec files directory.  Any yaml files under this 
+  # dirctory (recursive) are parsed as spec files.
+  spec_dir: ~/git-repos/awsorgs_specfiles/my_org
+  
+  # An AWS role name which permits cross account access to all accounts.
+  org_access_role: awsauth/OrgAdmin
+  
+  # AWS account Id for the Organization master account.  This must be in quotes.
+  master_account_id: '121212121212'
+  
+  # AWS account Id for the Central Auth account.  This must be in quotes.
+  auth_account_id: '343434343434'
+
+
+
+Usage
+-----
+
+Run each command with -h option for full usage info::
 
   awsorgs report
-  awsorgs organization -s org-spec.yaml [--exec]
+  awsorgs organization
+  awsorgs organization --exec
 
   awsaccounts report
-  awsaccounts invite --account-id ID [--exec]
-  awsaccounts create -s account-spec.yaml [--exec]
+  awsaccounts create [--exec]
+  awsaccounts alias [--exec]
 
+  awsaccounts invite --account-id ID [--exec]
+  # from invited account:
   awsorgs-accessrole --master_id ID [--exec]
 
-  awsauth report -s auth-spec.yaml 
-  awsauth users -s auth-spec.yaml [--exec]
-  awsauth delegations -s auth-spec.yaml [--exec]
-  awsauth local-users -s auth-spec.yaml [--exec]
+  awsauth report
+  awsauth report --users
+  awsauth report --delegations
+  awsauth report --credentials --full
+  awsauth report --account ucpath-prod --users --full
+
+  awsauth users [--exec]
+  awsauth delegations [--exec]
+  awsauth local-users [--exec]
 
   awsloginprofile maryanne
-  awsloginprofile maryanne --new --role ListOrgAccounts
-  awsloginprofile maryanne --reset --role ListOrgAccounts
-  awsloginprofile maryanne --disable
-  awsloginprofile maryanne --reenable
+  awsloginprofile maryanne --new
+  awsloginprofile maryanne --reset
   awsloginprofile maryanne --disable-expired --opt-ttl 48
 
 
@@ -90,5 +117,5 @@ Note: On RHEL6 you may need to update setuptools as well::
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.0.7
+:Version: 0.0.9
 
