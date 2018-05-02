@@ -365,6 +365,11 @@ Policies:
 Path:
   required: False
   type: string
+Duration:
+  required: False
+  type: integer
+  min: 3600
+  max: 43200
 Ensure:
   required: False
   type: string

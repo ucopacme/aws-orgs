@@ -637,6 +637,10 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 'Bool':{'aws:MultiFactorAuthPresent':'true'}}
     policy_doc = dict(Version='2012-10-17', Statement=[statement])
 
+    # munge session duration
+    if not 'Duration' in d_spec:
+        d_spec['Duration'] = 3600
+
     # get iam role object.  create role if it does not exist (i.e. won't load)
     try:
         role.load()
@@ -649,6 +653,7 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                         Description=d_spec['Description'],
                         Path=munge_path(auth_spec['default_path'], d_spec),
                         RoleName=d_spec['RoleName'],
+                        MaxSessionDuration=d_spec['Duration'],
                         AssumeRolePolicyDocument=json.dumps(policy_doc))
                 if 'Policies' in d_spec and d_spec['Policies']:
                     role.load()
@@ -690,6 +695,13 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
             iam_client.update_role_description(
                 RoleName=role.role_name,
                 Description=d_spec['Description'])
+    if role.max_session_duration != d_spec['Duration']:
+        log.info("Updating max session duration in role '%s' in account '%s'" %
+                (d_spec['RoleName'], account_name))
+        if args['--exec']:
+            iam_client.update_role(
+                RoleName=role.role_name,
+                MaxSessionDuration=d_spec['Duration'])
 
     # manage policy attachments
     attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
