@@ -222,7 +222,7 @@ def munge_passwd(passwd=None):
 
 
 def create_profile(log, user, passwd, require_reset):
-    log.info('creating login profile for user %s' % user.name)
+    log.debug('creating login profile for user %s' % user.name)
     return user.create_login_profile(
             Password=passwd,
             PasswordResetRequired=require_reset)
@@ -233,7 +233,7 @@ def reset_profile(log, user, login_profile, passwd, require_reset):
     This ensures the password creation date gets reset when updating a password.
     """
     if login_profile:
-        log.info('resetting login profile for user %s' % user.name)
+        log.debug('resetting login profile for user %s' % user.name)
         login_profile.delete()
         return login_profile.create(
                 Password=passwd,
@@ -314,12 +314,11 @@ def main():
             prep_email(log, aliases, user, passwd, args['--email'])
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-        user_report(log, aliases, user, login_profile)
+            user_report(log, aliases, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
         prep_email(log, aliases, user, passwd, args['--email'])
-        user_report(log, aliases, user, login_profile)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
@@ -336,7 +335,6 @@ def main():
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)
-        user_report(log, aliases, user, login_profile)
 
     else:
         user_report(log, aliases, user, login_profile)
