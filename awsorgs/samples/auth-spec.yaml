@@ -110,6 +110,8 @@ groups:
 #  RequireMFA:       Type 'bool'.  When set to 'True' (the default), add
 #                    a condition to the trust policy requiring users 
 #                    assuming the delegation role to have valid MFA token.
+#  Duration:         Type 'int'.  MaxSessionDuration time in seconds. 
+#                    Default is 3600 (one hour).
 #  Policies:         Type 'list'.  List of IAM policies to attach to the 
 #                    delegation role in the trusting accounts.
 delegations:
@@ -119,6 +121,7 @@ delegations:
     TrustingAccount: ALL
     TrustedGroup: authadmin
     RequireMFA: True
+    Duration: 43200
     Policies:
       - IAMFullAccess
       - ListAccountsInOrganization
