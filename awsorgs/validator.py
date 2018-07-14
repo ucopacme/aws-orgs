@@ -27,6 +27,10 @@ default_ou:
   type: string
 default_path:
   type: string
+default_smtp_server:
+  type: string
+org_admin_team:
+  type: string
 organizational_units:
   required: False
   type: list
@@ -105,6 +109,12 @@ default_ou:
   required: True
   type: string
 default_path:
+  required: True
+  type: string
+default_smtp_server:
+  required: True
+  type: string
+org_admin_team:
   required: True
   type: string
 organizational_units:
@@ -196,6 +206,9 @@ Ensure:
 
 TEAM_SCHEMA = """
 Name:
+  required: True
+  type: string
+Description:
   required: True
   type: string
 BusinessContacts:

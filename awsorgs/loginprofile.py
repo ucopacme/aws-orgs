@@ -216,7 +216,13 @@ def munge_passwd(passwd=None):
     if passwd:
         require_reset = False
     else:
-        passwd = passgen()
+        passwd = passgen(
+            length=12,
+            punctuation=True,
+            digits=True,
+            letters=True,
+            case='both'
+        )
         require_reset = True
     return passwd, require_reset
 
