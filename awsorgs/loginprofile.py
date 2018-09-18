@@ -51,7 +51,8 @@ import datetime
 import boto3
 from botocore.exceptions import ClientError
 from docopt import docopt
-from passgen import passgen
+from passwordgenerator import pwgenerator
+
 
 import awsorgs
 from awsorgs.utils import *
@@ -216,13 +217,7 @@ def munge_passwd(passwd=None):
     if passwd:
         require_reset = False
     else:
-        passwd = passgen(
-            length=12,
-            punctuation=True,
-            digits=True,
-            letters=True,
-            case='both'
-        )
+        passwd = pwgenerator.generate()
         require_reset = True
     return passwd, require_reset
 
@@ -230,8 +225,9 @@ def munge_passwd(passwd=None):
 def create_profile(log, user, passwd, require_reset):
     log.debug('creating login profile for user %s' % user.name)
     return user.create_login_profile(
-            Password=passwd,
-            PasswordResetRequired=require_reset)
+        Password=passwd,
+        PasswordResetRequired=require_reset,
+    )
 
 
 def reset_profile(log, user, login_profile, passwd, require_reset):

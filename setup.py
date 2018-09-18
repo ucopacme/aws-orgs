@@ -32,7 +32,7 @@ setup(
         'boto3', 
         'docopt', 
         'PyYAML', 
-        'passgen',
+        'passwordgenerator',
         'cerberus',
     ],
     package_data={
