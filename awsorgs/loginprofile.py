@@ -47,6 +47,9 @@ import yaml
 import logging
 from string import Template
 import datetime
+import smtplib
+from email.message import EmailMessage
+
 
 import boto3
 from botocore.exceptions import ClientError
@@ -108,7 +111,7 @@ def format_delegation_table(delegation_arns, aliases):
     return delegation_string
 
 
-def prep_email(log, aliases, user, passwd, email):
+def prep_email(log, aliases, user, passwd):
     """Generate email body from template"""
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
     trusted_id=boto3.client('sts').get_caller_identity()['Account']
@@ -120,13 +123,29 @@ def prep_email(log, aliases, user, passwd, email):
     log.debug('delegation_table: %s' % delegation_table)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
-            user_name=user.name,
-            onetimepw=passwd,
-            trusted_account=trusted_account,
-            delegations=format_delegation_table(delegation_table, aliases),
+        user_name=user.name,
+        onetimepw=passwd,
+        trusted_account=trusted_account,
+        delegations=format_delegation_table(delegation_table, aliases),
     )
     with open(template) as tpl:
-        print(Template(tpl.read()).substitute(mapping))
+        return Template(tpl.read()).substitute(mapping)
+
+
+def build_email_message(user, message_body, spec):
+    org_admin_team = lookup(spec['teams'], 'Name', spec['org_admin_team'])
+    msg = EmailMessage()
+    msg.set_content(message_body)
+    msg['Subject'] = 'login profile'
+    msg['To'] = lookup(spec['users'], 'Name', user.name, 'Email')
+    msg['From'] = ', '.join(org_admin_team['TechnicalContacts'])
+    msg['Cc'] = ', '.join(org_admin_team['BusinessContacts'])
+    return msg
+
+def send_email(msg, smtp_server):
+    s = smtplib.SMTP(smtp_server)
+    s.send_message(msg)
+    s.quit()
 
 
 def user_report(log, aliases, user, login_profile):
@@ -292,6 +311,7 @@ def main():
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
     args = load_config(log, args)
+    spec = validate_spec(log, args)
 
     user = validate_user(args['USER'])
     if not user:
@@ -313,14 +333,24 @@ def main():
     if args['--new']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, aliases, user, passwd, args['--email'])
+            message_body = prep_email(log, aliases, user, passwd)
+            if args['--email']:
+                msg = build_email_message(log, user, message_body, spec)
+                send_email(msg, spec['default_smtp_server'])
+            else:
+                print(message_body)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
             user_report(log, aliases, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
-        prep_email(log, aliases, user, passwd, args['--email'])
+        message_body = prep_email(log, aliases, user, passwd)
+        if args['--email']:
+            msg = build_email_message(log, user, message_body, spec)
+            send_email(msg, spec['default_smtp_server'])
+        else:
+            print(message_body)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
