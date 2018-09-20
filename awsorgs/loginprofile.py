@@ -8,11 +8,11 @@ Usage:
                        [--org-access-role ROLE]
                        [--report]
                        [--new | --reset | --reenable]
+                       [--no-email]
                        [--disable]
                        [--disable-expired]
                        [--opt-ttl HOURS]
                        [--password PASSWORD]
-                       [--email EMAIL]
                        [-q] [-d|-dd]
   awsloginprofile (--help|--version)
 
@@ -27,13 +27,12 @@ Options:
   --report                  Print user login profile report.  this is the default
   --new                     Create new login profile.
   --reset                   Reset password for existing login profile.
+  --no-email                Do not email user when (re)setting login profile.
   --disable                 Delete existing login profile, disable access keys.
   --disable-expired         Delete profile if one-time-password exceeds --opt-ttl.
   --reenable                Recreate login profile, reactivate access keys.
   --opt-ttl HOURS           One-time-password time to live in hours [default: 24].
   --password PASSWORD       Supply password, do not require user to reset.
-  --email EMAIL             Supply user's email address for sending credentials.
-                            (not implemented yet)
   -q, --quiet               Repress log output.
   -d, --debug               Increase log level to 'DEBUG'.
   -dd                       Include botocore and boto3 logs in log stream.
@@ -47,11 +46,15 @@ import yaml
 import logging
 from string import Template
 import datetime
+import smtplib
+from email.message import EmailMessage
+
 
 import boto3
 from botocore.exceptions import ClientError
 from docopt import docopt
-from passgen import passgen
+from passwordgenerator import pwgenerator
+
 
 import awsorgs
 from awsorgs.utils import *
@@ -61,6 +64,10 @@ from awsorgs.reports import *
 
 # Relative path within awsorgs project to template file used by prep_email()
 EMAIL_TEMPLATE = 'data/email_template'
+
+
+def utcnow():
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 def get_user_name():
@@ -107,80 +114,34 @@ def format_delegation_table(delegation_arns, aliases):
     return delegation_string
 
 
-def prep_email(log, aliases, user, passwd, email):
-    """Generate email body from template"""
-    log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
-    trusted_id=boto3.client('sts').get_caller_identity()['Account']
-    if aliases:
-        trusted_account = aliases[trusted_id]
-    else:
-        trusted_account = trusted_id
-    delegation_table = list_delegations(log, user)
-    log.debug('delegation_table: %s' % delegation_table)
-    template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
-    mapping = dict(
-            user_name=user.name,
-            onetimepw=passwd,
-            trusted_account=trusted_account,
-            delegations=format_delegation_table(delegation_table, aliases),
-    )
-    with open(template) as tpl:
-        print(Template(tpl.read()).substitute(mapping))
-
-
 def user_report(log, aliases, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
     delegation_table = list_delegations(log, user)
-    log.info('\nUser:                    %s' % user.name)
-    log.info('Arn:                     %s' % user.arn)
-    log.info('User Id:                 %s' % user.user_id)
-    log.info('User created:            %s' % user.create_date)
+    spacer = '{:<24}{}'
+    log.info('\n')
+    log.info(spacer.format('User:', user.name))
+    log.info(spacer.format('Arn:', user.arn))
+    log.info(spacer.format('User Id:', user.user_id))
+    log.info(spacer.format('User created:', user.create_date))
     if login_profile:
-        log.info('Login profile created:   %s' % login_profile.create_date)
-        log.info('Passwd reset required:   %s' % login_profile.password_reset_required)
+        log.info(spacer.format('Login profile created:', login_profile.create_date))
+        log.info(spacer.format('Passwd reset required:', login_profile.password_reset_required))
         if login_profile.password_reset_required:
-            log.info('One-time-passwd age:     %s' %
-                    (datetime.datetime.now(datetime.timezone.utc)
-                    - login_profile.create_date))
+            log.info(spacer.format(
+                'One-time-passwd age:',
+                utcnow() - login_profile.create_date,
+            ))
         else:
-            log.info('Password last used:      %s' % user.password_last_used)
+            log.info(spacer.format('Password last used:', user.password_last_used))
     else:
-        log.info('User login profile:      %s' % login_profile)
+        log.info(spacer.format('User login profile:', login_profile))
     assume_role_arns = list_delegations(log, user, aliases)
     if assume_role_arns:
-        #log.info('Delegations:\n  %s' % '\n  '.join(assume_role_arns))
-        log.info('Delegations:\n%s' % 
-                format_delegation_table(delegation_table, aliases))
-
-
-#def user_report(log, aliases, user, login_profile):
-#    """Generate report of IAM user's login profile, password usage, and
-#    assume_role delegations for any groups user is member of.
-#    """
-#    delegation_table = list_delegations(log, user)
-#    user_info = dict(
-#        User=user.name,
-#        Arn=user.arn,
-#        UserID=user.user_id,
-#        UserCreated=user.create_date,
-#    )
-#    if login_profile:
-#        user_info['Login profile created'] = login_profile.create_date
-#        user_info['Passwd reset required'] = login_profile.password_reset_required
-#        if login_profile.password_reset_required:
-#            user_info['One-time-passwd age'] = (
-#                datetime.datetime.now(datetime.timezone.utc) - login_profile.create_date
-#            )
-#        else:
-#            user_info['Password last used'] = user.password_last_used
-#    else:
-#        user_info['User login profile'] = login_profile
-#    assume_role_arns = list_delegations(log, user, aliases)
-#    if assume_role_arns:
-#        user_info['Delegations'] = format_delegation_table(delegation_table, aliases)
-#    log.info(yamlfmt(user_info))
+        log.info('Delegations:\n{}'.format(
+            format_delegation_table(delegation_table, aliases)
+        ))
 
 
 def validate_user(user_name, credentials=None):
@@ -216,13 +177,7 @@ def munge_passwd(passwd=None):
     if passwd:
         require_reset = False
     else:
-        passwd = passgen(
-            length=12,
-            punctuation=True,
-            digits=True,
-            letters=True,
-            case='both'
-        )
+        passwd = pwgenerator.generate()
         require_reset = True
     return passwd, require_reset
 
@@ -230,8 +185,9 @@ def munge_passwd(passwd=None):
 def create_profile(log, user, passwd, require_reset):
     log.debug('creating login profile for user %s' % user.name)
     return user.create_login_profile(
-            Password=passwd,
-            PasswordResetRequired=require_reset)
+        Password=passwd,
+        PasswordResetRequired=require_reset,
+    )
 
 
 def reset_profile(log, user, login_profile, passwd, require_reset):
@@ -242,8 +198,9 @@ def reset_profile(log, user, login_profile, passwd, require_reset):
         log.debug('resetting login profile for user %s' % user.name)
         login_profile.delete()
         return login_profile.create(
-                Password=passwd,
-                PasswordResetRequired=require_reset)
+            Password=passwd,
+            PasswordResetRequired=require_reset
+        )
     else:
         log.error("user '%s' has no login profile" % user.name)
         sys.exit(1)
@@ -272,12 +229,57 @@ def set_access_key_status(log, user, enable=True):
 def onetime_passwd_expired(log, user, login_profile, hours):
     """Test if initial one-time-only password is expired"""
     if login_profile and login_profile.password_reset_required:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        log.debug('now: %s' % now.isoformat())
+        log.debug('now: %s' % utcnow().isoformat())
         log.debug('ttl: %s' % datetime.timedelta(hours=hours))
-        log.debug('delta: %s' % (now - login_profile.create_date))
-        return (now - login_profile.create_date) > datetime.timedelta(hours=hours)
+        log.debug('delta: %s' % (utcnow() - login_profile.create_date))
+        return (utcnow() - login_profile.create_date) > datetime.timedelta(hours=hours)
     return False
+
+
+def prep_email(log, aliases, user, passwd):
+    """Generate email body from template"""
+    log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
+    trusted_id=boto3.client('sts').get_caller_identity()['Account']
+    if aliases:
+        trusted_account = aliases[trusted_id]
+    else:
+        trusted_account = trusted_id
+    delegation_table = list_delegations(log, user)
+    log.debug('delegation_table: %s' % delegation_table)
+    template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
+    mapping = dict(
+        user_name=user.name,
+        onetimepw=passwd,
+        trusted_account=trusted_account,
+        delegations=format_delegation_table(delegation_table, aliases),
+    )
+    with open(template) as tpl:
+        return Template(tpl.read()).substitute(mapping)
+
+
+def build_email_message(user, message_body, spec):
+    org_admin_team = lookup(spec['teams'], 'Name', spec['org_admin_team'])
+    msg = EmailMessage()
+    msg.set_content(message_body)
+    msg['Subject'] = 'login profile'
+    msg['To'] = lookup(spec['users'], 'Name', user.name, 'Email')
+    msg['From'] = ', '.join(org_admin_team['TechnicalContacts'])
+    msg['Cc'] = ', '.join(org_admin_team['BusinessContacts'])
+    return msg
+
+def send_email(msg, smtp_server):
+    s = smtplib.SMTP(smtp_server)
+    s.send_message(msg)
+    s.quit()
+
+
+def handle_email(log, args, spec, aliases, user, passwd):
+    message_body = prep_email(log, aliases, user, passwd)
+    if args['--no-email']:
+        print(message_body)
+    else:
+        msg = build_email_message(user, message_body, spec)
+        send_email(msg, spec['default_smtp_server'])
 
 
 def main():
@@ -296,6 +298,7 @@ def main():
     log = get_logger(args)
     log.debug("%s: args:\n%s" % (__name__, args))
     args = load_config(log, args)
+    spec = validate_spec(log, args)
 
     user = validate_user(args['USER'])
     if not user:
@@ -317,14 +320,14 @@ def main():
     if args['--new']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, aliases, user, passwd, args['--email'])
+            handle_email(log, args, spec, aliases, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
             user_report(log, aliases, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
-        prep_email(log, aliases, user, passwd, args['--email'])
+        handle_email(log, args, spec, aliases, user, passwd)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
@@ -337,7 +340,7 @@ def main():
     elif args['--reenable']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            prep_email(log, aliases, user, passwd, args['--email'])
+            handle_email(log, args, spec, aliases, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)
