@@ -1,0 +1,16 @@
+# AWSORGS Configuration Parameters
+
+# Path to yaml spec files directory.  Any yaml files under this dirctory
+# (recursive) are parsed as spec files.
+spec_dir: ~/.awsorgs/spec.d
+
+# An AWS role name which permits cross account access to all accounts.
+org_access_role: awsauth/OrgAdmin
+# Use  role from org master when creating a new account
+#org_access_role: OrganizationAccountAccessRole
+
+# AWS account Id for the Organization master account.  This must be in quotes.
+master_account_id: '1234546789012'
+
+# AWS account Id for the Central Auth account.  This must be in quotes.
+auth_account_id: '1234546789012'
