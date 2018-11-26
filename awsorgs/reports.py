@@ -24,20 +24,6 @@ def overbar(string):
     return "%s\n%s" % ('_' * len(string), string)
 
 
-def get_iam_objects(iam_client_function, object_key, f_args=dict()):
-    """
-    users = get_iam_objects(iam_client.list_users, 'Users')
-    """
-    iam_objects = []
-    response = iam_client_function(**f_args)
-    iam_objects += response[object_key]
-    if 'IsTruncated' in response:
-        while response['IsTruncated']:
-            response = iam_client_function(Marker=response['Marker'],**f_args)
-            iam_objects += response[object_key]
-    return iam_objects
-
-
 def report_maker(log, accounts, role, query_func, report_header=None, **qf_args):
     """
     Generate a report by running a arbitrary query function in each account.
