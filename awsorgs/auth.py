@@ -800,8 +800,8 @@ def main():
         sys.exit(1)
     iam_client = boto3.client('iam', **auth_credentials)
     deployed = dict(
-            users = iam_client.list_users()['Users'],
-            groups = iam_client.list_groups()['Groups'],
+            users = get_iam_objects(iam_client.list_users, 'Users'),
+            groups = get_iam_objects(iam_client.list_groups, 'Groups'),
             accounts = [a for a in scan_deployed_accounts(log, org_client)
                     if a['Status'] == 'ACTIVE'])
 
