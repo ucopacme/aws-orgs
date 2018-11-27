@@ -399,30 +399,30 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
 
-
-
     # test if this assume role policy should be deleted
     if ensure_absent(d_spec): 
         aws_policies = get_iam_objects(iam_client.list_policies, 'Policies')
         policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
         if policy_arn is not None:
-            # ISSUE:
-            # this should be it's own function delete_policy()
-            policy = iam_resource.Policy(policy_arn)
-            # detach it from any resources
-            if policy.attachment_count > 0:
-                for group in policy.attached_groups.all():
-                    policy.detach_group(group.name)
-                for user in policy.attached_users.all():
-                    policy.detach_user(user.name)
-                for role in policy.attached_roles.all():
-                    policy.detach_role(role.name)
-            # delete policy
-            for version in policy.versions.all():
-                if not version.is_default_version:
-                    version.delete()
-            policy.delete()
-            return
+            log.info("deleting policy {}".format(policy_name))
+            if args['--exec']:
+                # ISSUE:
+                # this should be it's own function delete_policy()
+                policy = iam_resource.Policy(policy_arn)
+                # detach it from any resources
+                if policy.attachment_count > 0:
+                    for group in policy.attached_groups.all():
+                        policy.detach_group(GroupName=group.name)
+                    for user in policy.attached_users.all():
+                        policy.detach_user(UserName=user.name)
+                    for role in policy.attached_roles.all():
+                        policy.detach_role(RoleName=role.name)
+                # delete policy
+                for version in policy.versions.all():
+                    if not version.is_default_version:
+                        version.delete()
+                policy.delete()
+        return
 
     # validate trusted group
     if lookup(deployed['groups'], 'GroupName', d_spec['TrustedGroup']):
@@ -462,19 +462,23 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     # create or update group policy
     policy_arn = get_policy_arn(iam_client, auth_account, policy_name, args, log,
             auth_spec, p_spec)
-    log.debug("role '{}, policy_arn: '{}'".format(d_spec['RoleName'], policy_arn))
+    log.debug("role: '{}, policy_arn: '{}'".format(d_spec['RoleName'], policy_arn))
 
     # attach policy to group
+    attached_policies = group.attached_policies.all()
     #attached_policies = group.attached_policies.filter(
     #    PathPrefix='/{}/'.format(auth_spec['default_path'])
     #)
-    #log.debug('attached_policies: {}'.format(yamlfmt(list(attached_policies))))
-    ## BUG BUG BUG BUG BUG
-    policy = iam_resource.Policy(policy_arn)
-    try:
-        policy.attach_group(GroupName=group.name)
-    except ClientError as e:
-        log.info(e)
+    log.debug('group: {}, attached_policies: {}'.format(
+            group.name, list(attached_policies)))
+    if policy_arn not in [p.arn for p in attached_policies]:
+        log.info("attaching policy {} to group {} in account {}".format(
+                policy_name, group.name, auth_account))
+        if args['--exec']:
+            try:
+                iam_resource.Policy(policy_arn).attach_group(GroupName=group.name)
+            except ClientError as e:
+                log.info(e)
 
 
 
