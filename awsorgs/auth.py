@@ -283,37 +283,45 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                             group.detach_policy(PolicyArn=policy_arn)
 
 
-def get_policy_arn(iam_client, account_name, policy_name, args, log, auth_spec):
+# ISSUE:
+# do not call manage_custom_policy()
+# just do policy discovery
+def get_policy_arn(iam_client, account_name, policy_name, args, log,
+        auth_spec, p_spec=None):
     """
     Return the policy arn of the named IAM policy in an account.
     Checks AWS scope first, then calls manage_custom_policy() for
     local scope policies.
     """
-    log.debug("policyName: '%s'" % policy_name)
-    aws_policies = iam_client.list_policies(Scope='AWS',
-            MaxItems=500)['Policies']
+    #log.debug("policy_name: '%s'" % policy_name)
+    log.debug("policy_name: '{}'".format(policy_name))
+    aws_policies = iam_client.list_policies(Scope='AWS', MaxItems=500)['Policies']
     policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
     log.debug('policy_arn: %s' % policy_arn)
     if policy_arn:
         return policy_arn
     else:
-        return manage_custom_policy(iam_client, account_name, policy_name, args,
-                log, auth_spec)
+        return manage_custom_policy(args, log, auth_spec, iam_client, account_name,
+                policy_name, p_spec)
 
-
-def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_spec):
+# ISSUE
+# need to separate policy discovery from create/update
+# move policy discovery to get_policy_arn
+def manage_custom_policy(args, log, auth_spec, iam_client, account_name,
+        policy_name, p_spec=None):
     """
-    Create or update a custom IAM policy in an account based on
-    a policy specification.  Returns the policy arn.
+    Create or update a custom IAM policy in an account based on a supplied
+    policy document or a policy specification.  Returns the policy arn.
     """
-    log.debug("account: '%s', policyName: '%s'" % (account_name, policy_name))
-    p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
-    if not p_spec:
-        log.error("Custom Policy spec for '%s' not found in auth-spec." % policy_name)
-        log.error("Policy creation failed.")
-        return None
+    log.debug("account: '{}', policy_name: '{}'".format(account_name, policy_name))
 
-    # generate policy_doc
+    # obtain p_spec if not supplied
+    if p_spec is None:
+        p_spec = lookup(auth_spec['custom_policies'], 'PolicyName', policy_name)
+        if not p_spec:
+            log.error("Custom Policy spec for '%s' not found in auth-spec." % policy_name)
+            log.error("Policy creation failed.")
+            return None
     policy_doc = dict(Version='2012-10-17', Statement=p_spec['Statement'])
 
     # check if custom policy exists
@@ -327,7 +335,7 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
                 (policy_name, account_name, yamlfmt(policy_doc)))
         if args['--exec']:
             return iam_client.create_policy(
-                PolicyName=p_spec['PolicyName'],
+                PolicyName=policy_name,
                 Path=munge_path(auth_spec['default_path'], p_spec),
                 Description=p_spec['Description'],
                 PolicyDocument=json.dumps(policy_doc),
@@ -385,9 +393,38 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     credentials = get_assume_role_credentials(
             args['--auth-account-id'],
             args['--org-access-role'])
+    iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
+    policy_name = 'GroupAssumeRole{}'.format(d_spec['RoleName'])
     auth_account = lookup(deployed['accounts'], 'Id',
             auth_spec['auth_account_id'], 'Name')
+
+
+
+    # test if this assume role policy should be deleted
+    if ensure_absent(d_spec): 
+        aws_policies = get_iam_objects(iam_client.list_policies, 'Policies')
+        policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
+        if policy_arn is not None:
+            # ISSUE:
+            # this should be it's own function delete_policy()
+            policy = iam_resource.Policy(policy_arn)
+            # detach it from any resources
+            if policy.attachment_count > 0:
+                for group in policy.attached_groups.all():
+                    policy.detach_group(group.name)
+                for user in policy.attached_users.all():
+                    policy.detach_user(user.name)
+                for role in policy.attached_roles.all():
+                    policy.detach_role(role.name)
+            # delete policy
+            for version in policy.versions.all():
+                if not version.is_default_version:
+                    version.delete()
+            policy.delete()
+            return
+
+    # validate trusted group
     if lookup(deployed['groups'], 'GroupName', d_spec['TrustedGroup']):
         group = iam_resource.Group(d_spec['TrustedGroup'])
     else:
@@ -396,68 +433,101 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                 (d_spec['RoleName'], d_spec['TrustedGroup'], auth_account))
         return
 
-    # make list of existing group policies which match this role name
-    group_policies_for_role = [p.policy_name for p in list(group.policies.all())
-            if d_spec['RoleName'] in p.policy_name.split('-')]
-
-    # test if delegation should be deleted
-    if ensure_absent(d_spec): 
-        for policy_name in group_policies_for_role:
-            log.info("Deleting assume role group policy '%s' from group '%s' "
-                    "in account '%s'" %
-                    (policy_name, d_spec['TrustedGroup'], auth_account))
-            if args['--exec']:
-                group.Policy(policy_name).delete()
-        return
-
-    # keep track of managed group policies as we process them
-    managed_policies = []
+    # create policy resource list - one per trusted account
+    policy_resource_list = []
     for account in trusting_accounts:
         account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
-        policy_name = "%s-%s" % (account, d_spec['RoleName'])
-        managed_policies.append(policy_name)
+        policy_resource_list.append(
+            'arn:aws:iam::{}:role{}{}'.format(
+                account_id,
+                munge_path(auth_spec['default_path'], d_spec),
+                d_spec['RoleName']
+            )
+        )
 
-        # assemble assume role policy document
-        statement = dict(
-                Effect='Allow',
-                Action='sts:AssumeRole',
-                Resource="arn:aws:iam::%s:role%s%s" % (
-                        account_id,
-                        munge_path(auth_spec['default_path'], d_spec),
-                        d_spec['RoleName'])) 
-        policy_doc = dict(Version='2012-10-17', Statement=[statement])
+    # create policy specification
+    statement = dict(
+        Effect='Allow',
+        Action='sts:AssumeRole',
+        Resource=policy_resource_list,
+    )
+    p_spec = dict(
+        PolicyName=policy_name,
+        Statement=[statement],
+        Description='Allow group members to assume role {} '
+            'in defined accounts'.format(d_spec['RoleName']),
+    )
+    log.debug("role: '{}', p_spec:\n{}".format(d_spec['RoleName'], yamlfmt(p_spec)))
 
-        # create or update group policy
-        if not policy_name in group_policies_for_role:
-            log.info("Creating assume role policy '%s' for group '%s' in "
-                    "account '%s':\n%s" % (
-                            policy_name, 
-                            d_spec['TrustedGroup'],
-                            auth_account, 
-                            yamlfmt(policy_doc)))
-            if args['--exec']:
-                group.create_policy(
-                        PolicyName=policy_name,
-                        PolicyDocument=json.dumps(policy_doc))
-        elif group.Policy(policy_name).policy_document != policy_doc:
-            log.info("Updating policy '%s' for group '%s' in account '%s':\n%s" % (
-                   policy_name, 
-                   d_spec['TrustedGroup'],
-                   auth_account,
-                   string_differ(
-                           yamlfmt(group.Policy(policy_name).policy_document), 
-                           yamlfmt(policy_doc))))
-            if args['--exec']:
-                group.Policy(policy_name).put(PolicyDocument=json.dumps(policy_doc))
+    # create or update group policy
+    policy_arn = get_policy_arn(iam_client, auth_account, policy_name, args, log,
+            auth_spec, p_spec)
+    log.debug("role '{}, policy_arn: '{}'".format(d_spec['RoleName'], policy_arn))
 
-    # purge any policies for this role that are no longer being managed
-    for policy_name in group_policies_for_role:
-        if policy_name not in managed_policies:
-            log.info("Deleting obsolete policy '%s' from group '%s' in "
-                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
-                    auth_account))
-            if args['--exec']:
-                group.Policy(policy_name).delete()
+    # attach policy to group
+    #attached_policies = group.attached_policies.filter(
+    #    PathPrefix='/{}/'.format(auth_spec['default_path'])
+    #)
+    #log.debug('attached_policies: {}'.format(yamlfmt(list(attached_policies))))
+    ## BUG BUG BUG BUG BUG
+    policy = iam_resource.Policy(policy_arn)
+    try:
+        policy.attach_group(GroupName=group.name)
+    except ClientError as e:
+        log.info(e)
+
+
+
+
+
+    ## keep track of managed group policies as we process them
+    #managed_policies = []
+    #for account in trusting_accounts:
+    #    account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
+    #    policy_name = "%s-%s" % (account, d_spec['RoleName'])
+    #    managed_policies.append(policy_name)
+
+    #    # assemble assume role policy document
+    #    statement = dict(
+    #            Effect='Allow',
+    #            Action='sts:AssumeRole',
+    #            Resource="arn:aws:iam::%s:role%s%s" % (
+    #                    account_id,
+    #                    munge_path(auth_spec['default_path'], d_spec),
+    #                    d_spec['RoleName'])) 
+    #    policy_doc = dict(Version='2012-10-17', Statement=[statement])
+
+    #    # create or update group policy
+    #    if not policy_name in group_policies_for_role:
+    #        log.info("Creating assume role policy '%s' for group '%s' in "
+    #                "account '%s':\n%s" % (
+    #                        policy_name, 
+    #                        d_spec['TrustedGroup'],
+    #                        auth_account, 
+    #                        yamlfmt(policy_doc)))
+    #        if args['--exec']:
+    #            group.create_policy(
+    #                    PolicyName=policy_name,
+    #                    PolicyDocument=json.dumps(policy_doc))
+    #    elif group.Policy(policy_name).policy_document != policy_doc:
+    #        log.info("Updating policy '%s' for group '%s' in account '%s':\n%s" % (
+    #               policy_name, 
+    #               d_spec['TrustedGroup'],
+    #               auth_account,
+    #               string_differ(
+    #                       yamlfmt(group.Policy(policy_name).policy_document), 
+    #                       yamlfmt(policy_doc))))
+    #        if args['--exec']:
+    #            group.Policy(policy_name).put(PolicyDocument=json.dumps(policy_doc))
+
+    ## purge any policies for this role that are no longer being managed
+    #for policy_name in group_policies_for_role:
+    #    if policy_name not in managed_policies:
+    #        log.info("Deleting obsolete policy '%s' from group '%s' in "
+    #                "account '%s'" % (policy_name, d_spec['TrustedGroup'],
+    #                auth_account))
+    #        if args['--exec']:
+    #            group.Policy(policy_name).delete()
 
 
 def manage_local_user_in_accounts(
@@ -668,13 +738,6 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                                         yamlfmt(policy_doc)))
                         if args['--exec'] and policy_arn:
                             role.attach_policy(PolicyArn=policy_arn)
-                return
-            else:
-                return
-        else:
-            raise e
-    except:
-        raise
 
     # update delegation role if needed
     if role.assume_role_policy_document != policy_doc:
