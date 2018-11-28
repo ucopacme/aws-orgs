@@ -113,6 +113,24 @@ def delete_user(user):
     user.delete()
 
 
+def delete_policy(policy):
+    """
+    Delete IAM policy.
+    'policy' is a boto3 resource object
+    """
+    if policy.attachment_count > 0:
+        for group in policy.attached_groups.all():
+            policy.detach_group(GroupName=group.name)
+        for user in policy.attached_users.all():
+            policy.detach_user(UserName=user.name)
+        for role in policy.attached_roles.all():
+            policy.detach_role(RoleName=role.name)
+    for version in policy.versions.all():
+        if not version.is_default_version:
+            version.delete()
+    policy.delete()
+
+
 def create_users(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM users based on user specification
@@ -256,57 +274,43 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                         in list(group.attached_policies.all())]
                 log.debug("attached policies: '%s'" % attached_policies)
                 log.debug("specified policies: '%s'" % g_spec['Policies'])
+
                 # attach missing policies
                 for policy_name in g_spec['Policies']:
                     if not policy_name in attached_policies:
-                        policy_arn = get_policy_arn(iam_client, auth_account,
-                                policy_name, args, log, auth_spec)
+                        policy_arn = get_policy_arn(iam_client, policy_name)
+                        if policy_arn is None:
+                            policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, auth_account, policy_name, p_spec)
                         log.debug("policy Arn for '%s': %s" % (policy_name, policy_arn))
                         log.info("Attaching policy '%s' to group '%s' in "
                                 "account '%s'" % (policy_name, g_spec['Name'],
                                 auth_account))
                         if args['--exec']:
                             group.attach_policy(PolicyArn=policy_arn)
-                    elif lookup(auth_spec['custom_policies'], 'PolicyName',
-                            policy_name):
-                        policy_arn = get_policy_arn(iam_client, auth_account,
-                                policy_name, args, log, auth_spec)
+                    elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
+                        policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, auth_account, policy_name)
+
+                # ISSUE:
+                # no longer able to manage obsolete policies because we now
+                # use attached policy for assume role trust policies instead of inline.
+                #
                 ## datach obsolete policies
-                #for policy_name in attached_policies:
-                #    if not policy_name in g_spec['Policies']:
-                #        policy_arn = get_policy_arn(iam_client, auth_account,
-                #                policy_name, args, log, auth_spec)
-                #        log.info("Detaching policy '%s' from group '%s' in "
-                #                "account '%s'" % (policy_name, g_spec['Name'],
-                #                auth_account))
-                #        if args['--exec']:
-                #            group.detach_policy(PolicyArn=policy_arn)
+                for policy_name in attached_policies:
+                    if not policy_name in g_spec['Policies']:
+                        policy_arn = get_policy_arn(iam_client, policy_name)
+                        log.info("Detaching policy '%s' from group '%s' in "
+                                "account '%s'" % (policy_name, g_spec['Name'],
+                                auth_account))
+                        if args['--exec']:
+                            pass
+                            #group.detach_policy(PolicyArn=policy_arn)
 
 
-# ISSUE:
-# do not call manage_custom_policy()
-# just do policy discovery
-def get_policy_arn(iam_client, account_name, policy_name, args, log,
-        auth_spec, p_spec=None):
-    """
-    Return the policy arn of the named IAM policy in an account.
-    Checks AWS scope first, then calls manage_custom_policy() for
-    local scope policies.
-    """
-    #log.debug("policy_name: '%s'" % policy_name)
-    log.debug("policy_name: '{}'".format(policy_name))
-    aws_policies = iam_client.list_policies(Scope='AWS', MaxItems=500)['Policies']
-    policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
-    log.debug('policy_arn: %s' % policy_arn)
-    if policy_arn:
-        return policy_arn
-    else:
-        return manage_custom_policy(args, log, auth_spec, iam_client, account_name,
-                policy_name, p_spec)
+def get_policy_arn(iam_client, policy_name):
+        aws_policies = get_iam_objects(iam_client.list_policies, 'Policies')
+        return lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
 
-# ISSUE
-# need to separate policy discovery from create/update
-# move policy discovery to get_policy_arn
+
 def manage_custom_policy(args, log, auth_spec, iam_client, account_name,
         policy_name, p_spec=None):
     """
@@ -325,7 +329,7 @@ def manage_custom_policy(args, log, auth_spec, iam_client, account_name,
     policy_doc = dict(Version='2012-10-17', Statement=p_spec['Statement'])
 
     # check if custom policy exists
-    custom_policies = iam_client.list_policies(Scope='Local')['Policies']
+    custom_policies = get_iam_objects(iam_client.list_policies, 'Policies', dict(Scope='Local'))
     log.debug("account: '%s', custom policies: '%s'" % (
             account_name,
             [p['Arn'] for p in custom_policies]))
@@ -401,27 +405,12 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
 
     # test if this assume role policy should be deleted
     if ensure_absent(d_spec): 
-        aws_policies = get_iam_objects(iam_client.list_policies, 'Policies')
-        policy_arn = lookup(aws_policies, 'PolicyName', policy_name, 'Arn')
+        policy_arn = get_policy_arn(iam_client, policy_name)
         if policy_arn is not None:
             log.info("deleting policy {}".format(policy_name))
             if args['--exec']:
-                # ISSUE:
-                # this should be it's own function delete_policy()
                 policy = iam_resource.Policy(policy_arn)
-                # detach it from any resources
-                if policy.attachment_count > 0:
-                    for group in policy.attached_groups.all():
-                        policy.detach_group(GroupName=group.name)
-                    for user in policy.attached_users.all():
-                        policy.detach_user(UserName=user.name)
-                    for role in policy.attached_roles.all():
-                        policy.detach_role(RoleName=role.name)
-                # delete policy
-                for version in policy.versions.all():
-                    if not version.is_default_version:
-                        version.delete()
-                policy.delete()
+                delete_policy(policy)
         return
 
     # validate trusted group
@@ -445,6 +434,10 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
             )
         )
 
+    # ISSUE:
+    # set additional path element to distiguish assume role trust policy
+    # from other attachable group policy
+    #
     # create policy specification
     statement = dict(
         Effect='Allow',
@@ -459,17 +452,14 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     )
     log.debug("role: {}, p_spec:\n{}".format(d_spec['RoleName'], yamlfmt(p_spec)))
 
-    # create or update group policy
-    policy_arn = get_policy_arn(
-        iam_client, auth_account, policy_name, args, log, auth_spec, p_spec
-    )
+    # create or update trust policy
+    policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, auth_account, policy_name, p_spec)
     log.debug("role: {}, policy_arn: {}".format(d_spec['RoleName'], policy_arn))
 
     # attach policy to group
-    attached_policies = group.attached_policies.all()
-    #attached_policies = group.attached_policies.filter(
-    #    PathPrefix='/{}/'.format(auth_spec['default_path'])
-    #)
+    attached_policies = group.attached_policies.filter(
+        PathPrefix='/{}/'.format(auth_spec['default_path'])
+    )
     log.debug('group: {}, attached_policies: {}'.format(
             group.name, list(attached_policies)))
     if policy_arn not in [p.arn for p in attached_policies]:
@@ -535,12 +525,13 @@ def manage_local_user_in_accounts(
             if 'Policies' in lu_spec and lu_spec['Policies']:
                 user.load()
                 for policy_name in lu_spec['Policies']:
-                    policy_arn = get_policy_arn(iam_client, account_name,
-                            policy_name, args, log, auth_spec)
+                    policy_arn = get_policy_arn(iam_client, policy_name)
+                    if policy_arn is None:
+                        policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, account_name, policy_name)
                     log.info("Attaching policy '%s' to local user '%s' "
                             "in account '%s'" %
                             (policy_name, user.name, account_name))
-                    if args['--exec'] and policy_arn:
+                    if args['--exec'] and policy_arn is not None:
                         user.attach_policy(PolicyArn=policy_arn)
     else:
         # validate path
@@ -557,20 +548,20 @@ def manage_local_user_in_accounts(
         attached_policies = [p.policy_name for p in list(user.attached_policies.all())]
         for policy_name in lu_spec['Policies']:
             if not policy_name in attached_policies:
-                policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                                            args, log, auth_spec)
+                policy_arn = get_policy_arn(iam_client, policy_name)
+                if policy_arn is None:
+                    policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, account_name, policy_name)
                 log.info("Attaching policy '%s' to local user '%s' in account '%s'" %
                         (policy_name, user.name, account_name))
-                if args['--exec'] and policy_arn:
+                if args['--exec'] and policy_arn is not None:
                     user.attach_policy(PolicyArn=policy_arn)
-            elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
-                policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                                            args, log, auth_spec)
+            elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
+                manage_custom_policy(args, log, auth_spec, iam_client, account_name, policy_name)
+
         # datach obsolete policies
         for policy_name in attached_policies:
             if not policy_name in lu_spec['Policies']:
-                policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                        args, log, auth_spec)
+                policy_arn = get_policy_arn(iam_client, policy_name)
                 log.info("Detaching policy '%s' from local user '%s' in account '%s'" %
                         (policy_name, user.name, account_name))
                 if args['--exec'] and policy_arn:
@@ -629,8 +620,6 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 return
             else:
                 raise e
-        except:
-            raise
         # delete delegation role
         log.info("Deleting role '%s' from account '%s'" %
                 (d_spec['RoleName'], account_name))
@@ -680,16 +669,20 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 if 'Policies' in d_spec and d_spec['Policies']:
                     role.load()
                     for policy_name in d_spec['Policies']:
-                        policy_arn = get_policy_arn(iam_client, account_name,
-                                policy_name, args, log, auth_spec)
+                        policy_arn = get_policy_arn(iam_client, policy_name)
+                        if policy_arn is None:
+                            policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, account_name, policy_name, p_spec)
                         log.info("Attaching policy '%s' to role '%s' "
                                 "in account '%s':\n%s" % (
                                         policy_name, 
                                         d_spec['RoleName'], 
                                         account_name,
                                         yamlfmt(policy_doc)))
-                        if args['--exec'] and policy_arn:
+                        if args['--exec'] and policy_arn is not None:
                             role.attach_policy(PolicyArn=policy_arn)
+        else:
+            raise e
+        return
 
     # update delegation role if needed
     if role.assume_role_policy_document != policy_doc:
@@ -719,27 +712,29 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                 MaxSessionDuration=d_spec['Duration'])
 
     # manage policy attachments
-    attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
+    attached_policies = role.attached_policies.all()
+    attached_policy_names = [p.policy_name for p in attached_policies]
     for policy_name in d_spec['Policies']:
         # attach missing policies
-        if not policy_name in attached_policies:
-            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
+        if not policy_name in attached_policy_names:
+            policy_arn = get_policy_arn(iam_client, policy_name)
+            if policy_arn is None:
+                policy_arn = manage_custom_policy(args, log, auth_spec, iam_client, account_name, policy_name)
             log.info("Attaching policy '%s' to role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
             if args['--exec'] and policy_arn:
                 role.attach_policy(PolicyArn=policy_arn)
-        elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
-            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
-    for policy_name in attached_policies:
-        # datach obsolete policies
+        # update attached policies if needed
+        elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
+            manage_custom_policy(args, log, auth_spec, iam_client, account_name, policy_name)
+
+    # datach obsolete policies
+    for policy_name in attached_policy_names:
         if not policy_name in d_spec['Policies']:
-            policy_arn = get_policy_arn(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
             log.info("Detaching policy '%s' from role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec'] and policy_arn:
+            policy_arn = next((p.arn for p in attached_policies if p.policy_name == policy_name), None)
+            if args['--exec'] and policy_arn is not None:
                 role.detach_policy(PolicyArn=policy_arn)
 
 
