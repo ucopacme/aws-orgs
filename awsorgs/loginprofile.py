@@ -78,24 +78,40 @@ def get_user_name():
     return sts.get_caller_identity()['Arn'].split('/')[-1]
 
 
-def list_delegations(log, user, aliases=None):
+def list_delegations(log, spec, user, aliases=None):
     """
     Return list of assume_role resource arns for all groups for user.
     If aliases are supplied, substitute an alias for account Id in each arn.
     """
+    role_arns = []
     groups = list(user.groups.all())
-    assume_role_policies = []
     for group in user.groups.all():
-        assume_role_policies += [p for p in list(group.policies.all())
-                if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-    role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
-            in assume_role_policies]
+        attached_policies = group.attached_policies.filter(
+            PathPrefix='/{}/'.format(spec['default_path'])
+        )
+        for p in attached_policies:
+            if p.default_version.document['Statement'][0]['Action'] == 'sts:AssumeRole':
+                role_arns += p.default_version.document['Statement'][0]['Resource']
     if aliases:
         for i in range(len(role_arns)):
             account_id = role_arns[i].split(':')[4]
             if account_id in aliases:
                  role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
     return role_arns
+
+    #groups = list(user.groups.all())
+    #assume_role_policies = []
+    #for group in user.groups.all():
+    #    assume_role_policies += [p for p in list(group.policies.all())
+    #            if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
+    #role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
+    #        in assume_role_policies]
+    #if aliases:
+    #    for i in range(len(role_arns)):
+    #        account_id = role_arns[i].split(':')[4]
+    #        if account_id in aliases:
+    #             role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
+    #return role_arns
 
 
 def format_delegation_table(delegation_arns, aliases):
@@ -114,11 +130,11 @@ def format_delegation_table(delegation_arns, aliases):
     return delegation_string
 
 
-def user_report(log, aliases, user, login_profile):
+def user_report(log, spec, aliases, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
-    delegation_table = list_delegations(log, user)
+    delegation_table = list_delegations(log, spec, user)
     spacer = '{:<24}{}'
     log.info('\n')
     log.info(spacer.format('User:', user.name))
@@ -137,7 +153,7 @@ def user_report(log, aliases, user, login_profile):
             log.info(spacer.format('Password last used:', user.password_last_used))
     else:
         log.info(spacer.format('User login profile:', login_profile))
-    assume_role_arns = list_delegations(log, user, aliases)
+    assume_role_arns = list_delegations(log, spec, user, aliases)
     if assume_role_arns:
         log.info('Delegations:\n{}'.format(
             format_delegation_table(delegation_table, aliases)
@@ -236,7 +252,7 @@ def onetime_passwd_expired(log, user, login_profile, hours):
     return False
 
 
-def prep_email(log, aliases, user, passwd):
+def prep_email(log, spec, aliases, user, passwd):
     """Generate email body from template"""
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
     trusted_id=boto3.client('sts').get_caller_identity()['Account']
@@ -244,7 +260,7 @@ def prep_email(log, aliases, user, passwd):
         trusted_account = aliases[trusted_id]
     else:
         trusted_account = trusted_id
-    delegation_table = list_delegations(log, user)
+    delegation_table = list_delegations(log, spec, user)
     log.debug('delegation_table: %s' % delegation_table)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
@@ -274,7 +290,7 @@ def send_email(msg, smtp_server):
 
 
 def handle_email(log, args, spec, aliases, user, passwd):
-    message_body = prep_email(log, aliases, user, passwd)
+    message_body = prep_email(log, spec, aliases, user, passwd)
     if args['--no-email']:
         print(message_body)
     else:
@@ -323,7 +339,7 @@ def main():
             handle_email(log, args, spec, aliases, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-            user_report(log, aliases, user, login_profile)
+            user_report(log, spec, aliases, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
@@ -346,7 +362,7 @@ def main():
         set_access_key_status(log, user, True)
 
     else:
-        user_report(log, aliases, user, login_profile)
+        user_report(log, spec, aliases, user, login_profile)
 
 
 if __name__ == "__main__":
