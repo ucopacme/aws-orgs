@@ -99,20 +99,6 @@ def list_delegations(log, spec, user, aliases=None):
                  role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
     return role_arns
 
-    #groups = list(user.groups.all())
-    #assume_role_policies = []
-    #for group in user.groups.all():
-    #    assume_role_policies += [p for p in list(group.policies.all())
-    #            if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-    #role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
-    #        in assume_role_policies]
-    #if aliases:
-    #    for i in range(len(role_arns)):
-    #        account_id = role_arns[i].split(':')[4]
-    #        if account_id in aliases:
-    #             role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
-    #return role_arns
-
 
 def format_delegation_table(delegation_arns, aliases):
     """Generate formatted list of delegation attributes as printable string"""
