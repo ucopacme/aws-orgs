@@ -114,6 +114,7 @@ def set_account_alias(account, log, args, account_spec, role):
                 account['Id'], args['--org-access-role'])
         if isinstance(credentials, RuntimeError):
             log.error(credentials)
+            return
         else:
             iam_client = boto3.client('iam', **credentials)
         aliases = iam_client.list_account_aliases()['AccountAliases']
