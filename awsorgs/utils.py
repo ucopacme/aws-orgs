@@ -36,7 +36,7 @@ def lookup(dlist, lkey, lvalue, rkey=None):
         return None
     if len(items) > 1:
         raise RuntimeError(
-            "Data Error: lkey:lvalue lookup matches multiple items in dlist"
+            "Data Error: lkey: {}, lvalue: {} - lookup matches multiple items in dlist".format(lkey, lvalue)
         )
     if rkey:
         if rkey in items[0]:
