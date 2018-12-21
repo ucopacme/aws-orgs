@@ -132,11 +132,12 @@ def validate_spec(log, args):
     validator = file_validator(log)
     spec_object = {}
     errors = 0
-    for root, _, filenames in os.walk(spec_dir):
+    for dirpath, dirnames, filenames in os.walk(spec_dir, topdown = True):
+        dirnames[:] = [d for d in dirnames if not d.startswith('.')]
         for f in filenames:
             log.debug("considering file {}".format(f))
             spec_from_file, errors = validate_spec_file(log,
-                    os.path.join(spec_dir, f), validator, errors)
+                    os.path.join(dirpath, f), validator, errors)
             if spec_from_file:
                 spec_object.update(spec_from_file)
     if errors:
