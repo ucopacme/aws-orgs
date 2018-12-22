@@ -113,6 +113,26 @@ def delete_user(user):
     user.delete()
 
 
+def delete_policy(policy):
+    """
+    Delete IAM policy.
+    
+    Args:
+        policy (obj): boto3 IAM resource object
+    """
+    if policy.attachment_count > 0:
+        for group in policy.attached_groups.all():
+            policy.detach_group(GroupName=group.name)
+        for user in policy.attached_users.all():
+            policy.detach_user(UserName=user.name)
+        for role in policy.attached_roles.all():
+            policy.detach_role(RoleName=role.name)
+    for version in policy.versions.all():
+        if not version.is_default_version:
+            version.delete()
+    policy.delete()
+
+
 def create_users(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM users based on user specification
