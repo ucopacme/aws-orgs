@@ -423,7 +423,12 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     # keep track of managed group policies as we process them
     managed_policies = []
     for account in trusting_accounts:
-        account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
+        if d_spec['TrustingAccount'] == 'ALL':
+            account = 'AllOrgAccounts'
+            account_id = '*'
+            trusting_accounts = []
+        else:
+            account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
         policy_name = "%s-%s" % (account, d_spec['RoleName'])
         managed_policies.append(policy_name)
 
@@ -459,6 +464,10 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
                            yamlfmt(policy_doc))))
             if args['--exec']:
                 group.Policy(policy_name).put(PolicyDocument=json.dumps(policy_doc))
+
+        # just create one group policy when TrustingAccount == 'ALL'
+        if d_spec['TrustingAccount'] == 'ALL':
+            break
 
     # purge any policies for this role that are no longer being managed
     for policy_name in group_policies_for_role:
@@ -683,13 +692,7 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                                         yamlfmt(policy_doc)))
                         if args['--exec'] and policy_arn:
                             role.attach_policy(PolicyArn=policy_arn)
-                return
-            else:
-                return
-        else:
-            raise e
-    except:
-        raise
+            return
 
     # update delegation role if needed
     if role.assume_role_policy_document != policy_doc:
