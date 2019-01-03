@@ -385,6 +385,59 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
         return policy['Arn']
 
 
+def assemble_assume_role_policy_document(account_id, auth_spec, d_spec):
+    statement = dict(
+            Effect='Allow',
+            Action='sts:AssumeRole',
+            Resource="arn:aws:iam::%s:role%s%s" % (
+                    account_id,
+                    munge_path(auth_spec['default_path'], d_spec),
+                    d_spec['RoleName'])) 
+    return dict(Version='2012-10-17', Statement=[statement])
+
+
+def create_role_policy(args, log, group, account, policy_name, policy_doc):
+    log.info("Creating assume role policy '%s' for group '%s' in "
+            "account '%s':\n%s" % (
+                    policy_name, 
+                    group.name,
+                    account, 
+                    yamlfmt(policy_doc)))
+    if args['--exec']:
+        group.create_policy(
+                PolicyName=policy_name,
+                PolicyDocument=json.dumps(policy_doc))
+
+
+def update_group_policy(args, log, group, account, policy_name, policy_doc):
+    log.info("Updating policy '%s' for group '%s' in account '%s':\n%s" % (
+           policy_name, 
+           group.name,
+           account,
+           string_differ(
+                   yamlfmt(group.Policy(policy_name).policy_document), 
+                   yamlfmt(policy_doc))))
+    if args['--exec']:
+        group.Policy(policy_name).put(PolicyDocument=json.dumps(policy_doc))
+
+
+def delete_group_policy(args, log, group, account, policy_name):
+    log.info("Deleting assume role group policy '%s' from group '%s' "
+            "in account '%s'" %
+            (policy_name, group.name, account))
+    if args['--exec']:
+        group.Policy(policy_name).delete()
+
+
+def delete_obsolete_group_policy(args, log, group, account, policy_name, managed_policies):
+    if policy_name not in managed_policies:
+        log.info("Deleting obsolete policy '%s' from group '%s' in "
+                "account '%s'" % (policy_name, d_spec['TrustedGroup'],
+                auth_account))
+        if args['--exec']:
+            group.Policy(policy_name).delete()
+
+
 def set_group_assume_role_policies(args, log, deployed, auth_spec,
         trusting_accounts, d_spec):
     """
@@ -413,11 +466,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
     # test if delegation should be deleted
     if ensure_absent(d_spec): 
         for policy_name in group_policies_for_role:
-            log.info("Deleting assume role group policy '%s' from group '%s' "
-                    "in account '%s'" %
-                    (policy_name, d_spec['TrustedGroup'], auth_account))
-            if args['--exec']:
-                group.Policy(policy_name).delete()
+            delete_group_policy(args, log, group, auth_account, policy_name)
         return
 
     # keep track of managed group policies as we process them
@@ -426,44 +475,18 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
         if d_spec['TrustingAccount'] == 'ALL':
             account = 'AllOrgAccounts'
             account_id = '*'
-            trusting_accounts = []
         else:
             account_id = lookup(deployed['accounts'], 'Name', account, 'Id')
         policy_name = "%s-%s" % (account, d_spec['RoleName'])
         managed_policies.append(policy_name)
-
-        # assemble assume role policy document
-        statement = dict(
-                Effect='Allow',
-                Action='sts:AssumeRole',
-                Resource="arn:aws:iam::%s:role%s%s" % (
-                        account_id,
-                        munge_path(auth_spec['default_path'], d_spec),
-                        d_spec['RoleName'])) 
-        policy_doc = dict(Version='2012-10-17', Statement=[statement])
+        policy_doc = assemble_assume_role_policy_document(account_id, auth_spec, d_spec)
 
         # create or update group policy
         if not policy_name in group_policies_for_role:
-            log.info("Creating assume role policy '%s' for group '%s' in "
-                    "account '%s':\n%s" % (
-                            policy_name, 
-                            d_spec['TrustedGroup'],
-                            auth_account, 
-                            yamlfmt(policy_doc)))
-            if args['--exec']:
-                group.create_policy(
-                        PolicyName=policy_name,
-                        PolicyDocument=json.dumps(policy_doc))
+            create_group_assume_role_policy(args, log, group, auth_account, policy_name, policy_doc)
+
         elif group.Policy(policy_name).policy_document != policy_doc:
-            log.info("Updating policy '%s' for group '%s' in account '%s':\n%s" % (
-                   policy_name, 
-                   d_spec['TrustedGroup'],
-                   auth_account,
-                   string_differ(
-                           yamlfmt(group.Policy(policy_name).policy_document), 
-                           yamlfmt(policy_doc))))
-            if args['--exec']:
-                group.Policy(policy_name).put(PolicyDocument=json.dumps(policy_doc))
+            update_group_policy(args, log, group, auth_account, policy_name, policy_doc)
 
         # just create one group policy when TrustingAccount == 'ALL'
         if d_spec['TrustingAccount'] == 'ALL':
@@ -471,12 +494,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
 
     # purge any policies for this role that are no longer being managed
     for policy_name in group_policies_for_role:
-        if policy_name not in managed_policies:
-            log.info("Deleting obsolete policy '%s' from group '%s' in "
-                    "account '%s'" % (policy_name, d_spec['TrustedGroup'],
-                    auth_account))
-            if args['--exec']:
-                group.Policy(policy_name).delete()
+        delete_obsolete_group_policy(args, log, group, auth_account, policy_name, managed_policies)
 
 
 def manage_local_user_in_accounts(
