@@ -396,7 +396,7 @@ def assemble_assume_role_policy_document(account_id, auth_spec, d_spec):
     return dict(Version='2012-10-17', Statement=[statement])
 
 
-def create_role_policy(args, log, group, account, policy_name, policy_doc):
+def create_group_policy(args, log, group, account, policy_name, policy_doc):
     log.info("Creating assume role policy '%s' for group '%s' in "
             "account '%s':\n%s" % (
                     policy_name, 
@@ -483,7 +483,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec,
 
         # create or update group policy
         if not policy_name in group_policies_for_role:
-            create_group_assume_role_policy(args, log, group, auth_account, policy_name, policy_doc)
+            create_group_policy(args, log, group, auth_account, policy_name, policy_doc)
 
         elif group.Policy(policy_name).policy_document != policy_doc:
             update_group_policy(args, log, group, auth_account, policy_name, policy_doc)
