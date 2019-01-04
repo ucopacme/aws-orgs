@@ -515,7 +515,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
         resource = build_resource_list(
             log, deployed['accounts'], d_spec, auth_spec, d_spec['TrustingAccount']
         )
-    policy_doc = assemble_assume_role_policy_document(resource, 'allow')
+    policy_doc = assemble_assume_role_policy_document(resource, 'Allow')
     policy_name = "AllowAssumeRole-{}".format(d_spec['RoleName'])
     manage_group_policy(
         args, log, group, auth_account, policy_name, policy_doc, group_policies
@@ -527,7 +527,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
         resource = build_resource_list(
             log, deployed['accounts'], d_spec, auth_spec, d_spec['ExcludeAccounts']
         )
-        policy_doc = assemble_assume_role_policy_document(resource, 'deny')
+        policy_doc = assemble_assume_role_policy_document(resource, 'Deny')
         policy_name = "DenyAssumeRole-{}".format(d_spec['RoleName'])
         manage_group_policy(
             args, log, group, auth_account, policy_name, policy_doc, group_policies
