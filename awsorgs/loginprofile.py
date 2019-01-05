@@ -80,7 +80,19 @@ def get_user_name():
 
 def list_delegations(log, user, deployed_accounts):
     """
-    Return list of assume role resource arns for all groups for user.
+    Return list of assume role resource arns for user.  Obtain these by
+    parsing in-line group policies for each group the user is a member of.
+
+    the policies we care about match one of two patterns:
+        AllowAssumeRole-<rolename>
+        DenyAssumeRole-<rolename>
+
+    we assemble a list of allowed role arns, then we remove any of the
+    denied arns.
+
+    if the account_id field of a AllowAssumeRole-<rolename> matches the
+    glob ('*') char, we generate the list of allowed role arns - one for
+    every 'ACTIVE' account.
     """
     groups = list(user.groups.all())
     role_arns = []
@@ -104,11 +116,9 @@ def list_delegations(log, user, deployed_accounts):
                 p for p in list(group.policies.all())
                 if p.name.startswith('DenyAssumeRole')
             ), None)
-            print(deny_policy)
             if deny_policy is not None:
                 deny_arns = deny_policy.policy_document['Statement'][0]['Resource']
                 deny_account_ids = [arn.split(':')[4] for arn in deny_arns]
-                print(deny_account_ids)
                 for id in deny_account_ids:
                     for arn in allow_arns:
                         if id in arn:
@@ -138,7 +148,6 @@ def user_report(log, deployed_accounts, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
-    delegation_table = list_delegations(log, user, deployed_accounts)
     spacer = '{:<24}{}'
     log.info('\n')
     log.info(spacer.format('User:', user.name))
@@ -160,7 +169,7 @@ def user_report(log, deployed_accounts, user, login_profile):
     assume_role_arns = list_delegations(log, user, deployed_accounts)
     if assume_role_arns:
         log.info('Delegations:\n{}'.format(
-            format_delegation_table(delegation_table, deployed_accounts)
+            format_delegation_table(assume_role_arns, deployed_accounts)
         ))
 
 
@@ -264,14 +273,14 @@ def prep_email(log, aliases, deployed_accounts, user, passwd):
         trusted_account = aliases[trusted_id]
     else:
         trusted_account = trusted_id
-    delegation_table = list_delegations(log, user, deployed_accounts)
-    log.debug('delegation_table: %s' % delegation_table)
+    assume_role_arns = list_delegations(log, user, deployed_accounts)
+    log.debug('assume_role_arns: %s' % assume_role_arns)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
         user_name=user.name,
         onetimepw=passwd,
         trusted_account=trusted_account,
-        delegations=format_delegation_table(delegation_table, deployed_accounts),
+        delegations=format_delegation_table(assume_role_arns, deployed_accounts),
     )
     with open(template) as tpl:
         return Template(tpl.read()).substitute(mapping)
