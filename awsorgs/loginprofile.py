@@ -80,26 +80,42 @@ def get_user_name():
 
 def list_delegations(log, user, deployed_accounts):
     """
-    Return list of assume_role resource arns for all groups for user.
-    If aliases are supplied, substitute an alias for account Id in each arn.
+    Return list of assume role resource arns for all groups for user.
     """
     groups = list(user.groups.all())
     role_arns = []
     for group in user.groups.all():
+
         allow_policy = next((
             p for p in list(group.policies.all())
             if p.policy_name.startswith('AllowAssumeRole')
         ), None)
-        #deny_policy = next((
-        #    p for p in list(group.policies.all())
-        #    if p.name.startswith('DenyAssumeRole')
-        #), None)
         if allow_policy is not None:
-            resource_arn_list = allow_policy.policy_document['Statement'][0]['Resource']
-            if isinstance(resource_arn_list, str) and '*' in resource_arn_list:
-                head, sep, tail = resource_arn_list.partition('*')
+            allow_arns = allow_policy.policy_document['Statement'][0]['Resource']
+
+            if isinstance(allow_arns, str) and '*' in allow_arns:
+                head, sep, tail = allow_arns.partition('*')
+                allow_arns = []
                 for account in deployed_accounts:
-                    role_arns.append(head + account['Id'] + tail)
+                    if account['Status'] == 'ACTIVE':
+                        allow_arns.append(head + account['Id'] + tail)
+
+            deny_policy = next((
+                p for p in list(group.policies.all())
+                if p.name.startswith('DenyAssumeRole')
+            ), None)
+            print(deny_policy)
+            if deny_policy is not None:
+                deny_arns = deny_policy.policy_document['Statement'][0]['Resource']
+                deny_account_ids = [arn.split(':')[4] for arn in deny_arns]
+                print(deny_account_ids)
+                for id in deny_account_ids:
+                    for arn in allow_arns:
+                        if id in arn:
+                            allow_arns.remove(arn)
+
+            role_arns += allow_arns
+
     return role_arns
 
 
