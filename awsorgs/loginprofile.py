@@ -302,8 +302,8 @@ def send_email(msg, smtp_server):
     s.quit()
 
 
-def handle_email(log, args, spec, aliases, user, passwd):
-    message_body = prep_email(log, aliases, user, passwd)
+def handle_email(log, args, spec, aliases, deployed_accounts, user, passwd):
+    message_body = prep_email(log, aliases, deployed_accounts, user, passwd)
     if args['--no-email']:
         print(message_body)
     else:
@@ -350,14 +350,14 @@ def main():
     if args['--new']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            handle_email(log, args, spec, aliases, user, passwd)
+            handle_email(log, args, spec, aliases, deployed_accounts, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
             user_report(log, deployed_accounts, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
-        handle_email(log, args, spec, aliases, user, passwd)
+        handle_email(log, args, spec, aliases, deployed_accounts, user, passwd)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
@@ -370,7 +370,7 @@ def main():
     elif args['--reenable']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            handle_email(log, args, spec, aliases, user, passwd)
+            handle_email(log, args, spec, aliases, deployed_accounts, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)
