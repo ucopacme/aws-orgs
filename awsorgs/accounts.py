@@ -50,6 +50,7 @@ import awsorgs
 from awsorgs.utils import *
 from awsorgs.spec import *
 
+S3_ACCOUNT_BUCKET = 'jjhsu-awsorgs-bucket'
 
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
@@ -234,6 +235,20 @@ def unmanaged_accounts(log, deployed_accounts, account_spec):
     log.debug('spec_account_names: %s' % spec_account_names)
     return [a for a in deployed_account_names if a not in spec_account_names]
 
+def s3_object_for_accounts(deployed_accounts):
+    s3_client = boto3.client('s3')
+    list_buckets_response = s3_client.list_buckets()
+    bucket_list = [a['Name'] for a in list_buckets_response['Buckets']]
+    if S3_ACCOUNT_BUCKET not in bucket_list:
+        s3_client.create_bucket(
+		ACL = 'private',
+    		Bucket = S3_ACCOUNT_BUCKET,
+		CreateBucketConfiguration = {'LocationConstraint':'us-west-2'})
+    s3_client.put_object(
+	Bucket = S3_ACCOUNT_BUCKET,
+	Key = 'key_deployed_accoutns',
+	Body = yamlfmt(deployed_accounts))
+    return
 
 def main():
     args = docopt(__doc__, version=awsorgs.__version__)
@@ -256,6 +271,7 @@ def main():
         display_provisioned_accounts(log, deployed_accounts, 'ACTIVE')
         display_provisioned_accounts(log, deployed_accounts, 'SUSPENDED')
         display_invited_accounts(log, org_client)
+        s3_object_for_accounts(deployed_accounts)
         return
 
     account_spec = validate_spec(log, args)
