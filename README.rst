@@ -12,7 +12,7 @@ awsorgs
 awsaccounts
   Manage accounts in an AWS Organization.
 
-awsorgaccessrole
+awsorg-accessrole
   Generate default org access role in an invited account.
 
 awsauth
@@ -34,17 +34,17 @@ Installation
 Python virtual environment (recommended)::
 
   source ~/path_to_my_venv/bin/activate
-  pip install https://github.com/ashleygould/aws-orgs/archive/master.zip
+  pip install https://github.com/ucopacme/aws-orgs/archive/master.zip
 
 
 Editable copy in venv::
 
-  git clone https://github.com/ashleygould/aws-orgs
+  git clone https://github.com/ucopacme/aws-orgs
   pip install -e aws-orgs/
 
 Local user installation::
 
-  git clone https://github.com/ashleygould/aws-orgs
+  git clone https://github.com/ucopacme/aws-orgs
   pip install --user -e aws-orgs/
 
 

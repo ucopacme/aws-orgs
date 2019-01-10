@@ -278,11 +278,13 @@ Members:
       type: string
 ExcludeMembers:
   required: False
+  nullable: True
   type: list
   schema:
     type: string
 Policies:
   required: False
+  nullable: True
   type: list
   schema:
     type: string
