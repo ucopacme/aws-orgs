@@ -253,7 +253,73 @@ Actions:
 Part III - Clean Up
 *******************
 
-- detach policies from group, remove user from group, delete group, delete user
+- detach policies, users from group::
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  diff --git a/groups-spec.yml b/groups-spec.yml
+  index 9e05738..565b1ab 100644
+  --- a/groups-spec.yml
+  +++ b/groups-spec.yml
+  @@ -49,7 +49,4 @@ groups:
+     - Name: testers
+       Ensure: present
+       Members:
+  -      - joeuser
+       Policies:
+  -      - IAMReadOnlyAccess
+  -      - ReadS3Bucket
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
+  [dryrun] awsorgs.utils: INFO     Removing user 'joeuser' from group 'testers'
+  [dryrun] awsorgs.utils: INFO     Detaching policy 'ReadS3Bucket' from group 'testers' in account 'Managment'
+  [dryrun] awsorgs.utils: INFO     Detaching policy 'IAMReadOnlyAccess' from group 'testers' in account 'Managment'
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
+  awsorgs.utils: INFO     Removing user 'joeuser' from group 'testers'
+  awsorgs.utils: INFO     Detaching policy 'ReadS3Bucket' from group 'testers' in account 'Managment'
+  awsorgs.utils: INFO     Detaching policy 'IAMReadOnlyAccess' from group 'testers' in account 'Managment'
+
+- delete group, delete user::
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi users-spec.yml 
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  diff --git a/groups-spec.yml b/groups-spec.yml
+  index 9e05738..4eda72b 100644
+  --- a/groups-spec.yml
+  +++ b/groups-spec.yml
+  @@ -47,9 +47,6 @@ groups:
+         - quincey
+         - egburt
+     - Name: testers
+  -    Ensure: present
+  +    Ensure: absent
+       Members:
+       Policies:
+  diff --git a/users-spec.yml b/users-spec.yml
+  index 5424bf4..3e8b87d 100644
+  --- a/users-spec.yml
+  +++ b/users-spec.yml
+  @@ -37,5 +37,6 @@ users:
+       Email: david.rivera@ucop.edu
+       Team: syseng
+     - Name: joeuser
+  +    Ensure: absent
+       Email: joeuser@example.com
+       Team: test
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
+  [dryrun] awsorgs.utils: INFO     Deleting user 'joeuser'
+  [dryrun] awsorgs.utils: INFO     Deleting group 'testers'
+  [dryrun] awsorgs.utils: INFO     Removing user 'joeuser' from group 'all-users'
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
+  awsorgs.utils: INFO     Deleting user 'joeuser'
+  awsorgs.utils: INFO     Deleting group 'testers'
+  awsorgs.utils: INFO     Removing user 'joeuser' from group 'all-users'
+
 
 awsauth delegations
 *******************
