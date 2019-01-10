@@ -14,14 +14,15 @@ Prerequisites:
 
 
 
-Users and Groups
-----------------
+Users and Groups - ``awsauth users``
+------------------------------------
 
 Commands used:
 
 - git diff
 - awsauth users
 - awsauth users --exec
+- awsauth report --users
 
 
 Spec files impacted:
@@ -31,8 +32,9 @@ Spec files impacted:
 - custom-policy-spec.yml
 
 
-Actions:
+Actions Summary:
 
+- report IAM users and groups in accounts
 - create an IAM user and group, and add the user to the group
 - attach a IAM managed policy to your group
 - attach a IAM custom policy to your group
@@ -41,52 +43,94 @@ Actions:
 - delete group, delete user
 
 
-Part 1 - AIM User and Group in Auth Account
-*******************************************
 
-create an IAM user and group, and add the user to the group::
+Report users and groups in all accounts
+***************************************
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi users-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
+Run ``awsauth report`` command with ``--users`` flag::
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  $ awsauth report --users 
+  _________________________________________
+  IAM Users and Groups in all Org Accounts:
+  _____________________
+  Account:    Managment
+  Users:
+  - arn:aws:iam::962936672038:user/awsauth/sysadm/agould
+  - arn:aws:iam::962936672038:user/awsauth/drivera
+  - arn:aws:iam::962936672038:user/awsauth/jhsu
+  
+  Groups:
+  - arn:aws:iam::962936672038:group/awsauth/all-users
+  - arn:aws:iam::962936672038:group/awsauth/orgadmins
+  
+  ____________________
+  Account:    blee-dev
+  ____________________
+  Account:    blee-poc
+  _____________________
+  Account:    blee-prod
+  __________________
+  Account:    master
+  Users:
+  - arn:aws:iam::640965621536:user/agould
+  
+  Groups:
+  - arn:aws:iam::640965621536:group/Admins
+
+
+Some variations::
+
+  $ awsauth report --users --full --account Managment
+  $ awsauth report --users --full
+  $ awsauth report --credentials --account Managment
+  $ awsauth report --credentials
+
+
+
+Create an IAM user and group, and add the user to the group
+***********************************************************
+
+Edit the following files:
+
+- users-spec.yml 
+- groups-spec.yml 
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
   diff --git a/groups-spec.yml b/groups-spec.yml
   index 7f37144..d3fe879 100644
   --- a/groups-spec.yml
   +++ b/groups-spec.yml
   @@ -46,3 +46,8 @@ groups:
-         - ashely
-         - quincey
-         - egburt
+
   +  - Name: testers
   +    Ensure: present
   +    Members:
   +      - joeuser
-  +
+  +      - maryuser
   diff --git a/users-spec.yml b/users-spec.yml
   index 22d2d61..5424bf4 100644
   --- a/users-spec.yml
   +++ b/users-spec.yml
   @@ -36,3 +36,6 @@ users:
-     - Name: drivera
-       Email: david.rivera@ucop.edu
-       Team: syseng
+
   +  - Name: joeuser
   +    Email: joeuser@example.com
   +    Team: test
+  +  - Name: maryuser
+  +    Email: maryuser@example.com
+  +    Team: test
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
-  [dryrun] awsorgs.utils: INFO     Creating user 'joeuser'
-  [dryrun] awsorgs.utils: INFO     Creating group 'testers'
-  [dryrun] awsorgs.utils: INFO     Adding user 'joeuser' to group 'all-users'
+Review proposed changes in ``dry-run`` mode::
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
-  awsorgs.utils: INFO     Creating user 'joeuser'
-  awsorgs.utils: INFO     arn:aws:iam::962936672038:user/awsauth/joeuser
-  awsorgs.utils: INFO     Creating group 'testers'
-  awsorgs.utils: INFO     arn:aws:iam::962936672038:group/awsauth/testers
-  awsorgs.utils: INFO     Adding user 'joeuser' to group 'all-users'
-  awsorgs.utils: INFO     Adding user 'joeuser' to group 'testers'
+  $ awsauth users
+
+Implement and review changes::  
+
+  $ awsauth users --exec
+  $ awsauth report --users
+
 
 
 
@@ -492,7 +536,10 @@ change ``TrustingAccount`` to keyword ``ALL``::
   awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'master':
 
 
-define a list of accounts in ``ExcludeAccounts``::
+define a list of accounts in ``ExcludeAccounts``
+************************************************
+
+::
 
   (python3.6) ashely@horus:~/.awsorgs/spec.d> vi delegations-spec.yml 
   (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
@@ -541,8 +588,127 @@ define a list of accounts in ``ExcludeAccounts``::
 
 
 
-attach a custom policy
-modify a custom policy
+attach a custom policy::
+
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi custom-policy-spec.yml 
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi delegations-spec.yml 
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
+  index 9399a60..a428164 100644
+  --- a/custom-policy-spec.yml
+  +++ b/custom-policy-spec.yml
+  @@ -120,3 +120,14 @@ custom_policies:
+           Action:
+             - aws-portal:Account*
+           Resource: '*'
+  +
+  +  - PolicyName: ReadS3Bucket
+  +    Description: list and get objects from my s3 bucket
+  +    Statement:
+  +      - Effect: Allow
+  +        Action:
+  +          - s3:List* 
+  +          - s3:Get*
+  +        Resource:
+  +          - arn:aws:s3:::my_bucket
+  +          - arn:aws:s3:::my_bucket/*
+  diff --git a/delegations-spec.yml b/delegations-spec.yml
+  index 8b01bb8..ce9afa9 100644
+  --- a/delegations-spec.yml
+  +++ b/delegations-spec.yml
+  @@ -113,5 +113,6 @@ delegations:
+       RequireMFA: True
+       Policies:
+         - ReadOnlyAccess
+  +      - ReadS3Bucket
+  
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations
+  [dryrun] awsorgs.utils: WARNING  /home/ashely/.awsorgs/spec.d/.gitignore not a valid yaml file. skipping
+  [dryrun] awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-dev':
+  Statement:
+  - Action:
+    - s3:List*
+    - s3:Get*
+    Effect: Allow
+    Resource:
+    - arn:aws:s3:::my_bucket
+    - arn:aws:s3:::my_bucket/*
+  Version: '2012-10-17'
+  
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-dev'
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Security'
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Managment'
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-prod'
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'master'
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'test2'
+  [dryrun] awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-poc':
+  Statement:
+  - Action:
+    - s3:List*
+    - s3:Get*
+    Effect: Allow
+    Resource:
+    - arn:aws:s3:::my_bucket
+    - arn:aws:s3:::my_bucket/*
+  Version: '2012-10-17'
+  
+  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-poc'
+  
+  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations --exec
+  awsorgs.utils: WARNING  /home/ashely/.awsorgs/spec.d/.gitignore not a valid yaml file. skipping
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Security'
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Managment'
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'master'
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-prod'
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'test2'
+  awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-dev':
+  Statement:
+  - Action:
+    - s3:List*
+    - s3:Get*
+    Effect: Allow
+    Resource:
+    - arn:aws:s3:::my_bucket
+    - arn:aws:s3:::my_bucket/*
+  Version: '2012-10-17'
+  
+  awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-poc':
+  Statement:
+  - Action:
+    - s3:List*
+    - s3:Get*
+    Effect: Allow
+    Resource:
+    - arn:aws:s3:::my_bucket
+    - arn:aws:s3:::my_bucket/*
+  Version: '2012-10-17'
+  
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-dev'
+  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-poc'
+
+
+
+
+
+modify a custom policy::
+
+(python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
+index a428164..7efe46b 100644
+--- a/custom-policy-spec.yml
++++ b/custom-policy-spec.yml
+@@ -131,3 +131,5 @@ custom_policies:
+         Resource:
+           - arn:aws:s3:::my_bucket
+           - arn:aws:s3:::my_bucket/*
++          - arn:aws:s3:::my_other_bucket
++          - arn:aws:s3:::my_other_bucket/*
+
+
+
+
+
+
 modify the ``Description``
 delete the delegation
 
