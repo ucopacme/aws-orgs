@@ -356,11 +356,10 @@ def manage_custom_policy(iam_client, account_name, policy_name, args, log, auth_
 
         # compare each statement as dict
         update_required = False
-        for i in range(len(current_doc['Statement'])):
-            if current_doc['Statement'][i] != policy_doc['Statement'][i]:
-                update_required = True
-                log.debug('account: %s, update_required: %s' %
-                        (account_name, update_required))
+        if current_doc['Statement'] != policy_doc['Statement']:
+            update_required = True
+            log.debug('account: %s, update_required: %s' %
+                    (account_name, update_required))
 
         # update policy and set as default version
         if update_required:
