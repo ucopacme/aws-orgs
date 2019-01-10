@@ -267,15 +267,15 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
             auth_spec['auth_account_id'], 'Name')
     log.debug("auth account: '%s'" % auth_account)
     for g_spec in auth_spec['groups']:
-        log.debug("processing group spec for '%s':\n%s" % (g_spec['Name'], g_spec))
-        group = iam_resource.Group(g_spec['Name'])
-        attached_policies = [p.policy_name for p in list(group.attached_policies.all())]
-        log.debug("attached policies: '%s'" % attached_policies)
-        if not 'Policies' in g_spec or g_spec['Policies'] is None:
-            g_spec['Policies'] = []
-        if g_spec['Policies']:
-            if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
-                    and not ensure_absent(g_spec)):
+        if (lookup(deployed['groups'], 'GroupName', g_spec['Name'])
+                and not ensure_absent(g_spec)):
+            log.debug("processing group spec for '%s':\n%s" % (g_spec['Name'], g_spec))
+            group = iam_resource.Group(g_spec['Name'])
+            attached_policies = [p.policy_name for p in list(group.attached_policies.all())]
+            log.debug("attached policies: '%s'" % attached_policies)
+            if not 'Policies' in g_spec or g_spec['Policies'] is None:
+                g_spec['Policies'] = []
+            if g_spec['Policies']:
                 log.debug("specified policies: '%s'" % g_spec['Policies'])
                 # attach missing policies
                 for policy_name in g_spec['Policies']:
@@ -294,15 +294,15 @@ def manage_group_policies(credentials, args, log, deployed, auth_spec):
                     elif lookup(auth_spec['custom_policies'], 'PolicyName', policy_name):
                         manage_custom_policy(iam_client, auth_account, policy_name,
                                 args, log, auth_spec)
-        # datach obsolete policies
-        for policy_name in attached_policies:
-            if not policy_name in g_spec['Policies']:
-                policy_arn = get_policy_arn(iam_client, policy_name)
-                log.info("Detaching policy '%s' from group '%s' in "
-                        "account '%s'" % (policy_name, g_spec['Name'],
-                        auth_account))
-                if args['--exec']:
-                    group.detach_policy(PolicyArn=policy_arn)
+            # datach obsolete policies
+            for policy_name in attached_policies:
+                if not policy_name in g_spec['Policies']:
+                    policy_arn = get_policy_arn(iam_client, policy_name)
+                    log.info("Detaching policy '%s' from group '%s' in "
+                            "account '%s'" % (policy_name, g_spec['Name'],
+                            auth_account))
+                    if args['--exec']:
+                        group.detach_policy(PolicyArn=policy_arn)
 
 
 def get_policy_arn(iam_client, policy_name):
