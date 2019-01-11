@@ -132,15 +132,14 @@ Implement and review changes::
   $ awsauth report --users
 
 
+Attach a IAM managed policy to your group
+*****************************************
 
+Edit file ``groups-spec.yml``
 
-Part II - IAM Group Policies in Auth Account
-********************************************
+Example Diff::
 
-attach a IAM managed policy to your group::
-
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  ~/.awsorgs/spec.d> git diff
   diff --git a/groups-spec.yml b/groups-spec.yml
   index d3fe879..9e05738 100644
   --- a/groups-spec.yml
@@ -150,27 +149,36 @@ attach a IAM managed policy to your group::
        Ensure: present
        Members:
          - joeuser
+         - maryuser
   +    Policies:
   +      - IAMReadOnlyAccess
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'IAMReadOnlyAccess' to group 'testers' in account 'Managment'
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
-  awsorgs.utils: INFO     Attaching policy 'IAMReadOnlyAccess' to group 'testers' in account 'Managment'
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth users
+
+Implement and review changes::  
+
+  $ awsauth users --exec
+  $ aws iam list-attached-group-policies  --group-name testers
 
 
-attach a IAM custom policy to your group::
+Attach a IAM custom policy to your group
+****************************************
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi custom-policies-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
+Edit the following files:
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+- groups-spec.yml 
+- custom-policy-spec.yml 
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
   diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
-  index 9399a60..d6f29d7 100644
+  index da46ebb..5d411f0 100644
   --- a/custom-policy-spec.yml
   +++ b/custom-policy-spec.yml
-  @@ -120,3 +120,19 @@ custom_policies:
+  @@ -111,3 +111,14 @@ custom_policies:
            Action:
              - aws-portal:Account*
            Resource: '*'
@@ -185,65 +193,36 @@ attach a IAM custom policy to your group::
   +        Resource:
   +          - arn:aws:s3:::my_bucket
   +          - arn:aws:s3:::my_bucket/*
-  +      - Effect: Allow
-  +        Action:
-  +          - s3:ListAllMyBuckets
-  +          - s3:GetBucketLocation
-  +        Resource: '*'
   diff --git a/groups-spec.yml b/groups-spec.yml
-  index d3fe879..9e05738 100644
+  index b506856..11e87cb 100644
   --- a/groups-spec.yml
   +++ b/groups-spec.yml
-  @@ -50,4 +50,6 @@ groups:
-     - Name: testers
-       Ensure: present
-       Members:
-         - joeuser
-  +    Policies:
-  +      - IAMReadOnlyAccess
+  @@ -36,3 +36,4 @@ groups:
+         - maryuser
+       Policies:
+         - IAMReadOnlyAccess
   +      - ReadS3Bucket
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
-  [dryrun] awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'Managment':
-  Statement:
-  - Action:
-    - s3:List*
-    - s3:Get*
-    Effect: Allow
-    Resource:
-    - arn:aws:s3:::my_bucket
-    - arn:aws:s3:::my_bucket/*
-  - Action:
-    - s3:ListAllMyBuckets
-    - s3:GetBucketLocation
-    Effect: Allow
-    Resource: '*'
-  Version: '2012-10-17'
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to group 'testers' in account 'Managment'
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
-  awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'Managment':
-  Statement:
-  - Action:
-    - s3:List*
-    - s3:Get*
-    Effect: Allow
-    Resource:
-    - arn:aws:s3:::my_bucket
-    - arn:aws:s3:::my_bucket/*
-  - Action:
-    - s3:ListAllMyBuckets
-    - s3:GetBucketLocation
-    Effect: Allow
-    Resource: '*'
-  Version: '2012-10-17'
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to group 'testers' in account 'Managment'
 
 
-modify attached custom policy::
+Review proposed changes in ``dry-run`` mode::
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi custom-policy-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  $ awsauth users
+
+Implement and review changes::  
+
+  $ awsauth users --exec
+  $ aws iam list-attached-group-policies  --group-name testers
+  $ aws iam get-policy --policy-arn <your_policy_arn>
+
+
+Modify attached custom policy
+*****************************
+
+Edit file ``custom-policy-spec.yml``
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
   diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
   index d6f29d7..7f5748a 100644
   --- a/custom-policy-spec.yml
@@ -254,55 +233,29 @@ modify attached custom policy::
              - arn:aws:s3:::my_bucket/*
   +          - arn:aws:s3:::my_other_bucket
   +          - arn:aws:s3:::my_other_bucket/*
-         - Effect: Allow
-           Action:
-             - s3:ListAllMyBuckets
-
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
-  [dryrun] awsorgs.utils: INFO     Updating custom policy 'ReadS3Bucket' in account 'Managment':
-    Statement:
-    - Action:
-      - s3:List*
-      - s3:Get*
-      Effect: Allow
-      Resource:
-      - arn:aws:s3:::my_bucket
-      - arn:aws:s3:::my_bucket/*
-  +   - arn:aws:s3:::my_other_bucket
-  +   - arn:aws:s3:::my_other_bucket/*
-    - Action:
-      - s3:ListAllMyBuckets
-      - s3:GetBucketLocation
-      Effect: Allow
-      Resource: '*'
-    Version: '2012-10-17'
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
-  awsorgs.utils: INFO     Updating custom policy 'ReadS3Bucket' in account 'Managment':
-    Statement:
-    - Action:
-      - s3:List*
-      - s3:Get*
-      Effect: Allow
-      Resource:
-      - arn:aws:s3:::my_bucket
-      - arn:aws:s3:::my_bucket/*
-  +   - arn:aws:s3:::my_other_bucket
-  +   - arn:aws:s3:::my_other_bucket/*
-    - Action:
-      - s3:ListAllMyBuckets
-      - s3:GetBucketLocation
-      Effect: Allow
-      Resource: '*'
-    Version: '2012-10-17'
 
 
-Part III - Clean Up
-*******************
+Review proposed changes in ``dry-run`` mode::
 
-detach policies, users from group::
+  $ awsauth users
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
+Implement and review changes::  
+
+  $ awsauth users --exec
+  $ aws iam list-attached-group-policies  --group-name testers
+  $ aws iam get-policy --policy-arn <your_policy_arn>
+  $ aws iam get-policy-version --policy-arn <your_policy_arn> --version-id <version_id>
+
+
+Detach policies, users from group
+*********************************
+
+Edit the following files:
+
+- groups-spec.yml 
+
+Example Diff::
+
   (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
   diff --git a/groups-spec.yml b/groups-spec.yml
   index 9e05738..565b1ab 100644
@@ -313,25 +266,35 @@ detach policies, users from group::
        Ensure: present
        Members:
   -      - joeuser
+  -      - maryuser
        Policies:
   -      - IAMReadOnlyAccess
   -      - ReadS3Bucket
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
-  [dryrun] awsorgs.utils: INFO     Removing user 'joeuser' from group 'testers'
-  [dryrun] awsorgs.utils: INFO     Detaching policy 'ReadS3Bucket' from group 'testers' in account 'Managment'
-  [dryrun] awsorgs.utils: INFO     Detaching policy 'IAMReadOnlyAccess' from group 'testers' in account 'Managment'
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
-  awsorgs.utils: INFO     Removing user 'joeuser' from group 'testers'
-  awsorgs.utils: INFO     Detaching policy 'ReadS3Bucket' from group 'testers' in account 'Managment'
-  awsorgs.utils: INFO     Detaching policy 'IAMReadOnlyAccess' from group 'testers' in account 'Managment'
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth users
+
+Implement and review changes::  
+
+  $ awsauth users --exec
+  $ awsauth report --users
+  $ aws iam list-attached-group-policies  --group-name testers
+  $ aws iam get-policy --policy-arn <your_policy_arn>
 
 
-delete group, delete user::
+Delete group, delete users
+**************************
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi groups-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi users-spec.yml 
+Files to edit:
+
+- users-spec.yml
+- groups-spec.yml
+
+To delete IAM entities we must set attribute ``Ensure: absent`` to associated spec.
+
+Example diff::
 
   (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
   diff --git a/groups-spec.yml b/groups-spec.yml
@@ -339,8 +302,7 @@ delete group, delete user::
   --- a/groups-spec.yml
   +++ b/groups-spec.yml
   @@ -47,9 +47,6 @@ groups:
-         - quincey
-         - egburt
+
      - Name: testers
   -    Ensure: present
   +    Ensure: absent
@@ -351,46 +313,45 @@ delete group, delete user::
   --- a/users-spec.yml
   +++ b/users-spec.yml
   @@ -37,5 +37,6 @@ users:
-       Email: david.rivera@ucop.edu
-       Team: syseng
      - Name: joeuser
   +    Ensure: absent
        Email: joeuser@example.com
        Team: test
-
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users
-  [dryrun] awsorgs.utils: INFO     Deleting user 'joeuser'
-  [dryrun] awsorgs.utils: INFO     Deleting group 'testers'
-  [dryrun] awsorgs.utils: INFO     Removing user 'joeuser' from group 'all-users'
-
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth users --exec
-  awsorgs.utils: INFO     Deleting user 'joeuser'
-  awsorgs.utils: INFO     Deleting group 'testers'
-  awsorgs.utils: INFO     Removing user 'joeuser' from group 'all-users'
+     - Name: maryuser
+  +    Ensure: absent
+       Email: maryuser@example.com
+       Team: test
 
 
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth users
+
+Implement and review changes::  
+
+  $ awsauth users --exec
+  $ awsauth report --users
 
 
 
-Cross Account Access Delegations
---------------------------------
+Cross Account Access Delegations - ``awsauth delegations``
+----------------------------------------------------------
 
 Prerequisites:
 
-- create trusted group with users
+- IAM group with users to use as ``TrustedGroup``
 
 
 Commands used:
 
 - git diff
-- awsauth users
-- awsauth users --exec
+- awsauth delegations
+- awsauth delegations --exec
+- awsauth report --roles
 
 
 Spec files impacted:
 
-- users-spec.yml
-- groups-spec.yml
 - delegations-spec.yml
 - custom-policy-spec.yml
 
@@ -406,23 +367,20 @@ Actions:
 Create a cross account access delegation
 ****************************************
 
-in delegations-spec.yml:
+File to edit: delegations-spec.yml
 
 - set ``TrustedGroup`` to your new group
 - define a list of accounts in ``TrustingAccount``
 - define one managed policy in ``Policies``
 
-::
+Example Diff::
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi delegations-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+  ~/.awsorgs/spec.d> git diff
   diff --git a/delegations-spec.yml b/delegations-spec.yml
   index 1ae3245..4d571e9 100644
   --- a/delegations-spec.yml
   +++ b/delegations-spec.yml
   @@ -101,3 +101,14 @@ delegations:
-       Policies:
-         - ElasticLoadBalancingReadOnly
    
   +  - RoleName: TestersRole
   +    Ensure: present
@@ -433,28 +391,15 @@ in delegations-spec.yml:
   +    Policies:
   +      - ReadOnlyAccess
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations
-  [dryrun] awsorgs.utils: INFO     Creating assume role policy 'AllowAssumeRole-TestersRole' for group 'testers' in account 'Managment':
-  Statement:
-  - Action: sts:AssumeRole
-    Effect: Allow
-    Resource:
-    - arn:aws:iam::219234291074:role/awsauth/TestersRole
-    - arn:aws:iam::403999741647:role/awsauth/TestersRole
-    - arn:aws:iam::633495783471:role/awsauth/TestersRole
-  Version: '2012-10-17'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'blee-dev'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'blee-poc'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'blee-prod'
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations --exec
-  awsorgs.utils: INFO     Creating assume role policy 'AllowAssumeRole-TestersRole' for group 'testers' in account 'Managment':
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'blee-prod'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'blee-dev'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'blee-poc'
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'blee-prod':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'blee-dev':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'blee-poc':
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth delegations
+
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ awsauth report --roles  | egrep "^Account|role/awsauth"
 
 
 Update the delegation
