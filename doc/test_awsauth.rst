@@ -399,16 +399,20 @@ Review proposed changes in ``dry-run`` mode::
 Implement and review changes::  
 
   $ awsauth delegations --exec
-  $ awsauth report --roles  | egrep "^Account|role/awsauth"
+  $ awsauth report --roles  | egrep "^Account|TestersRole"
+  $ aws iam list-group-policies --group-name testers
 
 
-Update the delegation
-*********************
+Update the delegation to apply to all accounts
+**********************************************
 
-change ``TrustingAccount`` to keyword ``ALL``::
+File to edit: delegations-spec.yml
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi delegations-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+- set ``TrustingAccount`` to keyword ``ALL``
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
   diff --git a/delegations-spec.yml b/delegations-spec.yml
   index 282db35..e46ac9e 100644
   --- a/delegations-spec.yml
@@ -426,68 +430,29 @@ change ``TrustingAccount`` to keyword ``ALL``::
        RequireMFA: True
        Policies:
          - ReadOnlyAccess
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations
-  [dryrun] awsorgs.utils: INFO     Updating policy 'AllowAssumeRole-TestersRole' for group 'testers' in account 'Managment':
-    Statement:
-    - Action: sts:AssumeRole
-      Effect: Allow
-  -   Resource:
-  -   - arn:aws:iam::219234291074:role/awsauth/TestersRole
-  ?   ^              ^^^^^^^^^^^^
-  +   Resource: arn:aws:iam::\*:role/awsauth/TestersRole
-  ?   ^^^^^^^^^              ^
-  -   - arn:aws:iam::403999741647:role/awsauth/TestersRole
-  -   - arn:aws:iam::633495783471:role/awsauth/TestersRole
-    Version: '2012-10-17'
-  
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'gorp-poc'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'test2'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'master'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'Managment'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'gorp-dev'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'gorp-prod'
-  [dryrun] awsorgs.utils: INFO     Creating role 'TestersRole' in account 'Security'
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations --exec
-  awsorgs.utils: WARNING  /home/ashely/.awsorgs/spec.d/.gitignore not a valid yaml file. skipping
-  awsorgs.utils: WARNING  /home/ashely/.awsorgs/spec.d/.delegations-spec.yml.swp not a valid yaml file. skipping
-  awsorgs.utils: INFO     Updating policy 'AllowAssumeRole-TestersRole' for group 'testers' in account 'Managment':
-    Statement:
-    - Action: sts:AssumeRole
-      Effect: Allow
-  -   Resource:
-  -   - arn:aws:iam::219234291074:role/awsauth/TestersRole
-  ?   ^              ^^^^^^^^^^^^
-  +   Resource: arn:aws:iam::\*:role/awsauth/TestersRole
-  ?   ^^^^^^^^^              ^
-  -   - arn:aws:iam::403999741647:role/awsauth/TestersRole
-  -   - arn:aws:iam::633495783471:role/awsauth/TestersRole
-    Version: '2012-10-17'
-  
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'Security'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'gorp-poc'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'gorp-dev'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'test2'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'gorp-prod'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'Managment'
-  awsorgs.utils: INFO     Creating role 'TestersRole' in account 'master'
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'test2':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'gorp-prod':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'gorp-poc':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'gorp-dev':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'Security':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'Managment':
-  awsorgs.utils: INFO     Attaching policy 'ReadOnlyAccess' to role 'TestersRole' in account 'master':
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth delegations
+
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ awsauth report --roles  | egrep "^Account|TestersRole"
+  $ aws iam list-group-policies --group-name testers
+  $ aws iam get-group-policy --group-name testers --policy-name AllowAssumeRole-TestersRole
 
 
-define a list of accounts in ``ExcludeAccounts``
-************************************************
+Exclude some accounts from a delegation
+***************************************
 
-::
+File to edit: delegations-spec.yml
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi delegations-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+- define a list of accounts in ``ExcludeAccounts``
+
+Example Diff::
+
+  :~/.awsorgs/spec.d> git diff
   diff --git a/delegations-spec.yml b/delegations-spec.yml
   index e46ac9e..8b01bb8 100644
   --- a/delegations-spec.yml
@@ -497,55 +462,41 @@ define a list of accounts in ``ExcludeAccounts``
        Description: testing cross account delegation
        TrustingAccount: ALL
   +    ExcludeAccounts: 
-  +      - gorp-poc
-  +      - gorp-dev
-  +      - gorp-prod
+  +      - blee-dev
+  +      - blee-prod
        TrustedGroup: testers
        RequireMFA: True
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations
-  [dryrun] awsorgs.utils: INFO     Creating assume role policy 'DenyAssumeRole-TestersRole' for group 'testers' in account 'Managment':
-  Statement:
-  - Action: sts:AssumeRole
-    Effect: Deny
-    Resource:
-    - arn:aws:iam::215031690010:role/awsauth/TestersRole
-    - arn:aws:iam::598608341536:role/awsauth/TestersRole
-    - arn:aws:iam::534447840478:role/awsauth/TestersRole
-  
-  [dryrun] awsorgs.utils: INFO     Deleting role 'TestersRole' from account 'gorp-dev'
-  [dryrun] awsorgs.utils: INFO     Deleting role 'TestersRole' from account 'gorp-prod'
-  [dryrun] awsorgs.utils: INFO     Deleting role 'TestersRole' from account 'gorp-poc'
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations --exec
-  awsorgs.utils: INFO     Creating assume role policy 'DenyAssumeRole-TestersRole' for group 'testers' in account 'Managment':
-  Statement:
-  - Action: sts:AssumeRole
-    Effect: Deny
-    Resource:
-    - arn:aws:iam::215031690010:role/awsauth/TestersRole
-    - arn:aws:iam::598608341536:role/awsauth/TestersRole
-    - arn:aws:iam::534447840478:role/awsauth/TestersRole
-  Version: '2012-10-17'
-  awsorgs.utils: INFO     Deleting role 'TestersRole' from account 'gorp-poc'
-  awsorgs.utils: INFO     Deleting role 'TestersRole' from account 'gorp-dev'
-  awsorgs.utils: INFO     Deleting role 'TestersRole' from account 'gorp-prod'
 
 
+Review proposed changes in ``dry-run`` mode::
 
-attach a custom policy::
+  $ awsauth delegations
 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi custom-policy-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> vi delegations-spec.yml 
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ awsauth report --roles  | egrep "^Account|TestersRole"
+  $ aws iam list-group-policies --group-name testers
+  $ aws iam get-group-policy --group-name testers --policy-name AllowAssumeRole-TestersRole
+  $ aws iam get-group-policy --group-name testers --policy-name DenyAssumeRole-TestersRole
+
+
+Attach a custom policy
+**********************
+
+Files to edit:
+
+- custom-policy-spec.yml
+- delegations-spec.yml
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
   diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
   index 9399a60..a428164 100644
   --- a/custom-policy-spec.yml
   +++ b/custom-policy-spec.yml
   @@ -120,3 +120,14 @@ custom_policies:
-           Action:
-             - aws-portal:Account*
-           Resource: '*'
   +
   +  - PolicyName: ReadS3Bucket
   +    Description: list and get objects from my s3 bucket
@@ -566,95 +517,87 @@ attach a custom policy::
        Policies:
          - ReadOnlyAccess
   +      - ReadS3Bucket
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations
-  [dryrun] awsorgs.utils: WARNING  /home/ashely/.awsorgs/spec.d/.gitignore not a valid yaml file. skipping
-  [dryrun] awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-dev':
-  Statement:
-  - Action:
-    - s3:List*
-    - s3:Get*
-    Effect: Allow
-    Resource:
-    - arn:aws:s3:::my_bucket
-    - arn:aws:s3:::my_bucket/*
-  Version: '2012-10-17'
-  
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-dev'
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Security'
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Managment'
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-prod'
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'master'
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'test2'
-  [dryrun] awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-poc':
-  Statement:
-  - Action:
-    - s3:List*
-    - s3:Get*
-    Effect: Allow
-    Resource:
-    - arn:aws:s3:::my_bucket
-    - arn:aws:s3:::my_bucket/*
-  Version: '2012-10-17'
-  
-  [dryrun] awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-poc'
-  
-  (python3.6) ashely@horus:~/.awsorgs/spec.d> awsauth delegations --exec
-  awsorgs.utils: WARNING  /home/ashely/.awsorgs/spec.d/.gitignore not a valid yaml file. skipping
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Security'
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'Managment'
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'master'
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-prod'
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'test2'
-  awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-dev':
-  Statement:
-  - Action:
-    - s3:List*
-    - s3:Get*
-    Effect: Allow
-    Resource:
-    - arn:aws:s3:::my_bucket
-    - arn:aws:s3:::my_bucket/*
-  Version: '2012-10-17'
-  
-  awsorgs.utils: INFO     Creating custom policy 'ReadS3Bucket' in account 'blee-poc':
-  Statement:
-  - Action:
-    - s3:List*
-    - s3:Get*
-    Effect: Allow
-    Resource:
-    - arn:aws:s3:::my_bucket
-    - arn:aws:s3:::my_bucket/*
-  Version: '2012-10-17'
-  
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-dev'
-  awsorgs.utils: INFO     Attaching policy 'ReadS3Bucket' to role 'TestersRole' in account 'blee-poc'
+
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth delegations
+
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ awsauth report --roles  | egrep "^Account|awsauth/ReadS3Bucket"
+  $ aws iam list-group-policies --group-name testers
+  $ aws iam get-group-policy --group-name testers --policy-name AllowAssumeRole-TestersRole
+  $ aws iam get-group-policy --group-name testers --policy-name DenyAssumeRole-TestersRole
+
+
+Modify a custom policy
+**********************
+
+Files to edit:
+
+- custom-policy-spec.yml
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
+  diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
+  index a428164..7efe46b 100644
+  --- a/custom-policy-spec.yml
+  +++ b/custom-policy-spec.yml
+  @@ -131,3 +131,5 @@ custom_policies:
+           Resource:
+             - arn:aws:s3:::my_bucket
+             - arn:aws:s3:::my_bucket/*
+  +          - arn:aws:s3:::my_other_bucket
+  +          - arn:aws:s3:::my_other_bucket/*
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth delegations
+
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ awsauth report --roles --full | grep -A12 awsauth/ReadS3Bucket
 
 
 
+Delete the delegation from all accounts
+***************************************
 
+Files to edit: delegations-spec.yml
 
-modify a custom policy::
+- set ``Ensure: absent``
 
-(python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
-diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
-index a428164..7efe46b 100644
---- a/custom-policy-spec.yml
-+++ b/custom-policy-spec.yml
-@@ -131,3 +131,5 @@ custom_policies:
-         Resource:
-           - arn:aws:s3:::my_bucket
-           - arn:aws:s3:::my_bucket/*
-+          - arn:aws:s3:::my_other_bucket
-+          - arn:aws:s3:::my_other_bucket/*
+Example Diff::
 
+  ~/.awsorgs/spec.d> git diff
+  diff --git a/delegations-spec.yml b/delegations-spec.yml
+  index 2b050da..b6892d1 100644
+  --- a/delegations-spec.yml
+  +++ b/delegations-spec.yml
+  @@ -67,14 +67,10 @@ delegations:
+         - ViewBilling
+   
+     - RoleName: TestersRole
+  -    Ensure: present
+  +    Ensure: absent
+       Description: testing cross account delegation
+       TrustingAccount: ALL
+       ExcludeAccounts: 
+         - blee-poc
+         - blee-dev
+         - blee-prod
 
+Review proposed changes in ``dry-run`` mode::
 
+  $ awsauth delegations
 
+Implement and review changes::  
 
+  $ awsauth delegations --exec
+  $ awsauth report --roles  | egrep "^Account|role/awsauth/ReadS3Bucket"
+  $ aws iam list-group-policies --group-name testers
 
-modify the ``Description``
-delete the delegation
-
-::
