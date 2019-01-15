@@ -58,20 +58,20 @@ Run 'awsacccouns report' ::
   Active Accounts in Org:
 
   Name:               Alias               Id:             Email:
-  account-jjhsuaws1   acct-jjhsuaws1      938960831554    mail1@yahoo.com
-  account-jjhsuaws2   acct-jjhsuaws2      427989285695    mail2@yahoo.com
-  account-jjhsuaws3   acct-jjhsuaws3      409058358936    mail3@yahoo.com
+  account-abcaws1   acct-abcaws1      123456789011    mail1@yahoo.com
+  account-abcaws2   acct-abcaws2      123456789011    mail2@yahoo.com
+  account-abcaws3   acct-abcaws3      123456789011    mail3@yahoo.com
 
 
 
 Edit spec_dir/accoount-spec.yml
 *******************************
 
-Change account-jjhsuaws3 alias from acct-jjhsuaws3 to accnt-jjhsuaws3::
+Change account-abcaws3 alias from acct-abcaws3 to accnt-abcaws3::
 
-  - Name: account-jjhsuaws3
-  Team: team-jjhsuaws3
-  Alias: accnt-jjhsuaws3
+  - Name: account-abcaws3
+  Team: team-abcaws3
+  Alias: accnt-abcaws3
   Email: mail3@yahoo.com
 
 
@@ -83,7 +83,7 @@ Run 'awsaccount alias' ::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias
 
-  [dryrun] awsorgs.utils: INFO     resetting account alias for account 'account-jjhsuaws3' to 'accnt-jjhsuaws3'; previous alias was 'acct-jjhsuaws3'
+  [dryrun] awsorgs.utils: INFO     resetting account alias for account 'account-abcaws3' to 'accnt-abcaws3'; previous alias was 'acct-abcaws3'
 
 
 
@@ -94,7 +94,7 @@ Run 'awsaccount alias --exec' ::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias --exec
 
-  awsorgs.utils: INFO     resetting account alias for account 'account-jjhsuaws3' to 'accnt-jjhsuaws3'; previous alias was 'acct-jjhsuaws3'
+  awsorgs.utils: INFO     resetting account alias for account 'account-abcaws3' to 'accnt-abcaws3'; previous alias was 'acct-abcaws3'
 
 
 
@@ -110,9 +110,9 @@ Run 'awsaccount report' ::
   Active Accounts in Org:
 
   Name:               Alias               Id:             Email:
-  account-jjhsuaws1   acct-jjhsuaws1      938960831554    mail1@yahoo.com
-  account-jjhsuaws2   acct-jjhsuaws2      427989285695    mail2@yahoo.com
-  account-jjhsuaws3   accnt-jjhsuaws3      409058358936    mail3@yahoo.com
+  account-abcaws1   acct-abcaws1      123456789011    mail1@yahoo.com
+  account-abcaws2   acct-abcaws2      123456789011    mail2@yahoo.com
+  account-abcaws3   accnt-abcaws3     123456789011    mail3@yahoo.com
 
 
 
