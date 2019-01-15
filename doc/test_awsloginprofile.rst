@@ -56,13 +56,13 @@ Assume OrgAdmin role for creating new IAM user
 
 Assume auth acount administrtor role::
 
-  (py36) [jhsu@scrappy-aws awsorgs]$ aws-assume-role master-jjhsu-OrgAdmin
+  (py36) [jhsu@scrappy-aws awsorgs]$ aws-assume-role master-abc-OrgAdmin
   (py36) [jhsu@scrappy-aws awsorgs]$
   (py36) [jhsu@scrappy-aws awsorgs]$ aws-whoami
   {
-    "UserId": "AROAJS2JVTC6CC3YZX3BC:jjhsu-admin@OrgAdmin",
-    "Account": "706847775242",
-    "Arn": "arn:aws:sts::706847775242:assumed-role/OrgAdmin/jjhsu-admin@OrgAdmin"
+    "UserId": "AROAJS2JVTC6CC3YZX3BC:abc-admin@OrgAdmin",
+    "Account": "123456789011",
+    "Arn": "arn:aws:sts::123456789011:assumed-role/OrgAdmin/abc-admin@OrgAdmin"
   }
 
 
@@ -72,9 +72,9 @@ Check current user login profile
 
 Run 'awsloginprofile user' ::
 
-  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile jjhsuaws1-user-1
-  User:                   jjhsuaws1-user-1
-  Arn:                    arn:aws:iam::706847775242:user/awsauth/jjhsuaws1-user-1
+  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile abcaws1-user-1
+  User:                   abcaws1-user-1
+  Arn:                    arn:aws:iam::123456789011:user/awsauth/abcaws1-user-1
   User Id:                AIDAI5DX7YNIPTLGTQXZK
   User created:           2019-01-03 01:28:59+00:00
   Login profile created:  2019-01-10 19:32:11+00:00
@@ -82,11 +82,11 @@ Run 'awsloginprofile user' ::
   Password last used:     2019-01-10 19:55:35+00:00
   Delegations:
     Account Id      Alias                   Role
-    938960831554    acct-jjhsuaws1          awsauth/jjhsuaws1
+    2222222222      acct-abcaws1          awsauth/abcaws1
 
 
-  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile jjhsuaws1-user-2
-  no such user: jjhsuaws1-user-2
+  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile abcaws1-user-2
+  no such user: abcaws1-user-2
 
 
 
@@ -95,16 +95,16 @@ Create new IAM user in user-spec.yml and group-spec.yml
 
 Edit users-spec.yml ::
   
-  - Name: jjhsuaws1-user-2
-    Email: jhsu@ucop.edu
-    Team: team-jjhsuaws1
+  - Name: abcaws1-user-2
+    Email: xyz@yahoo.com
+    Team: team-abcaws1
 
 Edit groups-spec.yml ::
 
-  - Name: group-jjhsuaws1
+  - Name: group-abcaws1
     Members:
-      - jjhsuaws1-user-1
-      - jjhsuaws1-user-2
+      - abcaws1-user-1
+      - abcaws1-user-2
 
 
 
@@ -114,10 +114,10 @@ Create new IAM user with awsauth
 Run 'awsauth users --exec' ::
 
   (py36) [jhsu@scrappy-aws awsorgs]$ awsauth users  --exec
-  awsorgs.utils: INFO     Creating user 'jjhsuaws1-user-2'
-  awsorgs.utils: INFO     arn:aws:iam::706847775242:user/awsauth/jjhsuaws1-user-2
-  awsorgs.utils: INFO     Adding user 'jjhsuaws1-user-2' to group 'all-users'
-  awsorgs.utils: INFO     Adding user 'jjhsuaws1-user-2' to group 'group-jjhsuaws1'
+  awsorgs.utils: INFO     Creating user 'abcaws1-user-2'
+  awsorgs.utils: INFO     arn:aws:iam::123456789011:user/awsauth/abcaws1-user-2
+  awsorgs.utils: INFO     Adding user 'abcaws1-user-2' to group 'all-users'
+  awsorgs.utils: INFO     Adding user 'abcaws1-user-2' to group 'group-abcaws1'
 
 
 
@@ -126,7 +126,7 @@ Create user login profile with awsloginprofile
 
 Run 'wsloginprofile user --new' ::
 
-  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile jjhsuaws1-user-2 --new
+  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile abcaws1-user-2 --new
 
 
 
@@ -151,9 +151,9 @@ Check email titled "login profile" for initial AWS login instruction ::
 
   IMPORTANT: your one time password will expire after 24 hours.
 
-  IAM User Name:        jjhsuaws1-user-2
+  IAM User Name:        abcaws1-user-2
   One Time Password:    Stroller_Ochre+402_Disputed
-  Login URL:            https://master-jhsu.signin.aws.amazon.com/console
+  Login URL:            https://master-aaa.signin.aws.amazon.com/console
 
 
 
@@ -162,10 +162,10 @@ Check user login status
 
 Run 'wsloginprofile user' ::
 
-  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile jjhsuaws1-user-2
+  (py36) [jhsu@scrappy-aws awsorgs]$ awsloginprofile abcaws1-user-2
 
-  User:                   jjhsuaws1-user-2
-  Arn:                    arn:aws:iam::706847775242:user/awsauth/jjhsuaws1-user-2
+  User:                   abcaws1-user-2
+  Arn:                    arn:aws:iam::123456789011:user/awsauth/abcaws1-user-2
   User Id:                AIDAJKHIBNEWTQ3T2QOYC
   User created:           2019-01-15 00:06:45+00:00
   Login profile created:  2019-01-15 00:07:08+00:00
@@ -173,7 +173,7 @@ Run 'wsloginprofile user' ::
   Password last used:     2019-01-15 00:51:46+00:00
   Delegations:
     Account Id      Alias                   Role
-    938960831554    acct-jjhsuaws1          awsauth/jjhsuaws1
+    222222222222    acct-abcaws1          awsauth/abcaws1
 
 
 Reset user login profile(password)
@@ -181,7 +181,7 @@ Reset user login profile(password)
 
 Run 'wsloginprofile user --reset' ::
 
-  awsloginprofile jjhsuaws1-user-2 --reset
+  awsloginprofile abcaws1-user-2 --reset
 
 
 
