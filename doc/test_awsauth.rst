@@ -55,13 +55,13 @@ Run ``awsauth report`` command with ``--users`` flag::
   _____________________
   Account:    Managment
   Users:
-  - arn:aws:iam::962936672038:user/awsauth/sysadm/agould
-  - arn:aws:iam::962936672038:user/awsauth/drivera
-  - arn:aws:iam::962936672038:user/awsauth/jhsu
+  - arn:aws:iam::123456789011:user/awsauth/sysadm/agould
+  - arn:aws:iam::123456789011:user/awsauth/drivera
+  - arn:aws:iam::123456789011:user/awsauth/jhsu
   
   Groups:
-  - arn:aws:iam::962936672038:group/awsauth/all-users
-  - arn:aws:iam::962936672038:group/awsauth/orgadmins
+  - arn:aws:iam::123456789011:group/awsauth/all-users
+  - arn:aws:iam::123456789011:group/awsauth/orgadmins
   
   ____________________
   Account:    blee-dev
@@ -72,10 +72,10 @@ Run ``awsauth report`` command with ``--users`` flag::
   __________________
   Account:    master
   Users:
-  - arn:aws:iam::640965621536:user/agould
+  - arn:aws:iam::222222222222:user/agould
   
   Groups:
-  - arn:aws:iam::640965621536:group/Admins
+  - arn:aws:iam::222222222222:group/Admins
 
 
 Some variations::
