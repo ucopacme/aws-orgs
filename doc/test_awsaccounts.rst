@@ -12,8 +12,8 @@ Prerequisites:
 
 
 
-AWS account alias  - ``awsaccounts alias``
-------------------------------------------
+AWS account alias
+-----------------
 
 Commands used:
 
@@ -31,7 +31,7 @@ spec files impacted:
 Actions Summary:
 
 - Define org_access_role in ~/.awsorgs/config.yaml
-- Define spec_dir/accoounts.yml
+- Define spec_dir/accoount-spec.yml
 - awsaccoutns alias 
 - awsaccoutns alias --exec
 - awsaccoutns report
@@ -64,8 +64,8 @@ Run 'awsacccouns report' ::
 
 
 
-Edit spec_dir/accoounts.yml
-***************************
+Edit spec_dir/accoount-spec.yml
+*******************************
 
 Change account-jjhsuaws3 alias from acct-jjhsuaws3 to accnt-jjhsuaws3::
 
@@ -79,7 +79,7 @@ Change account-jjhsuaws3 alias from acct-jjhsuaws3 to accnt-jjhsuaws3::
 Dryrun awsaccounts alias
 ************************
 
-awsaccount alias ::
+Run 'awsaccount alias' ::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias
 
@@ -90,7 +90,7 @@ awsaccount alias ::
 Exec awsaccounts alias
 **********************
 
-awsaccount alias --exec ::
+Run 'awsaccount alias --exec' ::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias --exec
 
@@ -101,7 +101,7 @@ awsaccount alias --exec ::
 awsaccounts report
 ******************
 
-awsaccount report ::
+Run 'awsaccount report' ::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts report
 
