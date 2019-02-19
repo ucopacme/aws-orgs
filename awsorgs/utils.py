@@ -17,6 +17,19 @@ import yaml
 import logging
 
 
+S3_BUCKET_PREFIX = 'awsorgs'
+S3_OBJECT_KEY = 'deployed_accounts.yaml'
+
+
+def get_s3_bucket_name(prefix=S3_BUCKET_PREFIX):
+    """
+    Generate an s3 bucket name based on a name prefix and the aws account ig
+    """
+    sts_client = boto3.client('sts')
+    account_id = sts_client.get_caller_identity()['Account']
+    return '-'.join([prefix, account_id])
+
+
 def lookup(dlist, lkey, lvalue, rkey=None):
     """
     Use a known key:value pair to lookup a dictionary in a list of
@@ -42,8 +55,7 @@ def lookup(dlist, lkey, lvalue, rkey=None):
         if rkey in items[0]:
             return items[0][rkey]
         return None
-    return items[0]
-
+    return items[0] 
 
 def search_spec(spec, search_key, recurse_key):
     """

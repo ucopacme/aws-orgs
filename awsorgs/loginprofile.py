@@ -78,35 +78,65 @@ def get_user_name():
     return sts.get_caller_identity()['Arn'].split('/')[-1]
 
 
-def list_delegations(log, user, aliases=None):
+def list_delegations(log, user, deployed_accounts):
     """
-    Return list of assume_role resource arns for all groups for user.
-    If aliases are supplied, substitute an alias for account Id in each arn.
+    Return list of assume role resource arns for user.  Obtain these by
+    parsing in-line group policies for each group the user is a member of.
+
+    the policies we care about match one of two patterns:
+        AllowAssumeRole-<rolename>
+        DenyAssumeRole-<rolename>
+
+    we assemble a list of allowed role arns, then we remove any of the
+    denied arns.
+
+    if the account_id field of a AllowAssumeRole-<rolename> matches the
+    glob ('*') char, we generate the list of allowed role arns - one for
+    every 'ACTIVE' account.
     """
     groups = list(user.groups.all())
-    assume_role_policies = []
+    role_arns = []
     for group in user.groups.all():
-        assume_role_policies += [p for p in list(group.policies.all())
-                if p.policy_document['Statement'][0]['Action'] == 'sts:AssumeRole']
-    role_arns = [policy.policy_document['Statement'][0]['Resource'] for policy
-            in assume_role_policies]
-    if aliases:
-        for i in range(len(role_arns)):
-            account_id = role_arns[i].split(':')[4]
-            if account_id in aliases:
-                 role_arns[i] = role_arns[i].replace(account_id, aliases[account_id])
+
+        allow_policy = next((
+            p for p in list(group.policies.all())
+            if p.policy_name.startswith('AllowAssumeRole')
+        ), None)
+        if allow_policy is not None:
+            allow_arns = allow_policy.policy_document['Statement'][0]['Resource']
+
+            if isinstance(allow_arns, str) and '*' in allow_arns:
+                head, sep, tail = allow_arns.partition('*')
+                allow_arns = []
+                for account in deployed_accounts:
+                    if account['Status'] == 'ACTIVE':
+                        allow_arns.append(head + account['Id'] + tail)
+
+            deny_policy = next((
+                p for p in list(group.policies.all())
+                if p.name.startswith('DenyAssumeRole')
+            ), None)
+            if deny_policy is not None:
+                deny_arns = deny_policy.policy_document['Statement'][0]['Resource']
+                deny_account_ids = [arn.split(':')[4] for arn in deny_arns]
+                for id in deny_account_ids:
+                    for arn in allow_arns:
+                        if id in arn:
+                            allow_arns.remove(arn)
+
+            role_arns += allow_arns
+
     return role_arns
 
 
-def format_delegation_table(delegation_arns, aliases):
+def format_delegation_table(delegation_arns, deployed_accounts):
     """Generate formatted list of delegation attributes as printable string"""
     template = "  {}    {}{}{}\n"
     delegation_string = template.format('Account Id  ', 'Alias', ' '*19, 'Role')
     for assume_role_arn in delegation_arns:
         account_id = assume_role_arn.split(':')[4]
-        if aliases:
-            alias = aliases[account_id]
-        else:
+        alias = lookup(deployed_accounts, 'Id', account_id, 'Alias')
+        if alias is None:
             alias = str()
         spacer = (24 - len(alias)) * ' '
         delegation_string += template.format(account_id, alias, spacer,
@@ -114,11 +144,10 @@ def format_delegation_table(delegation_arns, aliases):
     return delegation_string
 
 
-def user_report(log, aliases, user, login_profile):
+def user_report(log, deployed_accounts, user, login_profile):
     """Generate report of IAM user's login profile, password usage, and
     assume_role delegations for any groups user is member of.
     """
-    delegation_table = list_delegations(log, user)
     spacer = '{:<24}{}'
     log.info('\n')
     log.info(spacer.format('User:', user.name))
@@ -137,10 +166,10 @@ def user_report(log, aliases, user, login_profile):
             log.info(spacer.format('Password last used:', user.password_last_used))
     else:
         log.info(spacer.format('User login profile:', login_profile))
-    assume_role_arns = list_delegations(log, user, aliases)
+    assume_role_arns = list_delegations(log, user, deployed_accounts)
     if assume_role_arns:
         log.info('Delegations:\n{}'.format(
-            format_delegation_table(delegation_table, aliases)
+            format_delegation_table(assume_role_arns, deployed_accounts)
         ))
 
 
@@ -236,7 +265,7 @@ def onetime_passwd_expired(log, user, login_profile, hours):
     return False
 
 
-def prep_email(log, aliases, user, passwd):
+def prep_email(log, aliases, deployed_accounts, user, passwd):
     """Generate email body from template"""
     log.debug("loading file: '%s'" % EMAIL_TEMPLATE)
     trusted_id=boto3.client('sts').get_caller_identity()['Account']
@@ -244,14 +273,14 @@ def prep_email(log, aliases, user, passwd):
         trusted_account = aliases[trusted_id]
     else:
         trusted_account = trusted_id
-    delegation_table = list_delegations(log, user)
-    log.debug('delegation_table: %s' % delegation_table)
+    assume_role_arns = list_delegations(log, user, deployed_accounts)
+    log.debug('assume_role_arns: %s' % assume_role_arns)
     template = os.path.abspath(pkg_resources.resource_filename(__name__, EMAIL_TEMPLATE))
     mapping = dict(
         user_name=user.name,
         onetimepw=passwd,
         trusted_account=trusted_account,
-        delegations=format_delegation_table(delegation_table, aliases),
+        delegations=format_delegation_table(assume_role_arns, deployed_accounts),
     )
     with open(template) as tpl:
         return Template(tpl.read()).substitute(mapping)
@@ -273,8 +302,8 @@ def send_email(msg, smtp_server):
     s.quit()
 
 
-def handle_email(log, args, spec, aliases, user, passwd):
-    message_body = prep_email(log, aliases, user, passwd)
+def handle_email(log, args, spec, aliases, deployed_accounts, user, passwd):
+    message_body = prep_email(log, aliases, deployed_accounts, user, passwd)
     if args['--no-email']:
         print(message_body)
     else:
@@ -315,19 +344,20 @@ def main():
     org_client = boto3.client('organizations', **org_credentials)
     deployed_accounts = scan_deployed_accounts(log, org_client)
     aliases = get_account_aliases(log, deployed_accounts, args['--org-access-role'])
+    deployed_accounts = merge_aliases(log, deployed_accounts, aliases)
     log.debug(aliases)
 
     if args['--new']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            handle_email(log, args, spec, aliases, user, passwd)
+            handle_email(log, args, spec, aliases, deployed_accounts, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
-            user_report(log, aliases, user, login_profile)
+            user_report(log, deployed_accounts, user, login_profile)
 
     elif args['--reset']:
         login_profile = reset_profile(log, user, login_profile, passwd, require_reset)
-        handle_email(log, args, spec, aliases, user, passwd)
+        handle_email(log, args, spec, aliases, deployed_accounts, user, passwd)
 
     elif args['--disable']:
         delete_profile(log, user, login_profile)
@@ -340,13 +370,13 @@ def main():
     elif args['--reenable']:
         if not login_profile:
             login_profile = create_profile(log, user, passwd, require_reset)
-            handle_email(log, args, spec, aliases, user, passwd)
+            handle_email(log, args, spec, aliases, deployed_accounts, user, passwd)
         else:
             log.warn("login profile for user '%s' already exists" % user.name)
         set_access_key_status(log, user, True)
 
     else:
-        user_report(log, aliases, user, login_profile)
+        user_report(log, deployed_accounts, user, login_profile)
 
 
 if __name__ == "__main__":
