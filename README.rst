@@ -117,5 +117,5 @@ Run each command with -h option for full usage info::
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.0.11
+:Version: 0.2.1
 
