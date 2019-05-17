@@ -31,7 +31,7 @@ setup(
     install_requires=[
         'boto3', 
         'docopt', 
-        'PyYAML', 
+        'PyYAML<=3.13,>=3.10', 
         'passwordgenerator',
         'cerberus',
     ],

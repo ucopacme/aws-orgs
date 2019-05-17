@@ -34,7 +34,7 @@ Installation
 Python virtual environment (recommended)::
 
   source ~/path_to_my_venv/bin/activate
-  pip install https://github.com/ucopacme/aws-orgs/archive/master.zip
+  pip install aws-orgs
 
 
 Editable copy in venv::
@@ -42,18 +42,11 @@ Editable copy in venv::
   git clone https://github.com/ucopacme/aws-orgs
   pip install -e aws-orgs/
 
-Local user installation::
-
-  git clone https://github.com/ucopacme/aws-orgs
-  pip install --user -e aws-orgs/
-
 
 Uninstall::
 
   pip uninstall aws-orgs
 
-  # if installed as local user also run:
-  rm ~/.local/bin/{awsorgs,awsaccounts,awsauth}
 
 
 Configuration
