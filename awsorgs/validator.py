@@ -178,24 +178,20 @@ Ensure:
   - absent
 """
 
-SC_POLICY_SCHEMA = """
-Name:
+POLICY_SCHEMA = """
+PolicyName:
   required: True
   type: string
 Description:
   required: False
   type: string
-Effect:
-  required: False
-  type: string
-  allowed:
-  - Allow
-  - Deny
-Actions:
-  required: False
-  type: list
-  schema:
-    type: string
+Statement:
+  required: True
+  anyof:
+  - type: string
+  - type: list
+    schema:
+      type: dict
 Ensure:
   required: False
   type: string
@@ -393,39 +389,17 @@ Ensure:
   - absent
 """
 
-CUSTOM_POLICY_SCHEMA = """
-PolicyName:
-  required: True
-  type: string
-Description:
-  required: False
-  type: string
-Statement:
-  required: True
-  anyof:
-  - type: string
-  - type: list
-    schema:
-      type: dict
-Ensure:
-  required: False
-  type: string
-  allowed:
-  - present
-  - absent
-"""
-
 
 def file_validator(log):
     schema_registry.add('organizational_unit', yaml.load(ORGANIZATIONAL_UNIT_SCHEMA))
-    schema_registry.add('sc_policy', yaml.load(SC_POLICY_SCHEMA))
+    schema_registry.add('sc_policy', yaml.load(POLICY_SCHEMA))
     schema_registry.add('team', yaml.load(TEAM_SCHEMA))
     schema_registry.add('account', yaml.load(ACCOUNT_SCHEMA))
     schema_registry.add('user', yaml.load(USER_SCHEMA))
     schema_registry.add('group', yaml.load(GROUP_SCHEMA))
     schema_registry.add('local_user', yaml.load(LOCAL_USER_SCHEMA))
     schema_registry.add('delegation', yaml.load(DELEGATION_SCHEMA))
-    schema_registry.add('custom_policy', yaml.load(CUSTOM_POLICY_SCHEMA))
+    schema_registry.add('custom_policy', yaml.load(POLICY_SCHEMA))
     log.debug("adding subschema to schema_registry: {}".format(
             schema_registry.all().keys()))
     vfile = Validator(yaml.load(SPEC_FILE_SCHEMA))

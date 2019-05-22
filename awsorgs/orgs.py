@@ -255,7 +255,7 @@ def manage_policies(org_client, args, log, deployed, org_spec):
     the default policy.  Do not delete an attached policy.
     """
     for p_spec in org_spec['sc_policies']:
-        policy_name = p_spec['Name']
+        policy_name = p_spec['PolicyName']
         log.debug("considering sc_policy: %s" % policy_name)
         # dont touch default policy
         if policy_name == org_spec['default_sc_policy']:
@@ -266,15 +266,14 @@ def manage_policies(org_client, args, log, deployed, org_spec):
             if policy:
                 log.info("Deleting policy '%s'" % (policy_name))
                 # dont delete attached policy
-                if org_client.list_targets_for_policy( PolicyId=policy_id)['Targets']:
+                if org_client.list_targets_for_policy(PolicyId=policy['Id'])['Targets']:
                     log.error("Cannot delete policy '%s'. Still attached to OU" %
                             policy_name)
                 elif args['--exec']:
                     org_client.delete_policy(PolicyId=policy['Id'])
             continue
         # create or update sc_policy
-        statement = dict(Effect=p_spec['Effect'], Action=p_spec['Actions'], Resource='*')
-        policy_doc = json.dumps(dict(Version='2012-10-17', Statement=[statement]))
+        policy_doc = json.dumps(dict(Version='2012-10-17', Statement=p_spec['Statement']))
         log.debug("spec sc_policy_doc: %s" % yamlfmt(policy_doc))
         # create new policy
         if not policy:
@@ -283,7 +282,7 @@ def manage_policies(org_client, args, log, deployed, org_spec):
                 org_client.create_policy(
                         Content=policy_doc,
                         Description=p_spec['Description'],
-                        Name=p_spec['Name'],
+                        Name=p_spec['PolicyName'],
                         Type='SERVICE_CONTROL_POLICY')
         # check for policy updates
         else:
@@ -422,7 +421,7 @@ def main():
         managed = dict(
                 accounts = search_spec(root_spec, 'Accounts', 'Child_OU'),
                 ou = search_spec(root_spec, 'Name', 'Child_OU'),
-                policies = [p['Name'] for p in org_spec['sc_policies']])
+                policies = [p['PolicyName'] for p in org_spec['sc_policies']])
 
         # ensure default_sc_policy is considered 'managed'
         if org_spec['default_sc_policy'] not in managed['policies']:
