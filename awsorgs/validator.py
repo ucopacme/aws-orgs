@@ -391,23 +391,23 @@ Ensure:
 
 
 def file_validator(log):
-    schema_registry.add('organizational_unit', yaml.load(ORGANIZATIONAL_UNIT_SCHEMA))
-    schema_registry.add('sc_policy', yaml.load(POLICY_SCHEMA))
-    schema_registry.add('team', yaml.load(TEAM_SCHEMA))
-    schema_registry.add('account', yaml.load(ACCOUNT_SCHEMA))
-    schema_registry.add('user', yaml.load(USER_SCHEMA))
-    schema_registry.add('group', yaml.load(GROUP_SCHEMA))
-    schema_registry.add('local_user', yaml.load(LOCAL_USER_SCHEMA))
-    schema_registry.add('delegation', yaml.load(DELEGATION_SCHEMA))
-    schema_registry.add('custom_policy', yaml.load(POLICY_SCHEMA))
+    schema_registry.add('organizational_unit', yaml.safe_load(ORGANIZATIONAL_UNIT_SCHEMA))
+    schema_registry.add('sc_policy', yaml.safe_load(POLICY_SCHEMA))
+    schema_registry.add('team', yaml.safe_load(TEAM_SCHEMA))
+    schema_registry.add('account', yaml.safe_load(ACCOUNT_SCHEMA))
+    schema_registry.add('user', yaml.safe_load(USER_SCHEMA))
+    schema_registry.add('group', yaml.safe_load(GROUP_SCHEMA))
+    schema_registry.add('local_user', yaml.safe_load(LOCAL_USER_SCHEMA))
+    schema_registry.add('delegation', yaml.safe_load(DELEGATION_SCHEMA))
+    schema_registry.add('custom_policy', yaml.safe_load(POLICY_SCHEMA))
     log.debug("adding subschema to schema_registry: {}".format(
             schema_registry.all().keys()))
-    vfile = Validator(yaml.load(SPEC_FILE_SCHEMA))
+    vfile = Validator(yaml.safe_load(SPEC_FILE_SCHEMA))
     log.debug("file_validator_schema: {}".format(vfile.schema))
     return vfile
 
 
 def spec_validator(log):
-    vspec = Validator(yaml.load(SPEC_SCHEMA))
+    vspec = Validator(yaml.safe_load(SPEC_SCHEMA))
     log.debug("spec_validator_schema: {}".format(vspec.schema))
     return vspec

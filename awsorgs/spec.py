@@ -27,7 +27,7 @@ def scan_config_file(log, args):
     log.debug("loading config file: {}".format(config_file))
     with open(config_file) as f:
         try:
-            config = yaml.load(f.read())
+            config = yaml.safe_load(f.read())
         except (yaml.scanner.ScannerError, UnicodeDecodeError):
             log.error("{} not a valid yaml file".format(config_file))
             return None
@@ -103,7 +103,7 @@ def load_config(log, args):
 def validate_spec_file(log, spec_file, validator, errors):
     with open(spec_file) as f:
         try:
-            spec_from_file = yaml.load(f.read())
+            spec_from_file = yaml.safe_load(f.read())
         except (yaml.scanner.ScannerError, UnicodeDecodeError):
             log.warn("{} not a valid yaml file. skipping".format(spec_file))
             return (None, errors)
