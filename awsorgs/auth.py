@@ -140,11 +140,11 @@ def create_users(credentials, args, log, deployed, auth_spec):
     iam_client = boto3.client('iam', **credentials)
     iam_resource = boto3.resource('iam', **credentials)
     for u_spec in auth_spec['users']:
-        path = munge_path(auth_spec['default_path'], u_spec)
         tags = [
             {'Key': 'team',  'Value': u_spec['Team']},
             {'Key': 'email', 'Value': u_spec['Email']},
         ]
+        path = munge_path(auth_spec['default_path'], u_spec)
         deployed_user = lookup(deployed['users'], 'UserName', u_spec['Name'])
         if deployed_user:
             user = iam_resource.User(u_spec['Name'])
@@ -155,11 +155,11 @@ def create_users(credentials, args, log, deployed, auth_spec):
                     delete_user(user)
             # update user
             elif user.path != path:
-                log.info("Updating path on user '%s'" % u_spec['Name'])
+                log.info("Updating path for user '%s'" % u_spec['Name'])
                 if args['--exec']:
                     user.update(NewPath=path)
             elif user.tags != tags:
-                log.info("Updating tags on user '%s'" % u_spec['Name'])
+                log.info("Updating tags for user '%s'" % u_spec['Name'])
                 if args['--exec']:
                     iam_client.tag_user(
                         UserName=user.name,
