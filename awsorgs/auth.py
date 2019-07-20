@@ -662,6 +662,23 @@ def manage_local_users(lu_spec, args, log, deployed, auth_spec):
             f_args=(args, log, auth_spec, deployed, accounts, lu_spec))
 
 
+def get_policies_from_spec(log, auth_spec, d_spec):
+    """
+    Return a list of policy names from either 'Policies' or 'PolicySet'
+    attributes of d_spec.
+    """
+    if 'Policies' in d_spec:
+        return d_spec.get('Policies')
+    log.debug("Using PolicySet {} for role {}".format(d_spec['PolicySet'], d_spec['RoleName']))
+    return lookup(auth_spec['policy_sets'], 'Name', d_spec['PolicySet'], 'Policies')
+
+
+def get_tags_from_policy_set(auth_spec, d_spec):
+    if 'PolicySet' in d_spec:
+        return lookup(auth_spec['policy_sets'], 'Name', d_spec['PolicySet'], 'Tags')
+    return None
+
+
 def manage_delegation_role(account, args, log, auth_spec, deployed,
             trusting_accounts, d_spec):
     """
@@ -669,7 +686,9 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
     account based on delegetion specification.
     """
     account_name = account['Name']
-    log.debug('account: %s, role: %s' % (account_name, d_spec['RoleName']))
+    policy_list = get_policies_from_spec(log, auth_spec, d_spec)
+    tags = get_tags_from_policy_set(auth_spec, d_spec)
+    log.debug('account: %s, role: %s, policies: %s' % (account_name, d_spec['RoleName'], policy_list))
     credentials = get_assume_role_credentials(
             account['Id'],
             args['--org-access-role'])
@@ -732,26 +751,27 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                     (d_spec['RoleName'], account_name))
             if args['--exec']:
                 iam_client.create_role(
-                        Description=d_spec['Description'],
-                        Path=munge_path(auth_spec['default_path'], d_spec),
-                        RoleName=d_spec['RoleName'],
-                        MaxSessionDuration=d_spec['Duration'],
-                        AssumeRolePolicyDocument=json.dumps(policy_doc))
-                if 'Policies' in d_spec and d_spec['Policies']:
-                    role.load()
-                    for policy_name in d_spec['Policies']:
-                        policy_arn = get_policy_arn(iam_client, policy_name)
-                        if policy_arn is None:
-                            policy_arn = manage_custom_policy(iam_client, account_name,
-                                    policy_name, args, log, auth_spec)
-                        log.info("Attaching policy '%s' to role '%s' "
-                                "in account '%s':\n%s" % (
-                                        policy_name, 
-                                        d_spec['RoleName'], 
-                                        account_name,
-                                        yamlfmt(policy_doc)))
-                        if args['--exec'] and policy_arn:
-                            role.attach_policy(PolicyArn=policy_arn)
+                    Description=d_spec['Description'],
+                    Path=munge_path(auth_spec['default_path'], d_spec),
+                    RoleName=d_spec['RoleName'],
+                    MaxSessionDuration=d_spec['Duration'],
+                    AssumeRolePolicyDocument=json.dumps(policy_doc),
+                    Tags=tags,
+                )
+                role.load()
+                for policy_name in policy_list:
+                    policy_arn = get_policy_arn(iam_client, policy_name)
+                    if policy_arn is None:
+                        policy_arn = manage_custom_policy(iam_client, account_name,
+                                policy_name, args, log, auth_spec)
+                    log.info("Attaching policy '%s' to role '%s' "
+                            "in account '%s':\n%s" % (
+                                    policy_name, 
+                                    d_spec['RoleName'], 
+                                    account_name,
+                                    yamlfmt(policy_doc)))
+                    if args['--exec'] and policy_arn:
+                        role.attach_policy(PolicyArn=policy_arn)
             return
 
     # update delegation role if needed
@@ -780,10 +800,19 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
             iam_client.update_role(
                 RoleName=role.role_name,
                 MaxSessionDuration=d_spec['Duration'])
+    if role.tags != tags:
+        log.info("Updating tags in role '%s' in account '%s'" %
+                (d_spec['RoleName'], account_name))
+        if args['--exec']:
+            iam_client.tag_role(
+                RoleName=role.role_name,
+                Tags=tags,
+            )
+
 
     # manage policy attachments
     attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
-    for policy_name in d_spec['Policies']:
+    for policy_name in policy_list:
         # attach missing policies
         if not policy_name in attached_policies:
             policy_arn = get_policy_arn(iam_client, policy_name)
@@ -799,7 +828,7 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
                     args, log, auth_spec)
     for policy_name in attached_policies:
         # datach obsolete policies
-        if not policy_name in d_spec['Policies']:
+        if not policy_name in policy_list:
             policy_arn = get_policy_arn(iam_client, policy_name)
             log.info("Detaching policy '%s' from role '%s' in account '%s'" %
                     (policy_name, d_spec['RoleName'], account_name))
