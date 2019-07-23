@@ -671,7 +671,13 @@ def get_policies_from_spec(log, auth_spec, d_spec):
         return d_spec.get('Policies')
     log.debug("Using PolicySet {} for role {}".format(
             d_spec['PolicySet'], d_spec['RoleName']))
-    return lookup(auth_spec['policy_sets'], 'Name', d_spec['PolicySet'], 'Policies')
+    policy_set = lookup(auth_spec['policy_sets'], 'Name', d_spec['PolicySet'])
+    if policy_set is None:
+        log.error("policy set '{}' not found for role '{}'".format(
+                d_spec['PolicySet'], d_spec['RoleName']))
+        return list()
+    else:
+        return policy_set['Policies']
 
 
 def get_tags_from_policy_set(auth_spec, d_spec):
