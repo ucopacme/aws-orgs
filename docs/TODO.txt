@@ -92,7 +92,9 @@ recreate role,policy if path changes
 report unmanaged iam resources in all accounts
 when reporting roles, handle service roles as well as 'IAM' roles
 harvest unmanaged roles in accounts which have the default path
-incorporate create/send credentials for new users from awsorgs.loginprofile
+
+
+DONE incorporate create/send credentials for new users from awsorgs.loginprofile
 
 DONE require Team attribute for users
 DONE incorporate theading
