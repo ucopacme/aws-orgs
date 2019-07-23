@@ -98,34 +98,31 @@ def list_delegations(log, user, deployed_accounts):
     role_arns = []
     for group in user.groups.all():
 
-        allow_policy = next((
+        allow_policies = [
             p for p in list(group.policies.all())
             if p.policy_name.startswith('AllowAssumeRole')
-        ), None)
-        if allow_policy is not None:
+        ]
+        for allow_policy in allow_policies:
             allow_arns = allow_policy.policy_document['Statement'][0]['Resource']
-
             if isinstance(allow_arns, str) and '*' in allow_arns:
                 head, sep, tail = allow_arns.partition('*')
                 allow_arns = []
                 for account in deployed_accounts:
                     if account['Status'] == 'ACTIVE':
                         allow_arns.append(head + account['Id'] + tail)
-
-            deny_policy = next((
-                p for p in list(group.policies.all())
-                if p.name.startswith('DenyAssumeRole')
-            ), None)
-            if deny_policy is not None:
-                deny_arns = deny_policy.policy_document['Statement'][0]['Resource']
-                deny_account_ids = [arn.split(':')[4] for arn in deny_arns]
-                for id in deny_account_ids:
-                    for arn in allow_arns:
-                        if id in arn:
-                            allow_arns.remove(arn)
-
             role_arns += allow_arns
 
+        deny_policies = [
+            p for p in list(group.policies.all())
+            if p.name.startswith('DenyAssumeRole')
+        ]
+        for deny_policy in deny_policies:
+            deny_arns = deny_policy.policy_document['Statement'][0]['Resource']
+            deny_account_ids = [arn.split(':')[4] for arn in deny_arns]
+            for id in deny_account_ids:
+                for arn in role_arns:
+                    if id in arn:
+                        role_arns.remove(arn)
     return role_arns
 
 
