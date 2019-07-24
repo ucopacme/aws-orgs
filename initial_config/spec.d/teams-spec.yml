@@ -1,0 +1,11 @@
+# Teams Specification.  This provides a labeling system for tracking
+# folks within your organization who are responsible for managed accounts
+# and users.
+#
+teams:
+  - Name: orgadmin
+    Description: AWS Organization Administration
+    BusinessContacts:
+      - ashley@example.com
+    TechnicalContacts:
+      - orgadmins@example.com

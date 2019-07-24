@@ -1,0 +1,22 @@
+# Accounts Specification.  List of managed AWS accounts in the Organization.
+#
+# Each account has 3 attributes all of type 'str':
+#   Name:   The name of the account - required.
+#   Email:  The email address used when creating a new account.  This
+#           address must be unique in all AWS.  If omitted, we combine
+#           the account name and the default_email_domain.
+#   Team:   A label for tracking folks within your organization associated
+#           with a this account.
+#   Alias:  String to use for the account alias.  Defaults to 'Name' in
+#           lower case.
+#
+accounts:
+  - Name: master-account
+    Team: orgadmin
+    Alias: master
+    Email: master-account@example.com
+  - Name: central-auth
+    Team: orgadmin
+    Alias: auth
+    Email: central-auth@example.com
+
