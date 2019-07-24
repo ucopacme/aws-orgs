@@ -1,19 +1,22 @@
-aws-orgs
-========
+Getting started with aws-orgs
+=============================
 
 This project is an attempt to provision AWS Oranizations IAM resources
 based on structured imput files.
 
-aws-orgs installation provides the following python executibles:  
+Full documentation is available at https://aws-orgs.readthedocs.io/en/latest
+
+
+Console Scripts
+---------------
+
+``aws-orgs`` provides the following python executibles:  
 
 awsorgs
   Manage recources in an AWS Organization.
 
 awsaccounts
   Manage accounts in an AWS Organization.
-
-awsorg-accessrole
-  Generate default org access role in an invited account.
 
 awsauth
   Manage users, group, and roles for cross account access in an 
@@ -24,8 +27,6 @@ awsloginprofile
 
 
 Run each of these with the '--help' option for usage documentation.
-
-See the ``samples/`` directory for anotated examples of spec-file syntax.
 
 
 Installation
@@ -48,33 +49,24 @@ Uninstall::
   pip uninstall aws-orgs
 
 
+Configuration quick start
+-------------------------
 
-Configuration
--------------
+Run the ``awsorgs-setup`` script to generate an initial set of spec-files::
 
-Copy example spec files into your `spec_dir` location and edit as appropriate
-to your site.  The default spec directory is `~/.awsorgs/spec.d`.
+  awsorgs-init
 
-Most CLI commands make use of a config file for basic paramaters.  
-The default location is `~/.awsorgs/config.yaml`.  Example::
+This generates an initial ``config.yaml`` spec files under ``~/.awsorgs``.  Edit
+these as needed to suit your environment.
 
-  # Path to yaml spec files directory.  Any yaml files under this 
-  # dirctory (recursive) are parsed as spec files.
-  spec_dir: ~/git-repos/awsorgs_specfiles/my_org
-  
-  # An AWS role name which permits cross account access to all accounts.
-  org_access_role: awsauth/OrgAdmin
-  
-  # AWS account Id for the Organization master account.  This must be in quotes.
-  master_account_id: '121212121212'
-  
-  # AWS account Id for the Central Auth account.  This must be in quotes.
-  auth_account_id: '343434343434'
+See ``--help`` option for full usage.
 
 
+Basic Usage
+-----------
 
-Usage
------
+All commands execute in ``dry-run`` mode by default.  Include the ``--exec`` flag
+to affect change to AWS resources.
 
 Run each command with -h option for full usage info::
 
