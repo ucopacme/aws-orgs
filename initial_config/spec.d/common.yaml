@@ -1,10 +1,11 @@
+---
 # AWSORGS configuration parameters common to all operations.
 
 # AWS account Id for the Organization master account.  This must be in quotes.
-master_account_id: '123456789012'
+master_account_id: '121212121212'
 
 # AWS account Id for the Central Auth account.  This must be in quotes.
-auth_account_id: '123456789012'
+auth_account_id: '343434343434'
 
 # Email domain to use for account creation if the accounts['Email'] field
 # is not explicitly specified.
