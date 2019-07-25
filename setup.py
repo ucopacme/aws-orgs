@@ -37,7 +37,7 @@ setup(
     ],
     package_data={
         'awsorgs': [
-            'samples/*.yaml',
+            'spec_init_data/*',
             'data/*',
         ],
     },
@@ -47,7 +47,8 @@ setup(
             'awsaccounts=awsorgs.accounts:main',
             'awsauth=awsorgs.auth:main',
             'awsloginprofile=awsorgs.loginprofile:main',
-            'awsorgs-accessrole=awsorgs.accessrole:main',
+            'awsorgs-accessrole=awsorgs.tools.accessrole:main',
+            'awsorgs-spec-init=awsorgs.tools.spec_init:main',
         ],
     },
 

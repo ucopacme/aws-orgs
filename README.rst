@@ -52,9 +52,9 @@ Uninstall::
 Configuration quick start
 -------------------------
 
-Run the ``awsorgs-setup`` script to generate an initial set of spec-files::
+Run the ``awsorgs-spec-init`` script to generate an initial set of spec-files::
 
-  awsorgs-init
+  awsorgs-spec-init
 
 This generates an initial ``config.yaml`` spec files under ``~/.awsorgs``.  Edit
 these as needed to suit your environment.
