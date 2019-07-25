@@ -14,7 +14,6 @@
 #   Alias:  String to use for the account alias.  Defaults to 'Name' in
 #           lower case.
 
-
 accounts:
   - Name: master-account
     Team: administration

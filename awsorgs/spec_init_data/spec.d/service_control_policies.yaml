@@ -13,8 +13,6 @@
 #   Statement (list(dict)):  
 #                       List of IAM policy statements applied to the SCP.
 
-
----
 sc_policies:
 - PolicyName: LimitAWSRegions
   Ensure: present

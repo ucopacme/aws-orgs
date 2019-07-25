@@ -21,7 +21,6 @@
 #   Policies (list(str)): 
 #                     List of IAM policies to attach to the local user.
 
-
 local_users:
 - Name: local-service-user
   Description: Local service user 

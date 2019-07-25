@@ -9,8 +9,6 @@
 #                           this policy set
 #   Policies (list(str)):   list of IAM policy names
 
-
----
 policy_sets:
 - Name: Developer
   Description: Access for application developers.

@@ -10,7 +10,6 @@
 #   BusinessContacts (list(str)):   Email addresses of business contacts
 #   TechnicalContacts (list(str)):  Email addresses of technical contacts
 
-
 teams:
 - Name: administration
   Description: AWS Organization Administration

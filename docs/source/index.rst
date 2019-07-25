@@ -11,6 +11,7 @@ Welcome to aws-orgs's documentation!
    :caption: Contents:
 
    getting_started
+   configuration
    functional_testing 
 
 

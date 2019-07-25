@@ -40,7 +40,6 @@
 #   PolicySet (str):    Name of the policy set to attach to the delegation role
 #                       Incomplatible with "Policies".
 
-
 delegations:
 
 - RoleName: AccountAdmin

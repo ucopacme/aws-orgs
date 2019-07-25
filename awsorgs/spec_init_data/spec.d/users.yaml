@@ -11,7 +11,6 @@
 #   Team:   A label for associating the IAM user with a project team.
 #   Path:   Set a path element to the IAM user resource.
 
-
 users:
 - Name: ashley
   Email: ashley@example.com

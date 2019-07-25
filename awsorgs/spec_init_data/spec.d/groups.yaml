@@ -18,7 +18,6 @@
 #  Policies (list(str)):
 #                   List of IAM policies to attach to this group.
 
-
 groups:
 - Name: all-users
   Members: ALL
