@@ -12,7 +12,16 @@ Welcome to aws-orgs's documentation!
 
    getting_started
    configuration
-   functional_testing 
+   usage 
+
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   testing/test_awsaccounts
+   testing/test_awsauth
+   testing/test_awsloginprofile
 
 
 

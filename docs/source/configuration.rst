@@ -62,61 +62,57 @@ documentation of spec attributes.  Edit these to suit your AWS Organization.
 The default spec directory is `~/.awsorgs/spec.d`.  If you choose a non-default
 location, be sure to update the ``spec_dir`` parameter in your ``config.yaml``.
 
+.. toctree::
+   :hidden:
 
-accounts.yaml
-*************
+   spec_files
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/accounts.yaml
 
-common.yaml
+Shared Specs
+************
+
+:ref:`spec_files:common.yaml`
+  Top level spec attributes common to all tools.
+
+
+:ref:`spec_files:teams.yaml`
+  these are used as attributes in other spec objects:
+
+  - accounts
+  - users
+  - local_users
+
+
+
+``awsorgs``
 ***********
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/common.yaml
+:ref:`spec_files:organizational_units.yaml`
 
-custom_policies.yaml
-********************
+:ref:`spec_files:service_control_policies.yaml`
 
-custom_policies.yaml
-********************
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/custom_policies.yaml
 
-delegations.yaml
-****************
+``awsaccounts``
+***************
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/delegations.yaml
+:ref:`spec_files:accounts.yaml`
 
-groups.yaml
+
+
+``awsauth``
 ***********
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/groups.yaml
+:ref:`spec_files:users.yaml`
 
-local_users.yaml
-****************
+:ref:`spec_files:groups.yaml`
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/local_users.yaml
+:ref:`spec_files:delegations.yaml`
 
-organizational_units.yaml
-*************************
+:ref:`spec_files:policy_sets.yaml`
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/organizational_units.yaml
+:ref:`spec_files:custom_policies.yaml`
 
-policy_sets.yaml
-****************
+:ref:`spec_files:local_users.yaml`
 
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/policy_sets.yaml
 
-service_control_policies.yaml
-*****************************
-
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/service_control_policies.yaml
-
-teams.yaml
-**********
-
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/teams.yaml
-
-users.yaml
-**********
-
-  .. literalinclude:: ../../awsorgs/spec_init_data/spec.d/users.yaml
