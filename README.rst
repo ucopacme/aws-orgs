@@ -1,32 +1,29 @@
 Getting started with aws-orgs
 =============================
 
-This project is an attempt to provision AWS Oranizations IAM resources
-based on structured imput files.
+A configuration management tool set for AWS Organizations.
 
 Full documentation is available at https://aws-orgs.readthedocs.io/en/latest
 
 
-Console Scripts
----------------
+Features
+--------
 
-``aws-orgs`` provides the following python executibles:  
+- Ensure state of AWS Organizations and IAM resourses per `yaml`_ formatted 
+  specification files.
+- Configure AWS Organizations resources:
 
-awsorgs
-  Manage recources in an AWS Organization.
+  - organizational units
+  - service control policies
+  - account creation and organizational unit placement
 
-awsaccounts
-  Manage accounts in an AWS Organization.
+- Centrally manage IAM access across AWS Organization accounts:
 
-awsauth
-  Manage users, group, and roles for cross account access in an 
-  AWS Organization.
-
-awsloginprofile
-  Manage AWS IAM user login profile.
+  - IAM users/groups in a central *Auth* account
+  - customer managed IAM policies
+  - IAM roles and trust delegation in organization accounts
 
 
-Run each of these with the '--help' option for usage documentation.
 
 
 Installation
@@ -62,13 +59,31 @@ these as needed to suit your environment.
 See ``--help`` option for full usage.
 
 
-Basic Usage
------------
 
-All commands execute in ``dry-run`` mode by default.  Include the ``--exec`` flag
-to affect change to AWS resources.
+Console Scripts
+---------------
 
-Run each command with -h option for full usage info::
+``aws-orgs`` provides the following python executibles:  
+
+awsorgs
+  Manage recources in an AWS Organization.
+
+awsaccounts
+  Manage accounts in an AWS Organization.
+
+awsauth
+  Manage users, group, and roles for cross account access in an 
+  AWS Organization.
+
+awsloginprofile
+  Manage AWS IAM user login profile.
+
+
+All commands execute in ``dry-run`` mode by default.  Include the ``--exec``
+flag to affect change to AWS resources.  Run each of these with the '--help'
+option for usage documentation.
+
+::
 
   awsorgs report
   awsorgs organization
@@ -102,5 +117,11 @@ Run each command with -h option for full usage info::
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.2.1
+:Version: 0.3.0
 
+
+
+
+.. references
+
+.. _yaml: https://yaml.org/
