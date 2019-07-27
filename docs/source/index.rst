@@ -12,6 +12,7 @@ Welcome to aws-orgs's documentation!
 
    getting_started
    configuration
+   working_with_spec_files
    aws_organizations
    centralized_iam_access 
 

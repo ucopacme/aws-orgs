@@ -1,5 +1,5 @@
-Spec Files and CLI Configuration
-================================
+Configuration Basics
+====================
 
 There are two aspects os ``aws-orgs`` configuration:
 
@@ -41,17 +41,22 @@ A set of example spec files gets installed on your system when you run
 ``awsorg-spec-init``.  Each or the example spec files contains complete
 documentation of spec attributes.  Edit these to suit your AWS Organization.  
 
+.. toctree::
+
+   example_spec_files
+
+
 The default spec directory is `~/.awsorgs/spec.d`.  If you choose a non-default
 location, be sure to update the ``spec_dir`` parameter in your ``config.yaml``.
 
-.. Note
+.. note::
 
    Keep your spec files under version control!
 
 
 
-``Bootstrap your initial configuration``
-----------------------------------------
+Bootstrap your initial configuration
+------------------------------------
 
 ``aws-orgs`` provides a helper script ``awsorgs-spec-init``.  This script generates
 an initial ``config.yaml`` and a full set of example spec files.  By default
@@ -73,63 +78,3 @@ these are installed under ``~/.awsorgs``::
   ~/.awsorgs/spec.d/users.yaml
 
 Run ``awsorgs-spec-init --help`` for options on how to install to alternate locations.
-
-
-
-Working with spec files
------------------------
-
-.. toctree::
-   :hidden:
-
-   spec_files
-
-
-Shared Specs
-************
-
-:ref:`spec_files:common.yaml`
-  Top level spec attributes common to all tools.
-
-
-:ref:`spec_files:teams.yaml`
-  these are used as attributes in other spec objects:
-
-  - accounts
-  - users
-  - local_users
-
-
-
-``awsorgs``
-***********
-
-:ref:`spec_files:organizational_units.yaml`
-
-:ref:`spec_files:service_control_policies.yaml`
-
-
-
-``awsaccounts``
-***************
-
-:ref:`spec_files:accounts.yaml`
-
-
-
-``awsauth``
-***********
-
-:ref:`spec_files:users.yaml`
-
-:ref:`spec_files:groups.yaml`
-
-:ref:`spec_files:delegations.yaml`
-
-:ref:`spec_files:policy_sets.yaml`
-
-:ref:`spec_files:custom_policies.yaml`
-
-:ref:`spec_files:local_users.yaml`
-
-
