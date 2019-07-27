@@ -11,7 +11,7 @@ Welcome to aws-orgs's documentation!
    :caption: Contents:
 
    getting_started
-   configuration
+   basic_configuration
    working_with_spec_files
    aws_organizations
    centralized_iam_access 

@@ -22,24 +22,26 @@ Commands used:
 spec files impacted:
 
 - ~/.awsorgs/config.yaml
-- spec_dir/users-spec.yml
-- spec_dir/groups-spec.yml
+- spec_dir/users.yaml
+- spec_dir/groups.yaml
 
 
 Actions Summary:
 
-- Define org_access_role in ~/.awsorgs/config.yaml
-- Define spec_dir/users-spec.yml
-- Define spec_dir/groups-spec.yml
-- awsauth users --exec
-- awsloginprofile user --new
-- awsloginprofile user --reset
-- awsloginprofile user --report
+- `Define org_access_role in ~/.awsorgs/config.yaml`_
+- `Assume OrgAdmin role for creating new IAM user`_
+- `Check current user login profile`_
+- `Create new IAM user in users.yaml and groups.yaml`_
+- `Create new IAM user with awsauth`_
+- `Create user login profile with awsloginprofile`_
+- `User will receive initial login instruction from email notification`_
+- `Check user login status`_
+- `Reset user login profile(password)`_
 
 
 
-Define org_access_role in ~/.awsorgs/config.yaml
-************************************************
+Define org_access_role in ``~/.awsorgs/config.yaml``
+****************************************************
 
 Edit ~/.awsorgs/config.yaml ::
 
@@ -47,8 +49,8 @@ Edit ~/.awsorgs/config.yaml ::
 
 
 
-Assume OrgAdmin role for creating new IAM user
-**********************************************
+Assume ``OrgAdmin`` role for creating new IAM user
+**************************************************
 
 Assume auth acount administrtor role::
 
@@ -86,16 +88,16 @@ Run 'awsloginprofile user' ::
 
 
 
-Create new IAM user in user-spec.yml and group-spec.yml
-*******************************************************
+Create new IAM user in ``users.yaml`` and ``groups.yaml``
+*********************************************************
 
-Edit users-spec.yml ::
+Edit users.yaml ::
   
   - Name: abcaws1-user-2
     Email: xyz@yahoo.com
     Team: team-abcaws1
 
-Edit groups-spec.yml ::
+Edit groups.yaml ::
 
   - Name: group-abcaws1
     Members:
@@ -104,8 +106,8 @@ Edit groups-spec.yml ::
 
 
 
-Create new IAM user with awsauth
-********************************
+Create new IAM user with ``awsauth``
+************************************
 
 Run 'awsauth users --exec' ::
 
@@ -117,8 +119,8 @@ Run 'awsauth users --exec' ::
 
 
 
-Create user login profile with awsloginprofile
-**********************************************
+Create user login profile with ``awsloginprofile``
+**************************************************
 
 Run 'wsloginprofile user --new' ::
 

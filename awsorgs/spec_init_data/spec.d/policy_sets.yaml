@@ -18,6 +18,14 @@ policy_sets:
   Policies:
   - PowerUserAccess
   - IAMReadOnlyAccess
+- Name: TesterPolicySet
+  Description: Access for testers
+  Tags:
+  - Key: jobfunctionrole
+    Value: True
+  Policies:
+  - ReadOnlyAccess
+  - ReadS3Bucket
 
 
 

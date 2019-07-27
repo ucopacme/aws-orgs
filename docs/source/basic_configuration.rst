@@ -13,7 +13,7 @@ config.yaml
 -----------
 
 Most CLI commands make use of a per-user config file for basic paramaters.  The
-default location is `~/.awsorgs/config.yaml`.  This file supplies the values
+default location is ``~/.awsorgs/config.yaml``.  This file supplies the values
 for required cli option parameters::
 
   --spec-dir
@@ -46,7 +46,7 @@ documentation of spec attributes.  Edit these to suit your AWS Organization.
    example_spec_files
 
 
-The default spec directory is `~/.awsorgs/spec.d`.  If you choose a non-default
+The default spec directory is ``~/.awsorgs/spec.d``.  If you choose a non-default
 location, be sure to update the ``spec_dir`` parameter in your ``config.yaml``.
 
 .. note::

@@ -6,9 +6,9 @@ Prerequisites:
 - admin access to auth account
 - spec file setup
 
-  - ~/.awsorgs/config.yaml for awsorgs configuration parameters
-  - spec files in spec_dir directory which is defined in config.yaml
-  - create at least one satelite account (see awsaccounts)
+  - ``~/.awsorgs/config.yaml`` for awsorgs configuration parameters
+  - spec files in ``spec_dir`` directory which is defined in ``config.yaml``
+  - create at least one satelite account (see ``awsaccounts``)
 
 
 
@@ -25,32 +25,32 @@ Commands used:
 spec files impacted:
 
 - ~/.awsorgs/config.yaml
-- spec_dir/account-spec.yml
+- spec_dir/account.yaml
 
 
 Actions Summary:
 
-- Define org_access_role in ~/.awsorgs/config.yaml
-- Define spec_dir/accoount-spec.yml
-- awsaccoutns alias 
-- awsaccoutns alias --exec
-- awsaccoutns report
+- Define ``org_access_role`` in ``~/.awsorgs/config.yaml``
+- Define ``spec_dir/account.yaml``
+- ``awsaccounts alias``
+- ``awsaccounts alias --exec``
+- ``awsaccounts report``
 
 
 
-Define org_access_role in ~/.awsorgs/config.yaml
-************************************************
+Define ``org_access_role`` in ``~/.awsorgs/config.yaml``
+********************************************************
 
-Edit ~/.awsorgs/config.yaml ::
+Edit ``~/.awsorgs/config.yaml``::
 
   org_access_role: OrganizationAccountAccessRole
 
 
 
-Show current awsaccoutns alias
-******************************
+Show current account aliases
+****************************
 
-Run 'awsacccouns report' ::
+Run ``awsacccounts report``::
 
   (py36) [jhsu@scrappy-aws ~]$ awsaccounts report
 
@@ -59,15 +59,15 @@ Run 'awsacccouns report' ::
 
   Name:               Alias               Id:             Email:
   account-abcaws1   acct-abcaws1      123456789011    mail1@yahoo.com
-  account-abcaws2   acct-abcaws2      123456789011    mail2@yahoo.com
-  account-abcaws3   acct-abcaws3      123456789011    mail3@yahoo.com
+  account-abcaws2   acct-abcaws2      123456789022    mail2@yahoo.com
+  account-abcaws3   acct-abcaws3      123456789033    mail3@yahoo.com
 
 
 
-Edit spec_dir/accoount-spec.yml
-*******************************
+Edit ``spec_dir/account.yaml``
+******************************
 
-Change account-abcaws3 alias from acct-abcaws3 to accnt-abcaws3::
+Change ``account-abcaws3`` alias to ``accnt-abcaws3``::
 
   - Name: account-abcaws3
   Team: team-abcaws3
@@ -79,7 +79,7 @@ Change account-abcaws3 alias from acct-abcaws3 to accnt-abcaws3::
 Dryrun awsaccounts alias
 ************************
 
-Run 'awsaccount alias' ::
+Run ``awsaccount alias``::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias
 
@@ -90,7 +90,7 @@ Run 'awsaccount alias' ::
 Exec awsaccounts alias
 **********************
 
-Run 'awsaccount alias --exec' ::
+Run ``awsaccount alias --exec``::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias --exec
 
@@ -101,7 +101,7 @@ Run 'awsaccount alias --exec' ::
 awsaccounts report
 ******************
 
-Run 'awsaccount report' ::
+Run ``awsaccount report``::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts report
 

@@ -23,20 +23,20 @@ Commands used:
 
 Spec files impacted:
 
-- users-spec.yml
-- groups-spec.yml
-- custom-policy-spec.yml
+- users.yaml
+- groups.yaml
+- custom_policies.yaml
 
 
 Actions Summary:
 
-- report IAM users and groups in accounts
-- create an IAM user and group, and add the user to the group
-- attach a IAM managed policy to your group
-- attach a IAM custom policy to your group
-- modify attached custom policy
-- detach policies, users from group
-- delete group, delete user
+- `Report users and groups in all accounts`_
+- `Create an IAM user and group, and add the user to the group`_
+- `Attach a IAM managed policy to your group`_
+- `Attach a IAM custom policy to your group`_
+- `Modify attached custom policy`_
+- `Detach policies, users from group`_
+- `Delete group, delete users`_
 
 
 
@@ -88,16 +88,16 @@ Create an IAM user and group, and add the user to the group
 
 Edit the following files:
 
-- users-spec.yml 
-- groups-spec.yml 
+- users.yaml 
+- groups.yaml 
 
 Example Diff::
 
   ~/.awsorgs/spec.d> git diff
-  diff --git a/groups-spec.yml b/groups-spec.yml
+  diff --git a/groups.yaml b/groups.yaml
   index 7f37144..d3fe879 100644
-  --- a/groups-spec.yml
-  +++ b/groups-spec.yml
+  --- a/groups.yaml
+  +++ b/groups.yaml
   @@ -46,3 +46,8 @@ groups:
 
   +  - Name: testers
@@ -105,10 +105,10 @@ Example Diff::
   +    Members:
   +      - joeuser
   +      - maryuser
-  diff --git a/users-spec.yml b/users-spec.yml
+  diff --git a/users.yaml b/users.yaml
   index 22d2d61..5424bf4 100644
-  --- a/users-spec.yml
-  +++ b/users-spec.yml
+  --- a/users.yaml
+  +++ b/users.yaml
   @@ -36,3 +36,6 @@ users:
 
   +  - Name: joeuser
@@ -131,15 +131,15 @@ Implement and review changes::
 Attach a IAM managed policy to your group
 *****************************************
 
-Edit file ``groups-spec.yml``
+Edit file ``groups.yaml``
 
 Example Diff::
 
   ~/.awsorgs/spec.d> git diff
-  diff --git a/groups-spec.yml b/groups-spec.yml
+  diff --git a/groups.yaml b/groups.yaml
   index d3fe879..9e05738 100644
-  --- a/groups-spec.yml
-  +++ b/groups-spec.yml
+  --- a/groups.yaml
+  +++ b/groups.yaml
   @@ -50,4 +50,6 @@ groups:
      - Name: testers
        Ensure: present
@@ -164,16 +164,16 @@ Attach a IAM custom policy to your group
 
 Edit the following files:
 
-- groups-spec.yml 
-- custom-policy-spec.yml 
+- groups.yaml 
+- custom_policies.yaml 
 
 Example Diff::
 
   ~/.awsorgs/spec.d> git diff
-  diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
+  diff --git a/custom_policies.yaml b/custom_policies.yaml
   index da46ebb..5d411f0 100644
-  --- a/custom-policy-spec.yml
-  +++ b/custom-policy-spec.yml
+  --- a/custom_policies.yaml
+  +++ b/custom_policies.yaml
   @@ -111,3 +111,14 @@ custom_policies:
            Action:
              - aws-portal:Account*
@@ -189,10 +189,10 @@ Example Diff::
   +        Resource:
   +          - arn:aws:s3:::my_bucket
   +          - arn:aws:s3:::my_bucket/*
-  diff --git a/groups-spec.yml b/groups-spec.yml
+  diff --git a/groups.yaml b/groups.yaml
   index b506856..11e87cb 100644
-  --- a/groups-spec.yml
-  +++ b/groups-spec.yml
+  --- a/groups.yaml
+  +++ b/groups.yaml
   @@ -36,3 +36,4 @@ groups:
          - maryuser
        Policies:
@@ -214,15 +214,15 @@ Implement and review changes::
 Modify attached custom policy
 *****************************
 
-Edit file ``custom-policy-spec.yml``
+Edit file ``custom_policies.yaml``
 
 Example Diff::
 
   ~/.awsorgs/spec.d> git diff
-  diff --git a/custom-policy-spec.yml b/custom-policy-spec.yml
+  diff --git a/custom_policies.yaml b/custom_policies.yaml
   index d6f29d7..7f5748a 100644
-  --- a/custom-policy-spec.yml
-  +++ b/custom-policy-spec.yml
+  --- a/custom_policies.yaml
+  +++ b/custom_policies.yaml
   @@ -131,6 +131,8 @@ custom_policies:
            Resource:
              - arn:aws:s3:::my_bucket
@@ -248,15 +248,15 @@ Detach policies, users from group
 
 Edit the following files:
 
-- groups-spec.yml 
+- groups.yaml 
 
 Example Diff::
 
   (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
-  diff --git a/groups-spec.yml b/groups-spec.yml
+  diff --git a/groups.yaml b/groups.yaml
   index 9e05738..565b1ab 100644
-  --- a/groups-spec.yml
-  +++ b/groups-spec.yml
+  --- a/groups.yaml
+  +++ b/groups.yaml
   @@ -49,7 +49,4 @@ groups:
      - Name: testers
        Ensure: present
@@ -285,18 +285,18 @@ Delete group, delete users
 
 Files to edit:
 
-- users-spec.yml
-- groups-spec.yml
+- users.yaml
+- groups.yaml
 
 To delete IAM entities we must set attribute ``Ensure: absent`` to associated spec.
 
 Example diff::
 
   (python3.6) ashely@horus:~/.awsorgs/spec.d> git diff
-  diff --git a/groups-spec.yml b/groups-spec.yml
+  diff --git a/groups.yaml b/groups.yaml
   index 9e05738..4eda72b 100644
-  --- a/groups-spec.yml
-  +++ b/groups-spec.yml
+  --- a/groups.yaml
+  +++ b/groups.yaml
   @@ -47,9 +47,6 @@ groups:
 
      - Name: testers
@@ -304,10 +304,10 @@ Example diff::
   +    Ensure: absent
        Members:
        Policies:
-  diff --git a/users-spec.yml b/users-spec.yml
+  diff --git a/users.yaml b/users.yaml
   index 5424bf4..3e8b87d 100644
-  --- a/users-spec.yml
-  +++ b/users-spec.yml
+  --- a/users.yaml
+  +++ b/users.yaml
   @@ -37,5 +37,6 @@ users:
      - Name: joeuser
   +    Ensure: absent
