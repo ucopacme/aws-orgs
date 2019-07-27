@@ -12,7 +12,8 @@ Welcome to aws-orgs's documentation!
 
    getting_started
    configuration
-   usage 
+   aws_organizations
+   centralized_iam_access 
 
 
 .. toctree::

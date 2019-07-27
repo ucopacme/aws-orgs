@@ -1,30 +1,12 @@
-AWS-ORGS Configuration
-======================
+Spec Files and CLI Configuration
+================================
 
+There are two aspects os ``aws-orgs`` configuration:
 
-Initial Configuration
----------------------
+1. per-user cli configuration - `config.yaml`_
+#. site wide resource specifcation - `Spec files`_
 
-AWS-ORGS provides a helper script ``awsorgs-spec-init``.  This script generates
-an initial ``config.yaml`` and a full set of example spec files.  By default
-these are installed under ``~/.awsorgs``::
-
-  > awsorgs-spec-init
-  find ~/.awsorgs
-  ~/.awsorgs/config.yaml
-  ~/.awsorgs/spec.d/accounts.yaml
-  ~/.awsorgs/spec.d/common.yaml
-  ~/.awsorgs/spec.d/custom_policies.yaml
-  ~/.awsorgs/spec.d/delegations.yaml
-  ~/.awsorgs/spec.d/groups.yaml
-  ~/.awsorgs/spec.d/local_users.yaml
-  ~/.awsorgs/spec.d/orgs.yaml
-  ~/.awsorgs/spec.d/policy-sets.yaml
-  ~/.awsorgs/spec.d/service_control_policies.yaml
-  ~/.awsorgs/spec.d/teams.yaml
-  ~/.awsorgs/spec.d/users.yaml
-
-Run ``awsorgs-spec-init --help`` for options on how to install to alternate locations.
+The ``awsorgs-spec-init`` tool is provided to `Bootstrap your initial configuration`_.
 
 
 config.yaml
@@ -48,7 +30,7 @@ Copy this file to your home directory (or run ``awsorgs-spec-init``) and edit
 parameter values to suit your AWS Organization.
 
 
-Spec Files
+Spec files
 ----------
 
 AWS-ORGS makes use of a complex of YAML formatted resource specification files.
@@ -61,6 +43,41 @@ documentation of spec attributes.  Edit these to suit your AWS Organization.
 
 The default spec directory is `~/.awsorgs/spec.d`.  If you choose a non-default
 location, be sure to update the ``spec_dir`` parameter in your ``config.yaml``.
+
+.. Note
+
+   Keep your spec files under version control!
+
+
+
+``Bootstrap your initial configuration``
+----------------------------------------
+
+``aws-orgs`` provides a helper script ``awsorgs-spec-init``.  This script generates
+an initial ``config.yaml`` and a full set of example spec files.  By default
+these are installed under ``~/.awsorgs``::
+
+  > awsorgs-spec-init
+  find ~/.awsorgs
+  ~/.awsorgs/config.yaml
+  ~/.awsorgs/spec.d/accounts.yaml
+  ~/.awsorgs/spec.d/common.yaml
+  ~/.awsorgs/spec.d/custom_policies.yaml
+  ~/.awsorgs/spec.d/delegations.yaml
+  ~/.awsorgs/spec.d/groups.yaml
+  ~/.awsorgs/spec.d/local_users.yaml
+  ~/.awsorgs/spec.d/orgs.yaml
+  ~/.awsorgs/spec.d/policy-sets.yaml
+  ~/.awsorgs/spec.d/service_control_policies.yaml
+  ~/.awsorgs/spec.d/teams.yaml
+  ~/.awsorgs/spec.d/users.yaml
+
+Run ``awsorgs-spec-init --help`` for options on how to install to alternate locations.
+
+
+
+Working with spec files
+-----------------------
 
 .. toctree::
    :hidden:

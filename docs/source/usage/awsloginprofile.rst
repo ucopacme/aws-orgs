@@ -1,5 +1,5 @@
-Managing IAM User Login Profiles
-================================
+IAM User Login Profiles - ``awsloginprofile``
+=============================================
 
 Prerequisites:
 
@@ -10,10 +10,6 @@ Prerequisites:
   - spec files in spec_dir directory which is defined in config.yaml
   - create at least one satelite account (see awsaccounts)
 
-
-
-AWS awsloginprofile
--------------------
 
 Commands used:
 
