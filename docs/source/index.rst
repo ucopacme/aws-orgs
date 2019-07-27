@@ -12,6 +12,7 @@ Welcome to aws-orgs's documentation!
 
    getting_started
    basic_configuration
+   concepts_and_workflow
    working_with_spec_files
    aws_organizations
    centralized_iam_access 
@@ -26,10 +27,4 @@ Welcome to aws-orgs's documentation!
    testing/test_awsloginprofile
 
 
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+:ref:`search`
