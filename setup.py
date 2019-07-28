@@ -37,8 +37,9 @@ setup(
     ],
     package_data={
         'awsorgs': [
-            'spec_init_data/*',
             'data/*',
+            'spec_init_data/*',
+            'spec_init_data/spec.d/*',
         ],
     },
     entry_points={
