@@ -16,21 +16,18 @@ Options:
   -V, --version         Display version info and exit.
 """
 
-import os
-import sys
-import yaml
 import json
 
 import boto3
-from botocore.exceptions import ClientError
 from docopt import docopt
 
 import awsorgs
-from awsorgs.utils import *
+from awsorgs.utils import lookup
 
 ROLENAME = 'OrganizationAccountAccessRole'
 DESCRIPTION = 'Organization Access Role'
 POLICYNAME = 'AdministratorAccess'
+
 
 def main():
     args = docopt(__doc__, version=awsorgs.__version__)
@@ -52,13 +49,13 @@ def main():
                 AssumeRolePolicyDocument=policy_doc)
     # attach policy to new role
     iam_resource = boto3.resource('iam')
-    aws_policies = iam_client.list_policies(Scope='AWS',
-            MaxItems=500)['Policies']
+    aws_policies = iam_client.list_policies(
+            Scope='AWS', MaxItems=500)['Policies']
     policy_arn = lookup(aws_policies, 'PolicyName', POLICYNAME, 'Arn')
     role = iam_resource.Role(ROLENAME)
     try:
         role.load()
-    except:
+    except Exception:
         pass
     else:
         print("Attaching policy %s to %s" % (POLICYNAME, ROLENAME))
