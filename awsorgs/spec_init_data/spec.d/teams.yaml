@@ -1,0 +1,28 @@
+---
+# Teams Specification.
+#
+# Teams provides a labeling system for tracking folks within your organization
+# who are responsible for managed accounts and users.
+#
+# Each team spec has the following attributes:
+#   Name (str):                     The name of the user
+#   Description (str):              Team description
+#   BusinessContacts (list(str)):   Email addresses of business contacts
+#   TechnicalContacts (list(str)):  Email addresses of technical contacts
+
+teams:
+- Name: administration
+  Description: AWS Organization Administration
+  BusinessContacts:
+  - ashley@example.com
+  TechnicalContacts:
+  - admins@example.com
+- Name: development
+  Description: Application developers
+  BusinessContacts:
+  - kalila@example.com
+  TechnicalContacts:
+  - dimna@example.com
+
+
+

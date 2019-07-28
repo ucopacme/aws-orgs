@@ -11,7 +11,7 @@ You must complete the following tasks to configure your access:
 required to change your password as you log in.  The rules for good
 passwords are as follows:
 
-- Minimum password length: 8
+- Minimum password length: 14
 - Require at least one uppercase character from Latin alphabet. (A-Z)
 - Require at least one lowercase character from Latin alphabet. (a-z)
 - Require at least one symbol. (!@#$$%^&amp;*()_+-=[]{}|')

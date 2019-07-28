@@ -85,6 +85,12 @@ custom_policies:
   schema:
     type: dict
     schema: custom_policy
+policy_sets:
+  required: False
+  type: list
+  schema:
+    type: dict
+    schema: policy_set
 """
 
 
@@ -142,6 +148,9 @@ local_users:
   required: True
   type: list
 custom_policies:
+  required: True
+  type: list
+policy_sets:
   required: True
   type: list
 """
@@ -369,10 +378,15 @@ RequireMFA:
   required: False
   type: boolean
 Policies:
-  required: False
+  required: True
   type: list
   schema:
     type: string
+  excludes: PolicySet
+PolicySet:
+  required: True
+  type: string
+  excludes: Policies
 Path:
   required: False
   type: string
@@ -389,6 +403,39 @@ Ensure:
   - absent
 """
 
+POLICY_SET_SCHEMA = """
+Name:
+  required: True
+  type: string
+Description:
+  required: False
+  nullable: True
+  type: string
+Policies:
+  required: True
+  nullable: True
+  type: list
+  schema:
+    type: string
+Tags:
+  required: False
+  nullable: True
+  type: list
+  schema:
+    type: dict
+    schema: tag
+"""
+
+TAG_SCHEMA = """
+Key:
+  required: True
+  type: string
+Value:
+  required: False
+  type: string
+"""
+  
+
 
 def file_validator(log):
     schema_registry.add('organizational_unit', yaml.safe_load(ORGANIZATIONAL_UNIT_SCHEMA))
@@ -400,6 +447,8 @@ def file_validator(log):
     schema_registry.add('local_user', yaml.safe_load(LOCAL_USER_SCHEMA))
     schema_registry.add('delegation', yaml.safe_load(DELEGATION_SCHEMA))
     schema_registry.add('custom_policy', yaml.safe_load(POLICY_SCHEMA))
+    schema_registry.add('policy_set', yaml.safe_load(POLICY_SET_SCHEMA))
+    schema_registry.add('tag', yaml.safe_load(TAG_SCHEMA))
     log.debug("adding subschema to schema_registry: {}".format(
             schema_registry.all().keys()))
     vfile = Validator(yaml.safe_load(SPEC_FILE_SCHEMA))

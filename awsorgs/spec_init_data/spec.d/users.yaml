@@ -1,0 +1,26 @@
+---
+# Users Specification
+#
+# List of IAM users managed within the Central Auth account.
+#
+# Each user has the following attributes all of type 'str':
+#   Name:   The name of the user - required.
+#   Ensure: One of 'present' (default) or 'absent'.
+#           Setting to 'absent' will cause the user to be deleted.
+#   Email:  The email address with which the user can be contacted.
+#   Team:   A label for associating the IAM user with a project team.
+#   Path:   Set a path element to the IAM user resource.
+
+users:
+- Name: ashley
+  Email: ashley@example.com
+  Team: administration
+- Name: kalila
+  Email: kalila@example.com
+  Team: development
+- Name: dimna
+  Email: dimna@example.com
+  Team: development
+
+
+

@@ -1,5 +1,0 @@
-import boto3
-iam = boto3.resource('iam')
-
-role = iam.Role('blee')
-

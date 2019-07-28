@@ -1,0 +1,34 @@
+---
+# Local User Specification 
+#
+# IAM user resources can be deployed into managed accounts.  Local users 
+# are typically accociated with a service such as SES or S3.  Such users
+# do not have a login profile.
+# 
+# Each local user spce has the following attributes:
+#   Name (str):       The name of local IAM user.
+#   Ensure ('present'[default]|'absent'):
+#                     Ensures whether the local user exists or not.
+#   Description (str):
+#                     A decription applied to the local IAM user.
+#   Team (str):       A label for associating the IAM user with a project team.
+#                     This must match a 'Name' attribute from a team spec. 
+#   Path (str):       Path prefix for the IAM user resource name. (optional)
+#   Account (list(str), 'ALL'):
+#                     List of accounts in which the user is deployed.
+#                     If set to 'ALL', the local user will be created in
+#                     all accounts in the Organization.
+#   Policies (list(str)): 
+#                     List of IAM policies to attach to the local user.
+
+local_users:
+- Name: local-service-user
+  Description: Local service user 
+  Team: development
+  Path: service
+  Account: All
+  Policies:
+  - ReadOnlyAccess
+
+
+
