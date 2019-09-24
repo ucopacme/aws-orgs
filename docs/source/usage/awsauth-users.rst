@@ -211,6 +211,8 @@ Implement and review changes::
   $ aws iam get-policy --policy-arn <your_policy_arn>
 
 
+.. _modify_custom_policy:
+
 Modify attached custom policy
 *****************************
 

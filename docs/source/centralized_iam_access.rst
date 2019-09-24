@@ -6,3 +6,4 @@ Centralized IAM Access
    usage/awsauth-users
    usage/awsauth-delegations
    usage/awsloginprofile
+   usage/awsauth-local-users
