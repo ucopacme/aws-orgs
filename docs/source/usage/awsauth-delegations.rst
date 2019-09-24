@@ -282,8 +282,6 @@ Example Diff::
   -      - ReadOnlyAccess
   -      - ReadS3Bucket
   +    PolicySet: TesterPolicySet
-  +      - ReadOnlyAccess
-  +      - ReadS3Bucket
 
 
 Review proposed changes in ``dry-run`` mode::

@@ -151,7 +151,8 @@ custom_policies:
   required: True
   type: list
 policy_sets:
-  required: True
+  required: False
+  nullable: True
   type: list
 """
 
