@@ -29,6 +29,15 @@ local_users:
   Account: All
   Policies:
   - ReadOnlyAccess
+- Name: ses-smtp-user-myapp
+  Description: Local service user for SES SMTP access
+  Team: myapp
+  Path: service
+  Account:
+  - myapp-build
+  - myapp-prod
+  Policies:
+  - AmazonSesSendingAccess
 
 
 
