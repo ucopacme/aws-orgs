@@ -119,6 +119,18 @@ def validate_spec_file(log, spec_file, validator, errors):
         return (None, errors)
 
 
+def validate_package_version(log, spec_dir):
+    # find a file in spec_dir that starts with 'common'
+    common_spec = os.join(spec_dir, 'common.yml')
+    # load common spec and extract 'minimum_version`
+    with open(common_spec) as f:
+        try:
+            spec_from_file = yaml.safe_load(f.read())
+        except Exception as e:
+            log.critical("cant load common spec file '{}': {}".format(common_spec, e))
+            sys.exit(1)
+    
+
 def validate_teams_in_spec(log, spec_object):
     log.debug("checking teams in user spec")
     errors = []
@@ -147,6 +159,7 @@ def validate_spec(log, args):
     if not os.path.isdir(spec_dir):
         log.error("spec_dir not found or not a directory: {}".format(spec_dir))
         sys.exit(1)
+    validate_package_version(log, spec_dir)
     validator = file_validator(log)
     spec_object = {}
     errors = 0

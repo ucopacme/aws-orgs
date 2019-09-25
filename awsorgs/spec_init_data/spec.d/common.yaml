@@ -1,4 +1,8 @@
 ---
+
+# aws-orgs installation must be greater than or eqaul to this version number.
+minimum_version: '0.3.0'
+
 # AWSORGS configuration parameters common to all operations.
 
 # AWS account Id for the Organization master account.  This must be in quotes.
