@@ -1,7 +1,7 @@
 ---
 
 # aws-orgs installation must be greater than or eqaul to this version number.
-minimum_version: '0.3.0'
+minimum_version: '0.3.1'
 
 # AWSORGS configuration parameters common to all operations.
 
