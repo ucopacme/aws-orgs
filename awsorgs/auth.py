@@ -141,8 +141,9 @@ def create_users(credentials, args, log, deployed, auth_spec):
     iam_resource = boto3.resource('iam', **credentials)
     for u_spec in auth_spec['users']:
         tags = [
-            {'Key': 'team',  'Value': u_spec['Team']},
+            {'Key': 'cn',  'Value': u_spec['CN']},
             {'Key': 'email', 'Value': u_spec['Email']},
+            {'Key': 'requestid',  'Value': u_spec['RequestId']},
         ]
         path = munge_path(auth_spec['default_path'], u_spec)
         deployed_user = lookup(deployed['users'], 'UserName', u_spec['Name'])
