@@ -145,10 +145,7 @@ def create_users(credentials, args, log, deployed, auth_spec):
             {'Key': 'email', 'Value': u_spec['Email']},
             {'Key': 'requestid',  'Value': u_spec['RequestId']},
         ]
-        print(auth_spec['default_path'])
-        print(u_spec)
         path = munge_path(auth_spec['default_path'], u_spec)
-        print(path)
         deployed_user = lookup(deployed['users'], 'UserName', u_spec['Name'])
         if deployed_user:
             user = iam_resource.User(u_spec['Name'])
