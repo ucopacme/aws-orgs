@@ -15,6 +15,8 @@ from awsorgs.utils import yamlfmt
 # files have only a subset of these.
 #
 SPEC_FILE_SCHEMA = """
+minimum_version:
+  type: string
 master_account_id:
   type: string
 auth_account_id:
@@ -99,6 +101,9 @@ policy_sets:
 # schema, as that is done during spec_file validation.
 #
 SPEC_SCHEMA = """
+minimum_version:
+  required: True
+  type: string
 master_account_id:
   required: True
   type: string
