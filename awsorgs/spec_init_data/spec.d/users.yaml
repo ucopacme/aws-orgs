@@ -4,23 +4,33 @@
 # List of IAM users managed within the Central Auth account.
 #
 # Each user has the following attributes all of type 'str':
-#   Name:   The name of the user - required.
-#   Ensure: One of 'present' (default) or 'absent'.
-#           Setting to 'absent' will cause the user to be deleted.
-#   Email:  The email address with which the user can be contacted.
-#   Team:   A label for associating the IAM user with a project team.
-#   Path:   Set a path element to the IAM user resource.
+#   Name (str):        The name of the user - required.
+#   Ensure ('present'[default]|'absent'):
+#                      Setting to 'absent' will cause the user to be deleted.
+#   CN (str):          ActiveDirectory 'cn' attribute for this user.
+#                      i.e. <Firstname Lastname>
+#   Email (str):       The email address with which the user can be contacted.
+#                      Should match the ActiveDirectory 'mail' attribute.
+#   RequestId (str):   Ticketing system tracking number of a new user request.
+#   Path (str):        Set a path element to the IAM user resource. Optional.
+#   Tags (list(dict)): List of tags to attach to the user. Optional.
 
 users:
 - Name: ashley
+  CN: Ashley Gould
   Email: ashley@example.com
-  Team: administration
+  RequestId: RIT0012340
+  Path: admin
+  Tags:
+  - Key: role
+    Value: admin
+  - Key: birthday
+    Value: 3-23-1992
 - Name: kalila
+  CN: Kalila Bidpai
   Email: kalila@example.com
-  Team: development
+  RequestId: RIT0012341
 - Name: dimna
+  CN: Dimna Bidpai
   Email: dimna@example.com
-  Team: development
-
-
-
+  RequestId: RIT0012342
