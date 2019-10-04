@@ -133,6 +133,18 @@ def delete_policy(policy):
     policy.delete()
 
 
+def update_user_tags(iam_client, user, tags):
+    tagkeys = [tag['Key'] for tag in user.tags]
+    iam_client.untag_user(
+        UserName=user.name,
+        TagKeys=tagkeys,
+    )
+    iam_client.tag_user(
+        UserName=user.name,
+        Tags=tags,
+    )
+
+
 def create_users(credentials, args, log, deployed, auth_spec):
     """
     Manage IAM users based on user specification
@@ -141,8 +153,9 @@ def create_users(credentials, args, log, deployed, auth_spec):
     iam_resource = boto3.resource('iam', **credentials)
     for u_spec in auth_spec['users']:
         tags = [
-            {'Key': 'team',  'Value': u_spec['Team']},
+            {'Key': 'cn',  'Value': u_spec['CN']},
             {'Key': 'email', 'Value': u_spec['Email']},
+            {'Key': 'requestid',  'Value': u_spec['RequestId']},
         ]
         path = munge_path(auth_spec['default_path'], u_spec)
         deployed_user = lookup(deployed['users'], 'UserName', u_spec['Name'])
@@ -161,10 +174,7 @@ def create_users(credentials, args, log, deployed, auth_spec):
             elif user.tags != tags:
                 log.info("Updating tags for user '%s'" % u_spec['Name'])
                 if args['--exec']:
-                    iam_client.tag_user(
-                        UserName=user.name,
-                        Tags=tags,
-                    )
+                    update_user_tags(iam_client, user, tags)
         # create new user
         elif not ensure_absent(u_spec):
             log.info("Creating user '%s'" % u_spec['Name'])

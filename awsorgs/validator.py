@@ -253,14 +253,14 @@ USER_SCHEMA = """
 Name:
   required: True
   type: string
-Team:
-  required: True
-  type: string
 Email:
   required: True
   type: string
-Path:
-  required: False
+CN:
+  required: True
+  type: string
+RequestId:
+  required: True
   type: string
 Ensure:
   required: False

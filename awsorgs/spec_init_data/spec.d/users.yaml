@@ -15,22 +15,20 @@
 #   Path (str):        Set a path element to the IAM user resource. Optional.
 #   Tags (list(dict)): List of tags to attach to the user. Optional.
 
+
 users:
 - Name: ashley
+  Ensure: present
   CN: Ashley Gould
   Email: ashley@example.com
   RequestId: RIT0012340
-  Path: admin
-  Tags:
-  - Key: role
-    Value: admin
-  - Key: birthday
-    Value: 3-23-1992
 - Name: kalila
+  Ensure: present
   CN: Kalila Bidpai
   Email: kalila@example.com
   RequestId: RIT0012341
 - Name: dimna
+  Ensure: present
   CN: Dimna Bidpai
   Email: dimna@example.com
   RequestId: RIT0012342

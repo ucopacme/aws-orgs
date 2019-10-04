@@ -9,10 +9,12 @@
 #   Name (str):       The name of local IAM user.
 #   Ensure ('present'[default]|'absent'):
 #                     Ensures whether the local user exists or not.
-#   Description (str):
-#                     A decription applied to the local IAM user.
-#   Team (str):       A label for associating the IAM user with a project team.
-#                     This must match a 'Name' attribute from a team spec. 
+#   TechnicalContactEmailID (str):      
+#                     The email address with which the user can be contacted.
+#                     Should match the ActiveDirectory 'mail' attribute.
+#   RequestId (str):  Ticketing system tracking number of a new user request.
+#
+#   Description (str):A decription applied to the local IAM user.
 #   Path (str):       Path prefix for the IAM user resource name. (optional)
 #   Account (list(str), 'ALL'):
 #                     List of accounts in which the user is deployed.
@@ -22,9 +24,17 @@
 #                     List of IAM policies to attach to the local user.
 
 local_users:
+    # - Name: local-service-user
+  #Description: Local service user 
+  #Team: development
+  #Path: service
+  #Account: All
+  #Policies:
+  #- ReadOnlyAccess
 - Name: local-service-user
+  TechnicalContactEmailId: test@ucop.edu
+  RequestId: RIT00000123
   Description: Local service user 
-  Team: development
   Path: service
   Account: All
   Policies:
