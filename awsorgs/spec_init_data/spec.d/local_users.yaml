@@ -37,6 +37,7 @@ local_users:
   Description: Local service user 
   Path: service
   Account: All
+  ExcludeAccounts: '200000102000'
   Policies:
   - ReadOnlyAccess
 

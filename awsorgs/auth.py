@@ -572,6 +572,10 @@ def manage_local_user_in_accounts(
 
     account_name = account['Name']
     log.debug('account: %s, local user: %s' % (account_name, lu_spec['Name']))
+    tags = [
+        {'Key': 'technicalcontactemailid', 'Value': lu_spec['TechnicalContatEmailId']},
+        {'Key': 'requestid',  'Value': lu_spec['RequestId']},
+    ]   
     path_spec = munge_path(auth_spec['default_path'], lu_spec)
     credentials = get_assume_role_credentials(account['Id'], args['--org-access-role'])
     if isinstance(credentials, RuntimeError):
@@ -608,12 +612,18 @@ def manage_local_user_in_accounts(
                 delete_user(user)
         return
 
+    # update user tags
+    if user_exists and user.tags != tags:
+        log.info("Updating tags for user '%s'" % lu_spec['Name'])
+        if args['--exec']:
+            update_user_tags(iam_client, user, tags)
+
     # create local user and attach policies
     if not user_exists:
         log.info("Creating local user '%s' in account '%s'" %
                 (lu_spec['Name'], account_name))
         if args['--exec']:
-            user.create(Path=path_spec)
+            user.create(Path=path_spec, Tags=tags)
             if 'Policies' in lu_spec and lu_spec['Policies']:
                 user.load()
                 for policy_name in lu_spec['Policies']:

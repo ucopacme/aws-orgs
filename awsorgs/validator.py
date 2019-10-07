@@ -311,18 +311,18 @@ LOCAL_USER_SCHEMA = """
 Name:
   required: True
   type: string
+TechnicalContactEmailId:
+  required: True
+  type: string
+RequestId:
+  required: True
+  type: string
 Description:
   required: False
-  type: string
-Team:
-  required: True
   type: string
 Path:
   required: False
   type: string
-#AuthMethod:
-#  required: False
-#  type: string
 Account:
   required: True
   anyof:
@@ -337,9 +337,6 @@ ExcludeAccounts:
   type: list
   schema:
     type: string
-#TrustedGroup:
-#  required: False
-#  type: string
 Policies:
   required: False
   type: list
