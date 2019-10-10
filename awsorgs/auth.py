@@ -573,7 +573,7 @@ def manage_local_user_in_accounts(
     account_name = account['Name']
     log.debug('account: %s, local user: %s' % (account_name, lu_spec['Name']))
     tags = [
-        {'Key': 'technicalcontactemailid', 'Value': lu_spec['TechnicalContatEmailId']},
+        {'Key': 'technicalcontactemailid', 'Value': lu_spec['TechnicalContactEmailId']},
         {'Key': 'requestid',  'Value': lu_spec['RequestId']},
     ]   
     path_spec = munge_path(auth_spec['default_path'], lu_spec)
@@ -593,7 +593,6 @@ def manage_local_user_in_accounts(
     else:
         user_exists = True
         log.debug('account: %s, local user exists: %s' % (account_name, user.arn))
-
     # check for unmanaged user in account
     if user_exists:
         if not user.path.startswith('/' + auth_spec['default_path']):
