@@ -155,7 +155,7 @@ def create_users(credentials, args, log, deployed, auth_spec):
         tags = [
             {'Key': 'cn',  'Value': u_spec['CN']},
             {'Key': 'email', 'Value': u_spec['Email']},
-            {'Key': 'requestid',  'Value': u_spec['RequestId']},
+            {'Key': 'request_id',  'Value': u_spec['RequestId']},
         ]
         path = munge_path(auth_spec['default_path'], u_spec)
         deployed_user = lookup(deployed['users'], 'UserName', u_spec['Name'])
@@ -573,10 +573,10 @@ def manage_local_user_in_accounts(
     account_name = account['Name']
     log.debug('account: %s, local user: %s' % (account_name, lu_spec['Name']))
     tags = [
-        {'Key': 'technicalcontactemailid', 'Value': lu_spec['TechnicalContactEmailId']},
-        {'Key': 'requestid',  'Value': lu_spec['RequestId']},
+        {'Key': 'contact_email', 'Value': lu_spec['ContactEmail']},
+        {'Key': 'request_id',  'Value': lu_spec['RequestId']},
     ]   
-    path_spec = munge_path(auth_spec['default_path'], lu_spec)
+    path_spec = "/{}/service/{}/".format(auth_spec['default_path'], lu_spec['Service'])
     credentials = get_assume_role_credentials(account['Id'], args['--org-access-role'])
     if isinstance(credentials, RuntimeError):
         log.error(credentials)

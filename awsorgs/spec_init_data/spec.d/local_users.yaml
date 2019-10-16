@@ -9,37 +9,36 @@
 #   Name (str):       The name of local IAM user.
 #   Ensure ('present'[default]|'absent'):
 #                     Ensures whether the local user exists or not.
-#   TechnicalContactEmailID (str):      
+#   ContactEmail (str):      
 #                     The email address with which the user can be contacted.
 #                     Should match the ActiveDirectory 'mail' attribute.
 #   RequestId (str):  Ticketing system tracking number of a new user request.
 #
 #   Description (str):A decription applied to the local IAM user.
-#   Path (str):       Path prefix for the IAM user resource name. (optional)
+#   Service (str):    Name of the AWS service this user interacts with. This 
+#                     is used in the IAM resource path.
 #   Account (list(str), 'ALL'):
 #                     List of accounts in which the user is deployed.
 #                     If set to 'ALL', the local user will be created in
 #                     all accounts in the Organization.
+#   ExcludeAccounts (list(str)):
+#                     If 'TrustingAccount' attribute is set to 'ALL',
+#                     any accounts listed in 'ExludeAccounts' are
+#                     excluded from the delegation.
 #   Policies (list(str)): 
 #                     List of IAM policies to attach to the local user.
 
 local_users:
-    # - Name: local-service-user
-  #Description: Local service user 
-  #Team: development
-  #Path: service
-  #Account: All
-  #Policies:
-  #- ReadOnlyAccess
 - Name: local-service-user
-  TechnicalContactEmailId: test@ucop.edu
+  Ensure: present
+  ContactEmail: test@ucop.edu
   RequestId: RIT00000123
   Description: Local service user 
-  Path: service
-  Account: All
-  ExcludeAccounts: '200000102000'
+  Service: ses
+  Account:
+  - dev1
   Policies:
-  - ReadOnlyAccess
+  - AmazonSesSendingAccess
 
 
 

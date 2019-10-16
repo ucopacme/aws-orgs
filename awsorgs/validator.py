@@ -311,7 +311,7 @@ LOCAL_USER_SCHEMA = """
 Name:
   required: True
   type: string
-TechnicalContactEmailId:
+ContactEmail:
   required: True
   type: string
 RequestId:
@@ -320,8 +320,8 @@ RequestId:
 Description:
   required: False
   type: string
-Path:
-  required: False
+Service:
+  required: True
   type: string
 Account:
   required: True
