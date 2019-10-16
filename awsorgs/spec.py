@@ -147,24 +147,6 @@ def validate_package_version(log, spec_dir):
     return
 
 
-def validate_teams_in_spec(log, spec_object):
-    log.debug("checking teams in user spec")
-    errors = []
-    for u_spec in spec_object['users']:
-        team = lookup(spec_object['teams'], 'Name', u_spec['Team'])
-        if team is None:
-            errors.append("Team name '{}' is undefined in teams spec "
-                          "for user '{}'".format(u_spec['Team'], u_spec['Name']))
-    for a_spec in spec_object['accounts']:
-        team = lookup(spec_object['teams'], 'Name', a_spec['Team'])
-        if team is None:
-            errors.append("Team name '{}' not found in teams spec "
-                          "for account '{}'".format(a_spec['Team'], a_spec['Name']))
-    if errors:
-        log.critical("spec_object validation failed:\n{}".format('\n'.join(errors)))
-        sys.exit(1)
-
-
 def validate_spec(log, args):
     """
     Load all spec files in spec_dir and validate against spec schema
@@ -198,6 +180,5 @@ def validate_spec(log, args):
         log.critical("spec_object validation failed:\n{}".format(
                 yamlfmt(validator.errors)))
         sys.exit(1)
-    validate_teams_in_spec(log, spec_object)
     log.debug("spec_object validation succeeded")
     return spec_object
