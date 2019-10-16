@@ -12,9 +12,6 @@
 #   Email (str):       The email address with which the user can be contacted.
 #                      Should match the ActiveDirectory 'mail' attribute.
 #   RequestId (str):   Ticketing system tracking number of a new user request.
-#   Path (str):        Set a path element to the IAM user resource. Optional.
-#   Tags (list(dict)): List of tags to attach to the user. Optional.
-
 
 users:
 - Name: ashley
