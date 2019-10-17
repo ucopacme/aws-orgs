@@ -26,9 +26,11 @@ Actions:
 - `Create a cross account access delegation`_
 - `Update the delegation to apply to all accounts`_
 - `Exclude some accounts from a delegation`_
+- `Update the delegation attributes`_
 - `Attach a custom policy`_
 - `Modify a custom policy`_
 - `Create a policy set and apply it to the delegation`_
+- `Modify attributes of a policy set`_
 - `Delete the delegation from all accounts`_
 
 
@@ -69,6 +71,21 @@ Implement and review changes::
   $ awsauth delegations --exec
   $ awsauth report --roles  | egrep "^Account|TestersRole"
   $ aws iam list-group-policies --group-name testers
+
+
+Update the delegation attributes
+********************************
+
+File to edit: delegations.yaml
+
+- add a ``Path`` attribute to the delegation
+- update ``Description`` attribute
+- update ``TrustingAccount`` attribute
+- update ``TrustedGroup`` attribute
+- update ``Policies`` attribute
+
+Example Diff::
+
 
 
 Update the delegation to apply to all accounts
@@ -292,6 +309,51 @@ Implement and review changes::
 
   $ awsauth delegations --exec
   $ aws iam list-role-tags --role-name TestersRole
+
+
+Modify attributes of a policy set
+*********************************
+
+Files to edit: policy_sets.yaml
+
+- modify attributes:
+
+  - Tags
+  - Policies
+
+Example Diff::
+
+:~/.awsorgs/spec.d> git diff policy-sets-spec.yml
+diff --git a/policy-sets-spec.yml b/policy-sets-spec.yml
+index 6f557d2..4c35965 100644
+--- a/policy-sets-spec.yml
++++ b/policy-sets-spec.yml
+@@ -163,16 +163,15 @@ policy_sets:
+ - Name: Developer
+   Description: >
+     Access to application services, but cannot manage IAM users/groups,
+     create Route53 HostedZones, or manage inter VPC routing.
+   Tags:
+-  - Key: compliance
+-    Value: IS3
++  - Key: job_function
++    Value: Developer
+   Policies:
+   - SystemAdministrator
+   - DatabaseAdministrator
+   - PowerUserAccess
++  - ReadOnlyAccess
+
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth delegations
+
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ aws iam get-role --role-name Developer
+  $ aws iam list-attached-role-policies --role-name Developer
 
 
 Delete the delegation from all accounts
