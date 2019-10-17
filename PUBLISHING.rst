@@ -25,13 +25,6 @@ After merging a pull request on Github:
      > git checkout master
      > git pull ucopacme master
 
-#. Create a git tag for the new release::
-
-     > git tag -ln | tail -1
-     0.3.0.dev1      Pre-Release 0.3.0.dev1
-     > git tag -a -m 'Release 0.3.0'  0.3.0
-
-
 #. Edit ``awsorgs/__init__.py`` and update the ``__version__`` parameter to the new tag::
 
      > git diff 
@@ -39,15 +32,6 @@ After merging a pull request on Github:
      -__version__ = '0.3.0.dev0'
      +__version__ = '0.3.0'
  
-#. Commit and push to master on github along with the new tag::
-
-     > git commit -am 'release 0.3.0'
-     [master 04c3946] release 1.0.1a5
-     > git push ucopacme master --tags
-     To github.com:ucopacme/aws-orgs.git
-        0035e5f..04c3946  master -> master
-      * [new tag]         0.3.0 -> 0.3.0
-
 #. Build a distributable package with the ``setup.py`` script::
 
      > python setup.py sdist bdist_wheel
@@ -91,7 +75,7 @@ Validate distribution
 Publish to public PyPI
 ----------------------
 
-#. Upload to real PyPI site::
+1. Upload to real PyPI site::
 
      > twine upload dist/*
      Enter your password: 
@@ -100,3 +84,25 @@ Publish to public PyPI
      Uploading aws-orgs-0.3.0.tar.gz
 
 #. Visit ``pypi.org`` and verify your release: https://pypi.org/project/aws-orgs/
+
+
+Tag and push to Github
+----------------------
+
+#. Be sure to commit the version update any other changes you made during package validation::
+
+     > git commit -am 'release 0.3.0'
+     [master 04c3946] release 0.3.0
+
+#. Create a git tag for the new release::
+
+     > git tag -a -m 'Release 0.3.0'  0.3.0
+
+#. Push to master on github along with the new tag::
+
+     > git push ucopacme master --tags
+     To github.com:ucopacme/aws-orgs.git
+        0035e5f..04c3946  master -> master
+      * [new tag]         0.3.0 -> 0.3.0
+
+
