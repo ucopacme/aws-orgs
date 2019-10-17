@@ -134,10 +134,10 @@ def delete_policy(policy):
 
 
 def update_user_tags(iam_client, user, tags):
-    tagkeys = [tag['Key'] for tag in user.tags]
+    tag_keys = [tag['Key'] for tag in user.tags]
     iam_client.untag_user(
         UserName=user.name,
-        TagKeys=tagkeys,
+        TagKeys=tag_keys,
     )
     iam_client.tag_user(
         UserName=user.name,
@@ -726,16 +726,20 @@ def update_role_tags(log, args, iam_client, account_name, role, tags):
     '''
     log.debug("role: '{}', account: '{}', role tags: {}; spec tags: {}".format(
             role.name, account_name, role.tags, tags))
+    tag_keys = [tag['Key'] for tag in role.tags]
     if tags is not None and role.tags != tags:
         log.info("Updating tags in role '{}' in account '{}'".format(
                 role.name, account_name))
         if args['--exec']:
+            iam_client.untag_role(
+                RoleName=role.role_name,
+                TagKeys=tag_keys,
+            )
             iam_client.tag_role(
                 RoleName=role.role_name,
                 Tags=tags,
             )
     if tags is None and role.tags:
-        tag_keys = [tag['Key'] for tag in role.tags]
         log.info("Removing tags {} from role '{}' in account '{}'".format(
                 tag_keys, role.name, account_name))
         if args['--exec']:
