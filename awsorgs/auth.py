@@ -525,7 +525,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
     # make list of existing group policies which match this role name
     group_policies = [
         p.policy_name for p in list(group.policies.all())
-        if d_spec['RoleName'] in p.policy_name.split('-')
+        if p.policy_name.endswith(d_spec['RoleName'])
     ]
 
     # test if delegation should be deleted
