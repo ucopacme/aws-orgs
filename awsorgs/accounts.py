@@ -154,39 +154,38 @@ def set_account_alias(account, log, args, account_spec, role):
     Set an alias on an account.  Use 'Alias' attribute from account spec
     if provided.  Otherwise set the alias to the account name.
     """
-    if account['Status'] == 'ACTIVE':
-        a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
-        if a_spec and 'Alias' in a_spec:
-            proposed_alias = a_spec['Alias']
-        else:
-            proposed_alias = account['Name'].lower()
-        credentials = get_assume_role_credentials(
-                account['Id'], args['--org-access-role'])
-        if isinstance(credentials, RuntimeError):
-            log.error(credentials)
-            return
-        else:
-            iam_client = boto3.client('iam', **credentials)
-        aliases = iam_client.list_account_aliases()['AccountAliases']
-        log.debug('account_name: %s; aliases: %s' % (account['Name'], aliases))
-        if not aliases:
-            log.info("setting account alias to '%s' for account '%s'" %
-                    (proposed_alias, account['Name']))
-            if args['--exec']:
-                try:
-                    iam_client.create_account_alias(AccountAlias=proposed_alias)
-                except Exception as e:
-                    log.error(e)
-        elif aliases[0] != proposed_alias:
-            log.info("resetting account alias for account '%s' to '%s'; "
-                    "previous alias was '%s'" %
-                    (account['Name'], proposed_alias, aliases[0]))
-            if args['--exec']:
-                iam_client.delete_account_alias(AccountAlias=aliases[0])
-                try:
-                    iam_client.create_account_alias(AccountAlias=proposed_alias)
-                except Exception as e:
-                    log.error(e)
+    if not is_valid_account(account, account_spec):
+        return
+    proposed_alias = lookup(account_spec['accounts'], 'Name', account['Name'], 'Alias')
+    if proposed_alias is None:
+         proposed_alias = account['Name'].lower()
+    credentials = get_assume_role_credentials(
+            account['Id'], args['--org-access-role'])
+    if isinstance(credentials, RuntimeError):
+        log.error(credentials)
+        return
+    else:
+        iam_client = boto3.client('iam', **credentials)
+    aliases = iam_client.list_account_aliases()['AccountAliases']
+    log.debug('account_name: %s; aliases: %s' % (account['Name'], aliases))
+    if not aliases:
+        log.info("setting account alias to '%s' for account '%s'" %
+                (proposed_alias, account['Name']))
+        if args['--exec']:
+            try:
+                iam_client.create_account_alias(AccountAlias=proposed_alias)
+            except Exception as e:
+                log.error(e)
+    elif aliases[0] != proposed_alias:
+        log.info("resetting account alias for account '%s' to '%s'; "
+                "previous alias was '%s'" %
+                (account['Name'], proposed_alias, aliases[0]))
+        if args['--exec']:
+            iam_client.delete_account_alias(AccountAlias=aliases[0])
+            try:
+                iam_client.create_account_alias(AccountAlias=proposed_alias)
+            except Exception as e:
+                log.error(e)
 
 
 def scan_invited_accounts(log, org_client):
