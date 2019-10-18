@@ -114,7 +114,7 @@ def transform_tag_spec_into_list_of_dict(tag_spec):
     return []
 
 
-def update_account_tags(org_client, account, account_tags, tags_spec):
+def update_account_tags(org_client, account, account_tags, tag_spec):
     tagkeys = [tag['Key'] for tag in account_tags]
     org_client.untag_resource(
         ResourceId=account['Id'],
@@ -122,7 +122,7 @@ def update_account_tags(org_client, account, account_tags, tags_spec):
     )
     org_client.tag_resource(
         ResourceId=account['Id'],
-        Tags=tag_spec_list,
+        Tags=tag_spec,
     )
 
 
@@ -134,16 +134,19 @@ def set_account_tags(account, log, args, account_spec, org_client):
     account_tags = org_client.list_tags_for_resource(ResourceId=account['Id'])['Tags']
     log.debug('tag_spec for account "{}":\n{}'.format(
         account['Name'],
-        yamlfmt(tag_spec_list),
+        yamlfmt(tag_spec),
     ))
     log.debug('account_tags for account "{}":\n{}'.format(
         account['Name'],
         yamlfmt(account_tags),
     ))
-    if account_tags != tag_spec_list:
-        log.info('Updating tags for account "{}"'.format(account['Name']))
+    if account_tags != tag_spec:
+        log.info('Updating tags for account "{}":\n{}'.format(
+            account['Name'],
+            string_differ(yamlfmt(account_tags), yamlfmt(tag_spec)),
+        ))
         if args['--exec']:
-            update_account_tags(org_client, account, account_tags, tags_spec)
+            update_account_tags(org_client, account, account_tags, tag_spec)
 
 
 def set_account_alias(account, log, args, account_spec, role):
