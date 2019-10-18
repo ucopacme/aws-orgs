@@ -99,38 +99,51 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                      log.warn("Account creation still pending. Moving on!")
 
 
-def transform_tag_spec(tag_spec):
-    return [{'Key': k, 'Value': v} for k, v in tag_spec.items()]
+def is_valid_account(account, account_spec):
+    if account['Status'] != 'ACTIVE':
+        return False
+    a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
+    if a_spec is None:
+        return False
+    return True
 
-'''
-def update_account_tags(org_client, account_tags, tag_spec_list):
 
-    tagkeys = [tag['Key'] for tag in user.tags]
-    iam_client.untag_user(
-        UserName=user.name,
+def transform_tag_spec_into_list_of_dict(tag_spec):
+    if tag_spec is not None:
+        return [{'Key': k, 'Value': v} for k, v in tag_spec.items()]
+    return []
+
+
+def update_account_tags(org_client, account, account_tags, tags_spec):
+    tagkeys = [tag['Key'] for tag in account_tags]
+    org_client.untag_resource(
+        ResourceId=account['Id'],
         TagKeys=tagkeys,
     )
-    iam_client.tag_user(
-        UserName=user.name,
-        Tags=tags,
+    org_client.tag_resource(
+        ResourceId=account['Id'],
+        Tags=tag_spec_list,
     )
-'''
 
 
 def set_account_tags(account, log, args, account_spec, org_client):
-    if account['Status'] == 'ACTIVE':
-        a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
-        if a_spec is not None:
-            log.info('Setting tags for account "{}"'.format(account['Name']))
-            tag_spec = a_spec.get('Tags')
-            log.info('tag_spec:\n{}'.format(yamlfmt(tag_spec)))
-            tag_spec_list = []
-            if tag_spec is not None:
-                tag_spec_list = transform_tag_spec(tag_spec)
-            log.info('tag_spec_list:\n{}'.format(yamlfmt(tag_spec_list)))
-
-            account_tags = org_client.list_tags_for_resource(ResourceId=account['Id'])['Tags']
-            log.info('account_tags:\n{}'.format(yamlfmt(account_tags)))
+    if not is_valid_account(account, account_spec):
+        return
+    tag_spec = lookup(account_spec['accounts'], 'Name', account['Name'], 'Tags')
+    tag_spec = transform_tag_spec_into_list_of_dict(tag_spec)
+    account_tags = org_client.list_tags_for_resource(ResourceId=account['Id'])['Tags']
+    log.debug('tag_spec for account "{}":\n{}'.format(
+        account['Name'],
+        yamlfmt(tag_spec_list),
+    ))
+    log.debug('account_tags for account "{}":\n{}'.format(
+        account['Name'],
+        yamlfmt(account_tags),
+    ))
+    if account_tags != tag_spec_list:
+        log.info('Updating tags for account "{}"'.format(account['Name']))
+        if args['--exec']:
+            update_account_tags(org_client, account, account_tags, tags_spec)
 
 
 def set_account_alias(account, log, args, account_spec, role):
