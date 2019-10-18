@@ -4,7 +4,7 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts (report|create|alias|invite) [--config FILE]
+  awsaccounts (report|create|update|invite) [--config FILE]
                                            [--spec-dir PATH] 
                                            [--master-account-id ID]
                                            [--auth-account-id ID]
@@ -16,7 +16,7 @@ Usage:
 Modes of operation:
   report         Display organization status report.
   create         Create new accounts in AWS Org per specifation.
-  alias          Set account alias for each account in Org per specifation.
+  update         Set account alias and tags for each account per specifation.
   invite         Invite another account to join Org as a member account. 
 
 Options:
@@ -50,7 +50,6 @@ import awsorgs
 from awsorgs.utils import *
 from awsorgs.spec import *
 
-S3_ACCOUNT_BUCKET = 'jjhsu-awsorgs-bucket'
 
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
@@ -98,6 +97,40 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                     counter += 1
                 if counter == maxtries and creation['State'] == 'IN_PROGRESS':
                      log.warn("Account creation still pending. Moving on!")
+
+
+def transform_tag_spec(tag_spec):
+    return [{'Key': k, 'Value': v} for k, v in tag_spec.items()]
+
+'''
+def update_account_tags(org_client, account_tags, tag_spec_list):
+
+    tagkeys = [tag['Key'] for tag in user.tags]
+    iam_client.untag_user(
+        UserName=user.name,
+        TagKeys=tagkeys,
+    )
+    iam_client.tag_user(
+        UserName=user.name,
+        Tags=tags,
+    )
+'''
+
+
+def set_account_tags(account, log, args, account_spec, org_client):
+    if account['Status'] == 'ACTIVE':
+        a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
+        if a_spec is not None:
+            log.info('Setting tags for account "{}"'.format(account['Name']))
+            tag_spec = a_spec.get('Tags')
+            log.info('tag_spec:\n{}'.format(yamlfmt(tag_spec)))
+            tag_spec_list = []
+            if tag_spec is not None:
+                tag_spec_list = transform_tag_spec(tag_spec)
+            log.info('tag_spec_list:\n{}'.format(yamlfmt(tag_spec_list)))
+
+            account_tags = org_client.list_tags_for_resource(ResourceId=account['Id'])['Tags']
+            log.info('account_tags:\n{}'.format(yamlfmt(account_tags)))
 
 
 def set_account_alias(account, log, args, account_spec, role):
@@ -289,9 +322,12 @@ def main():
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
 
-    if args['alias']:
+    if args['update']:
         queue_threads(log, deployed_accounts, set_account_alias,
                 f_args=(log, args, account_spec, args['--org-access-role']),
+                thread_count=10)
+        queue_threads(log, deployed_accounts, set_account_tags,
+                f_args=(log, args, account_spec, org_client),
                 thread_count=10)
 
     if args['invite']:

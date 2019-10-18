@@ -45,12 +45,6 @@ sc_policies:
   schema:
     type: dict
     schema: sc_policy
-teams:
-  required: False
-  type: list
-  schema:
-    type: dict
-    schema: team
 accounts:
   required: False
   type: list
@@ -134,9 +128,6 @@ organizational_units:
 sc_policies:
   required: True
   type: list
-teams:
-  required: True
-  type: list
 accounts:
   required: True
   type: list
@@ -215,25 +206,6 @@ Ensure:
   - absent
 """
 
-TEAM_SCHEMA = """
-Name:
-  required: True
-  type: string
-Description:
-  required: True
-  type: string
-BusinessContacts:
-  required: True
-  type: list
-  schema:
-    type: string
-TechnicalContacts:
-  required: True
-  type: list
-  schema:
-    type: string
-"""
-
 ACCOUNT_SCHEMA = """
 Name:
   required: True
@@ -241,12 +213,15 @@ Name:
 Email:
   required: False
   type: string
-Team:
-  required: True
-  type: string
 Alias:
   required: False
   type: string
+Tags:
+  required: False
+  nullable: True
+  type: dict
+  allow_unknown:
+    type: string
 """
 
 USER_SCHEMA = """
@@ -443,7 +418,6 @@ Value:
 def file_validator(log):
     schema_registry.add('organizational_unit', yaml.safe_load(ORGANIZATIONAL_UNIT_SCHEMA))
     schema_registry.add('sc_policy', yaml.safe_load(POLICY_SCHEMA))
-    schema_registry.add('team', yaml.safe_load(TEAM_SCHEMA))
     schema_registry.add('account', yaml.safe_load(ACCOUNT_SCHEMA))
     schema_registry.add('user', yaml.safe_load(USER_SCHEMA))
     schema_registry.add('group', yaml.safe_load(GROUP_SCHEMA))
