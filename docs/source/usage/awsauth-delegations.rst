@@ -25,6 +25,7 @@ Actions:
 
 - `Create a cross account access delegation`_
 - `Update the delegation to apply to all accounts`_
+- `Update attributes of a delegation`_
 - `Exclude some accounts from a delegation`_
 - `Attach a custom policy`_
 - `Modify a custom policy`_
@@ -54,6 +55,7 @@ Example Diff::
   +    Ensure: present
   +    Description: testing cross account delegation
   +    TrustingAccount:
+  +    - dev1
   +    TrustedGroup: testers
   +    RequireMFA: True
   +    Policies:
@@ -90,9 +92,7 @@ Example Diff::
        Ensure: present
        Description: testing cross account delegation
   -    TrustingAccount:
-  -      - blee-dev
-  -      - blee-poc
-  -      - blee-prod
+  -    - dev1
   +    TrustingAccount: ALL
        TrustedGroup: testers
        RequireMFA: True
@@ -109,6 +109,48 @@ Implement and review changes::
   $ awsauth report --roles  | egrep "^Account|TestersRole"
   $ aws iam list-group-policies --group-name testers
   $ aws iam get-group-policy --group-name testers --policy-name AllowAssumeRole-TestersRole
+
+
+Update attributes of a delegation
+*********************************
+
+File to edit: delegations.yaml
+
+- set a custom ``Path``
+- alter the ``Description``
+- add an additional policy 
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
+  diff --git a/delegations.yaml b/delegations.yaml
+  index 282db35..e46ac9e 100644
+  --- a/delegations.yaml
+  +++ b/delegations.yaml
+  @@ -104,14 +104,10 @@ delegations:
+     - RoleName: TestersRole
+       Ensure: present
+  -    Description: testing cross account delegation
+  +    Description: testing cross account delegation role
+  +    Path: testing
+       TrustingAccount: ALL
+       TrustedGroup: testers
+       RequireMFA: True
+       Policies:
+       - ReadOnlyAccess
+  +    - ViewBilling
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsauth delegations
+
+Implement and review changes::  
+
+  $ awsauth delegations --exec
+  $ awsauth report --roles  | egrep "^Account|TestersRole"
+  $ aws iam get-role --role-name TestersRole | egrep "Path|Description"
+  $ aws iam list-attached-role-policies --role-name TestersRole
+
 
 
 Exclude some accounts from a delegation
@@ -130,8 +172,7 @@ Example Diff::
        Description: testing cross account delegation
        TrustingAccount: ALL
   +    ExcludeAccounts: 
-  +      - blee-dev
-  +      - blee-prod
+  +    - master
        TrustedGroup: testers
        RequireMFA: True
 
