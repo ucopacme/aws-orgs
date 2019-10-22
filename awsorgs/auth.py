@@ -134,15 +134,16 @@ def delete_policy(policy):
 
 
 def update_user_tags(iam_client, user, tags):
-    tagkeys = [tag['Key'] for tag in user.tags]
-    iam_client.untag_user(
-        UserName=user.name,
-        TagKeys=tagkeys,
-    )
-    iam_client.tag_user(
-        UserName=user.name,
-        Tags=tags,
-    )
+    if user.tags is not None:
+        iam_client.untag_user(
+            UserName=user.name,
+            TagKeys=[tag['Key'] for tag in user.tags],
+        )
+    if tags is not None:
+        iam_client.tag_user(
+            UserName=user.name,
+            Tags=tags,
+        )
 
 
 def create_users(credentials, args, log, deployed, auth_spec):
@@ -524,7 +525,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
     # make list of existing group policies which match this role name
     group_policies = [
         p.policy_name for p in list(group.policies.all())
-        if d_spec['RoleName'] in p.policy_name.split('-')
+        if p.policy_name.endswith(d_spec['RoleName'])
     ]
 
     # test if delegation should be deleted
@@ -720,6 +721,7 @@ def get_tags_from_policy_set(auth_spec, d_spec):
     return None
 
 
+#<<<<<<< HEAD
 def update_role_tags(args, log, iam_client, account_name, role, tags):
     '''
     Compare existing role tags to what is in spec and adjust as needed
@@ -730,19 +732,46 @@ def update_role_tags(args, log, iam_client, account_name, role, tags):
         log.info("Updating tags in role '{}' in account '{}'".format(
                 role.name, account_name))
         if args['--exec']:
-            iam_client.tag_role(
-                RoleName=role.role_name,
-                Tags=tags,
-            )
-    if tags is None and role.tags:
-        tag_keys = [tag['Key'] for tag in role.tags]
-        log.info("Removing tags {} from role '{}' in account '{}'".format(
-                tag_keys, role.name, account_name))
-        if args['--exec']:
-            iam_client.untag_role(
-                RoleName=role.role_name,
-                TagKeys=tag_keys,
-            )
+            if role.tags is not None:
+                iam_client.untag_role(
+                    RoleName=role.role_name,
+                    TagKeys=[tag['Key'] for tag in role.tags],
+                )
+            if tags is not None:
+                iam_client.tag_role(
+                    RoleName=role.role_name,
+                    Tags=tags,
+                )
+
+
+
+
+#            iam_client.tag_role(
+#                RoleName=role.role_name,
+#                Tags=tags,
+#            )
+#    if tags is None and role.tags:
+#        tag_keys = [tag['Key'] for tag in role.tags]
+#        log.info("Removing tags {} from role '{}' in account '{}'".format(
+#                tag_keys, role.name, account_name))
+#        if args['--exec']:
+#            iam_client.untag_role(
+#                RoleName=role.role_name,
+#                TagKeys=tag_keys,
+#            )
+#=======
+#def update_role_tags(iam_client, role, tags):
+#    if role.tags is not None:
+#        iam_client.untag_role(
+#            RoleName=role.role_name,
+#            TagKeys=[tag['Key'] for tag in role.tags],
+#        )
+#    if tags is not None:
+#        iam_client.tag_role(
+#            RoleName=role.role_name,
+#            Tags=tags,
+#        )
+#>>>>>>> prerelease-0.3.1
 
 
 def create_role(args, log, role, iam_client, d_spec, account_name, path_spec, tags, policy_doc):
