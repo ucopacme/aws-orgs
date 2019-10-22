@@ -18,6 +18,9 @@
 #                       trusting accounts and removes assume role policies
 #                       from the trusted group.
 #   Description (str):  A decription applied to the IAM role.
+#   Path (str):         Path prefix for the IAM user resource name. (optional)
+#                       If Path is not fully qualified (i.e. starts with '/'),
+#                       awsauth prepends the 'default_path' to Path.
 #   TrustingAccount (list(str), 'ALL'):
 #                       List of trusting accounts within the scope of the
 #                       delegation.  If set to 'ALL', all accounts in the

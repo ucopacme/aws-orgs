@@ -721,60 +721,140 @@ def get_tags_from_policy_set(auth_spec, d_spec):
     return None
 
 
-def update_role_tags(iam_client, role, tags):
-    if role.tags is not None:
-        iam_client.untag_role(
-            RoleName=role.role_name,
-            TagKeys=[tag['Key'] for tag in role.tags],
-        )
-    if tags is not None:
-        iam_client.tag_role(
-            RoleName=role.role_name,
-            Tags=tags,
-        )
-
-
-def manage_delegation_role(account, args, log, auth_spec, deployed,
-            trusting_accounts, d_spec):
-    """
-    Create and manage a cross account access delegetion role in an
-    account based on delegetion specification.
-    """
-    account_name = account['Name']
-    policy_list = get_policies_from_spec(log, auth_spec, d_spec)
-    tags = get_tags_from_policy_set(auth_spec, d_spec)
-    log.debug('account: %s, role: %s, policies: %s' % (account_name, d_spec['RoleName'], policy_list))
-    credentials = get_assume_role_credentials(
-            account['Id'],
-            args['--org-access-role'])
-    if isinstance(credentials, RuntimeError):
-        log.error(credentials)
-        return
-    iam_client = boto3.client('iam', **credentials)
-    iam_resource = boto3.resource('iam', **credentials)
-    role = iam_resource.Role(d_spec['RoleName'])
-
-    # check if role should not exist
-    if account_name not in trusting_accounts or ensure_absent(d_spec):
-        try:
-            role.load()
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchEntity':
-                return
-            else:
-                raise e
-        except:
-            raise
-        # delete delegation role
-        log.info("Deleting role '%s' from account '%s'" %
-                (d_spec['RoleName'], account_name))
+def update_role_tags(args, log, iam_client, account_name, role, tags):
+    '''
+    Compare existing role tags to what is in spec and adjust as needed
+    '''
+    log.debug("role: '{}', account: '{}', role tags: {}; spec tags: {}".format(
+            role.name, account_name, role.tags, tags))
+    if tags is not None and role.tags != tags:
+        log.info("Updating tags in role '{}' in account '{}'".format(
+                role.name, account_name))
         if args['--exec']:
-            for p in list(role.attached_policies.all()):
-                role.detach_policy(PolicyArn=p.arn)
-            role.delete()
-        return
+            if role.tags is not None:
+                iam_client.untag_role(
+                    RoleName=role.role_name,
+                    TagKeys=[tag['Key'] for tag in role.tags],
+                )
+            if tags is not None:
+                iam_client.tag_role(
+                    RoleName=role.role_name,
+                    Tags=tags,
+                )
 
-    # else: assemble assume role policy document for delegation role
+
+def create_role(args, log, role, iam_client, d_spec, account_name, path_spec, tags, policy_doc):
+    log.info("Creating role '{}' in account '{}'".format(d_spec['RoleName'], account_name))
+    if args['--exec']:
+        create_role_attributes=dict(
+            Description=d_spec['Description'],
+            Path=path_spec,
+            RoleName=d_spec['RoleName'],
+            MaxSessionDuration=d_spec['Duration'],
+            AssumeRolePolicyDocument=json.dumps(policy_doc),
+        )
+        if tags is not None:
+            create_role_attributes['Tags']=tags
+        iam_client.create_role(**create_role_attributes)
+        role.load()
+        return role
+
+
+def delete_role(args, log, role, account_name):
+    log.info("Deleting role '{}' from account '{}'".format(role.role_name, account_name))
+    if args['--exec']:
+        for p in list(role.attached_policies.all()):
+            role.detach_policy(PolicyArn=p.arn)
+        role.delete()
+
+
+def update_role_path(args, log, role, iam_client, account_name, d_spec, path_spec, tags, policy_doc):
+    if role.path != path_spec:
+        log.info("Updating path for role '{}' in account '{}'".format(
+            role.role_name,
+            account_name,
+        ))
+        if args['--exec']:
+            delete_role(args, log, role, account_name)
+            create_role(args, log, role, iam_client, d_spec, account_name, path_spec, tags, policy_doc)
+
+
+def update_role_policy_document(args, log, role, iam_client, account_name, policy_doc):
+    if role.assume_role_policy_document != policy_doc:
+        log.info("Updating policy document in role '{}' in account '{}':\n{}".format(
+            role.role_name, 
+            account_name,
+            string_differ(
+                yamlfmt(role.assume_role_policy_document),
+                yamlfmt(policy_doc),
+            ),
+        ))
+        if args['--exec']:
+            iam_client.update_assume_role_policy(
+                RoleName=role.role_name,
+                PolicyDocument=json.dumps(policy_doc),
+            )
+
+
+def update_role_description(args, log, role, iam_client, account_name, role_description):
+    if role.description != role_description:
+        log.info("Updating description in role '{}' in account '{}'".format(
+            role.role_name,
+            account_name,
+        ))
+        if args['--exec']:
+            iam_client.update_role_description(
+                RoleName=role.role_name,
+                Description=role_description,
+            )
+
+
+def update_role_duration(args, log, role, iam_client, account_name, role_duration):
+    if role.max_session_duration != role_duration:
+        log.info("Updating max session duration in role '{}' in account '{}'".format(
+            role.role_name,
+            account_name,
+        ))
+        if args['--exec']:
+            iam_client.update_role(
+                RoleName=role.role_name,
+                MaxSessionDuration=role_duration,
+            )
+
+
+def manage_attached_role_policies(args, log, role, iam_client, policy_list, account_name, auth_spec):
+    attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
+    # attach missing policies
+    for policy_name in policy_list:
+        if not policy_name in attached_policies:
+            policy_arn = get_policy_arn(iam_client, policy_name)
+            if policy_arn is None:
+                policy_arn = manage_custom_policy(iam_client, account_name, policy_name,
+                        args, log, auth_spec)
+            log.info("Attaching policy '{}' to role '{}' in account '{}'".format(
+                policy_name,
+                role.name,
+                account_name,
+            ))
+            if args['--exec'] and policy_arn:
+                role.attach_policy(PolicyArn=policy_arn)
+        elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
+            manage_custom_policy(iam_client, account_name, policy_name,
+                    args, log, auth_spec)
+    # datach obsolete policies
+    for policy_name in attached_policies:
+        if not policy_name in policy_list:
+            policy_arn = get_policy_arn(iam_client, policy_name)
+            log.info("Detaching policy '{}' from role '{}' in account '{}'".format(
+                policy_name,
+                role.name,
+                account_name,
+            ))
+            if args['--exec'] and policy_arn:
+                role.detach_policy(PolicyArn=policy_arn)
+
+
+def get_assume_role_policy_document(d_spec, deployed, auth_spec):
     if 'TrustedAccount' in d_spec and d_spec['TrustedAccount']:
         trusted_account = lookup(deployed['accounts'], 'Name',
                 d_spec['TrustedAccount'], 'Id')
@@ -791,102 +871,57 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
     if mfa:
         statement['Condition'] = {
                 'Bool':{'aws:MultiFactorAuthPresent':'true'}}
-    policy_doc = dict(Version='2012-10-17', Statement=[statement])
+    return dict(Version='2012-10-17', Statement=[statement])
 
-    # munge session duration
+
+def manage_delegation_role(account, args, log, auth_spec, deployed,
+            trusting_accounts, d_spec):
+    """
+    Create and manage a cross account access delegetion role in an
+    account based on delegetion specification.
+    """
+    account_name = account['Name']
+    policy_list = get_policies_from_spec(log, auth_spec, d_spec)
+    log.debug('account: {}, role: {}, policies: {}'.format(
+        account_name,
+        d_spec['RoleName'],
+        policy_list,
+    ))
+    path_spec = munge_path(auth_spec['default_path'], d_spec)
+    tags = get_tags_from_policy_set(auth_spec, d_spec)
     if not 'Duration' in d_spec:
         d_spec['Duration'] = 3600
-
-    # get iam role object.  create role if it does not exist (i.e. won't load)
+    policy_doc = get_assume_role_policy_document(d_spec, deployed, auth_spec)
+    credentials = get_assume_role_credentials(
+            account['Id'],
+            args['--org-access-role'])
+    if isinstance(credentials, RuntimeError):
+        log.error(credentials)
+        return
+    iam_client = boto3.client('iam', **credentials)
+    iam_resource = boto3.resource('iam', **credentials)
+    role = iam_resource.Role(d_spec['RoleName'])
+    if account_name not in trusting_accounts or ensure_absent(d_spec):
+        try:
+            role.load()
+            delete_role(args, log, role, account_name)
+            return
+        except role.meta.client.exceptions.NoSuchEntityException:
+            return
     try:
         role.load()
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchEntity':
-            log.info("Creating role '%s' in account '%s'" %
-                    (d_spec['RoleName'], account_name))
-            if args['--exec']:
-                create_role_attributes=dict(
-                    Description=d_spec['Description'],
-                    Path=munge_path(auth_spec['default_path'], d_spec),
-                    RoleName=d_spec['RoleName'],
-                    MaxSessionDuration=d_spec['Duration'],
-                    AssumeRolePolicyDocument=json.dumps(policy_doc),
-                )
-                if tags is not None:
-                    create_role_attributes['Tags']=tags
-                iam_client.create_role(**create_role_attributes)
-                role.load()
-                for policy_name in policy_list:
-                    policy_arn = get_policy_arn(iam_client, policy_name)
-                    if policy_arn is None:
-                        policy_arn = manage_custom_policy(iam_client, account_name,
-                                policy_name, args, log, auth_spec)
-                    log.info("Attaching policy '%s' to role '%s' "
-                            "in account '%s':\n%s" % (
-                                    policy_name, 
-                                    d_spec['RoleName'], 
-                                    account_name,
-                                    yamlfmt(policy_doc)))
-                    if args['--exec'] and policy_arn:
-                        role.attach_policy(PolicyArn=policy_arn)
-            return
-
-    # update delegation role if needed
-    if role.assume_role_policy_document != policy_doc:
-        log.info("Updating policy document in role '%s' in account '%s':\n%s" % (
-                d_spec['RoleName'], 
-                account_name,
-                string_differ(
-                        yamlfmt(role.assume_role_policy_document),
-                        yamlfmt(policy_doc))))
-        if args['--exec']:
-            iam_client.update_assume_role_policy(
-                RoleName=role.role_name,
-                PolicyDocument=json.dumps(policy_doc))
-    if role.description != d_spec['Description']:
-        log.info("Updating description in role '%s' in account '%s'" %
-                (d_spec['RoleName'], account_name))
-        if args['--exec']:
-            iam_client.update_role_description(
-                RoleName=role.role_name,
-                Description=d_spec['Description'])
-    if role.max_session_duration != d_spec['Duration']:
-        log.info("Updating max session duration in role '%s' in account '%s'" %
-                (d_spec['RoleName'], account_name))
-        if args['--exec']:
-            iam_client.update_role(
-                RoleName=role.role_name,
-                MaxSessionDuration=d_spec['Duration'])
-    if role.tags != tags:
-        log.info("Updating tags in role '{}' in account '{}'".format(
-                role.name, account_name))
-        if args['--exec']:
-            update_role_tags(iam_client, role, tags)
-
-    # manage policy attachments
-    attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
-    for policy_name in policy_list:
-        # attach missing policies
-        if not policy_name in attached_policies:
-            policy_arn = get_policy_arn(iam_client, policy_name)
-            if policy_arn is None:
-                policy_arn = manage_custom_policy(iam_client, account_name, policy_name,
-                        args, log, auth_spec)
-            log.info("Attaching policy '%s' to role '%s' in account '%s'" %
-                    (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec'] and policy_arn:
-                role.attach_policy(PolicyArn=policy_arn)
-        elif lookup(auth_spec['custom_policies'], 'PolicyName',policy_name):
-            manage_custom_policy(iam_client, account_name, policy_name,
-                    args, log, auth_spec)
-    for policy_name in attached_policies:
-        # datach obsolete policies
-        if not policy_name in policy_list:
-            policy_arn = get_policy_arn(iam_client, policy_name)
-            log.info("Detaching policy '%s' from role '%s' in account '%s'" %
-                    (policy_name, d_spec['RoleName'], account_name))
-            if args['--exec'] and policy_arn:
-                role.detach_policy(PolicyArn=policy_arn)
+        update_role_tags(args, log, iam_client, account_name, role, tags)
+        update_role_policy_document(args, log, role, iam_client, account_name, policy_doc)
+        update_role_description(args, log, role, iam_client, account_name, d_spec['Description'])
+        update_role_duration(args, log, role, iam_client, account_name, d_spec['Duration'])
+        update_role_path(args, log, role, iam_client, account_name, d_spec, path_spec, tags, policy_doc)
+        if role is not None:
+            manage_attached_role_policies(args, log, role, iam_client, policy_list, account_name, auth_spec)
+    except role.meta.client.exceptions.NoSuchEntityException:
+        role = create_role(args, log, role, iam_client, d_spec, account_name, path_spec, tags, policy_doc)
+        if role is not None:
+            manage_attached_role_policies(args, log, role, iam_client, policy_list, account_name, auth_spec)
+    return
 
 
 def manage_delegations(d_spec, args, log, deployed, auth_spec):

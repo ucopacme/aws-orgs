@@ -252,6 +252,7 @@ Name:
 Path:
   required: False
   type: string
+  nullable: True
 Members:
   required: False
   nullable: True
@@ -368,6 +369,7 @@ PolicySet:
 Path:
   required: False
   type: string
+  nullable: True
 Duration:
   required: False
   type: integer
