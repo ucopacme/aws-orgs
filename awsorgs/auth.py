@@ -134,15 +134,16 @@ def delete_policy(policy):
 
 
 def update_user_tags(iam_client, user, tags):
-    tagkeys = [tag['Key'] for tag in user.tags]
-    iam_client.untag_user(
-        UserName=user.name,
-        TagKeys=tagkeys,
-    )
-    iam_client.tag_user(
-        UserName=user.name,
-        Tags=tags,
-    )
+    if user.tags is not None:
+        iam_client.untag_user(
+            UserName=user.name,
+            TagKeys=[tag['Key'] for tag in user.tags],
+        )
+    if tags is not None:
+        iam_client.tag_user(
+            UserName=user.name,
+            Tags=tags,
+        )
 
 
 def create_users(credentials, args, log, deployed, auth_spec):
@@ -524,7 +525,7 @@ def set_group_assume_role_policies(args, log, deployed, auth_spec, d_spec):
     # make list of existing group policies which match this role name
     group_policies = [
         p.policy_name for p in list(group.policies.all())
-        if d_spec['RoleName'] in p.policy_name.split('-')
+        if p.policy_name.endswith(d_spec['RoleName'])
     ]
 
     # test if delegation should be deleted
@@ -720,29 +721,17 @@ def get_tags_from_policy_set(auth_spec, d_spec):
     return None
 
 
-def update_role_tags(log, args, iam_client, account_name, role, tags):
-    '''
-    Compare existing role tags to what is in spec and adjust as needed
-    '''
-    log.debug("role: '{}', account: '{}', role tags: {}; spec tags: {}".format(
-            role.name, account_name, role.tags, tags))
-    if tags is not None and role.tags != tags:
-        log.info("Updating tags in role '{}' in account '{}'".format(
-                role.name, account_name))
-        if args['--exec']:
-            iam_client.tag_role(
-                RoleName=role.role_name,
-                Tags=tags,
-            )
-    if tags is None and role.tags:
-        tag_keys = [tag['Key'] for tag in role.tags]
-        log.info("Removing tags {} from role '{}' in account '{}'".format(
-                tag_keys, role.name, account_name))
-        if args['--exec']:
-            iam_client.untag_role(
-                RoleName=role.role_name,
-                TagKeys=tag_keys,
-            )
+def update_role_tags(iam_client, role, tags):
+    if role.tags is not None:
+        iam_client.untag_role(
+            RoleName=role.role_name,
+            TagKeys=[tag['Key'] for tag in role.tags],
+        )
+    if tags is not None:
+        iam_client.tag_role(
+            RoleName=role.role_name,
+            Tags=tags,
+        )
 
 
 def manage_delegation_role(account, args, log, auth_spec, deployed,
@@ -868,7 +857,11 @@ def manage_delegation_role(account, args, log, auth_spec, deployed,
             iam_client.update_role(
                 RoleName=role.role_name,
                 MaxSessionDuration=d_spec['Duration'])
-    update_role_tags(log, args, iam_client, account_name, role, tags)
+    if role.tags != tags:
+        log.info("Updating tags in role '{}' in account '{}'".format(
+                role.name, account_name))
+        if args['--exec']:
+            update_role_tags(iam_client, role, tags)
 
     # manage policy attachments
     attached_policies = [p.policy_name for p in list(role.attached_policies.all())]
