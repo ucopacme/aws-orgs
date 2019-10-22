@@ -12,99 +12,36 @@ Prerequisites:
 
 
 
-AWS account alias
------------------
-
 Commands used:
 
-- awsaccounts alias
-- awsaccounts alias --exec
 - awsaccounts report
+- awsaccounts create
+- awsaccounts create --exec
+- awsaccounts update
+- awsaccounts update --exec
 
 
-spec files impacted:
+Spec files impacted:
 
 - ~/.awsorgs/config.yaml
-- spec_dir/account.yaml
+- spec_dir/accounts.yaml
 
 
 Actions Summary:
 
-- Define ``org_access_role`` in ``~/.awsorgs/config.yaml``
-- Define ``spec_dir/account.yaml``
-- ``awsaccounts alias``
-- ``awsaccounts alias --exec``
-- ``awsaccounts report``
+- `Report accounts in an AWS Organization`_
+- `Create a new AWS account`_
+- `Set or update AWS account alias`_
+- `Set or update AWS account tags`_
 
 
 
-Define ``org_access_role`` in ``~/.awsorgs/config.yaml``
-********************************************************
-
-Edit ``~/.awsorgs/config.yaml``::
-
-  org_access_role: OrganizationAccountAccessRole
-
-
-
-Show current account aliases
-****************************
-
-Run ``awsacccounts report``::
-
-  (py36) [jhsu@scrappy-aws ~]$ awsaccounts report
-
-  _______________________
-  Active Accounts in Org:
-
-  Name:               Alias               Id:             Email:
-  account-abcaws1   acct-abcaws1      123456789011    mail1@yahoo.com
-  account-abcaws2   acct-abcaws2      123456789022    mail2@yahoo.com
-  account-abcaws3   acct-abcaws3      123456789033    mail3@yahoo.com
-
-
-
-Edit ``spec_dir/account.yaml``
-******************************
-
-Change ``account-abcaws3`` alias to ``accnt-abcaws3``::
-
-  - Name: account-abcaws3
-  Team: team-abcaws3
-  Alias: accnt-abcaws3
-  Email: mail3@yahoo.com
-
-
-
-Dryrun awsaccounts alias
-************************
-
-Run ``awsaccount alias``::
-
-  (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias
-
-  [dryrun] awsorgs.utils: INFO     resetting account alias for account 'account-abcaws3' to 'accnt-abcaws3'; previous alias was 'acct-abcaws3'
-
-
-
-Exec awsaccounts alias
-**********************
-
-Run ``awsaccount alias --exec``::
-
-  (py36) [jhsu@scrappy-aws doc]$ awsaccounts alias --exec
-
-  awsorgs.utils: INFO     resetting account alias for account 'account-abcaws3' to 'accnt-abcaws3'; previous alias was 'acct-abcaws3'
-
-
-
-awsaccounts report
-******************
+Report accounts in an AWS Organization
+**************************************
 
 Run ``awsaccount report``::
 
   (py36) [jhsu@scrappy-aws doc]$ awsaccounts report
-
 
   _______________________
   Active Accounts in Org:
@@ -116,5 +53,100 @@ Run ``awsaccount report``::
 
 
 
+Create a new AWS account
+************************
 
+Edit file ``accounts.yaml``
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff account-tags 
+  diff --git a/accounts.yaml b/accounts.yaml
+  index 701d502..5224dc5 100644
+  --- a/accounts.yaml
+  +++ b/accounts.yaml
+  @@ -72,3 +72,7 @@ accounts:
+  +- Name: test3
+  +  Email: test3@example.com
+  +  Alias:
+  +  Tags:
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsaccounts create
+
+Implement and review changes  **!!WARNING!! D0 NOT RUN WITH --exec IF DOING
+FUNCTIONAL TESTING.  It is a pain to remove unwanted acounts.** ::  
+
+  $ awsaccounts create --exec
+  $ awsaccounts report
+
+
+
+Set or update AWS account alias
+*******************************
+
+Edit file ``accounts.yaml``
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
+  diff --git a/accounts.yaml b/accounts.yaml
+  index 701d502..7f3bb83 100644
+  --- a/accounts.yaml
+  +++ b/accounts.yaml
+  @@ -18,7 +18,7 @@ accounts:
+   - Name: Managment
+  -  Alias: ashely-managment
+  +  Alias: central-auth
+     Email: management@example.com
+     Tags:
+
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsaccounts update
+
+
+Implement and review changes::
+
+  $ awsaccounts update --exec
+  $ awsaccounts report
+
+
+Set or update AWS account tags
+******************************
+
+Edit file ``accounts.yaml``
+
+Example Diff::
+
+  ~/.awsorgs/spec.d> git diff
+  diff --git a/accounts.yaml b/accounts.yaml
+  index 7f3bb83..9f3f0d3 100644
+  --- a/accounts.yaml
+  +++ b/accounts.yaml
+  @@ -21,7 +21,8 @@ accounts:
+     Alias: central-auth
+     Email: management@ucop.edu
+     Tags:
+  -    owner: Ashley Gould
+  +    owner: Kumar Yegamani
+  +    service: infrastructure
+       application: identity_mgmt
+       environment: production
+
+Review proposed changes in ``dry-run`` mode::
+
+  $ awsaccounts update
+
+
+Implement::
+
+
+  $ awsaccounts update --exec
+
+Review changes - assume role into master account::
+
+  $ aws organizations list-tags-for-resource --resource-id <account_id>
 

@@ -4,7 +4,7 @@
 """Manage accounts in an AWS Organization.
 
 Usage:
-  awsaccounts (report|create|alias|invite) [--config FILE]
+  awsaccounts (report|create|update|invite) [--config FILE]
                                            [--spec-dir PATH] 
                                            [--master-account-id ID]
                                            [--auth-account-id ID]
@@ -16,7 +16,7 @@ Usage:
 Modes of operation:
   report         Display organization status report.
   create         Create new accounts in AWS Org per specifation.
-  alias          Set account alias for each account in Org per specifation.
+  update         Set account alias and tags for each account per specifation.
   invite         Invite another account to join Org as a member account. 
 
 Options:
@@ -50,7 +50,6 @@ import awsorgs
 from awsorgs.utils import *
 from awsorgs.spec import *
 
-S3_ACCOUNT_BUCKET = 'jjhsu-awsorgs-bucket'
 
 def create_accounts(org_client, args, log, deployed_accounts, account_spec):
     """
@@ -100,44 +99,93 @@ def create_accounts(org_client, args, log, deployed_accounts, account_spec):
                      log.warn("Account creation still pending. Moving on!")
 
 
+def is_valid_account(account, account_spec):
+    if account['Status'] != 'ACTIVE':
+        return False
+    a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
+    if a_spec is None:
+        return False
+    return True
+
+
+def transform_tag_spec_into_list_of_dict(tag_spec):
+    if tag_spec is not None:
+        return [{'Key': k, 'Value': v} for k, v in tag_spec.items()]
+    return []
+
+
+def update_account_tags(org_client, account, account_tags, tag_spec):
+    tagkeys = [tag['Key'] for tag in account_tags]
+    org_client.untag_resource(
+        ResourceId=account['Id'],
+        TagKeys=tagkeys,
+    )
+    org_client.tag_resource(
+        ResourceId=account['Id'],
+        Tags=tag_spec,
+    )
+
+
+def set_account_tags(account, log, args, account_spec, org_client):
+    if not is_valid_account(account, account_spec):
+        return
+    tag_spec = lookup(account_spec['accounts'], 'Name', account['Name'], 'Tags')
+    tag_spec = transform_tag_spec_into_list_of_dict(tag_spec)
+    account_tags = org_client.list_tags_for_resource(ResourceId=account['Id'])['Tags']
+    log.debug('tag_spec for account "{}":\n{}'.format(
+        account['Name'],
+        yamlfmt(tag_spec),
+    ))
+    log.debug('account_tags for account "{}":\n{}'.format(
+        account['Name'],
+        yamlfmt(account_tags),
+    ))
+    if account_tags != tag_spec:
+        log.info('Updating tags for account "{}":\n{}'.format(
+            account['Name'],
+            string_differ(yamlfmt(account_tags), yamlfmt(tag_spec)),
+        ))
+        if args['--exec']:
+            update_account_tags(org_client, account, account_tags, tag_spec)
+
+
 def set_account_alias(account, log, args, account_spec, role):
     """
     Set an alias on an account.  Use 'Alias' attribute from account spec
     if provided.  Otherwise set the alias to the account name.
     """
-    if account['Status'] == 'ACTIVE':
-        a_spec = lookup(account_spec['accounts'], 'Name', account['Name'])
-        if a_spec and 'Alias' in a_spec:
-            proposed_alias = a_spec['Alias']
-        else:
-            proposed_alias = account['Name'].lower()
-        credentials = get_assume_role_credentials(
-                account['Id'], args['--org-access-role'])
-        if isinstance(credentials, RuntimeError):
-            log.error(credentials)
-            return
-        else:
-            iam_client = boto3.client('iam', **credentials)
-        aliases = iam_client.list_account_aliases()['AccountAliases']
-        log.debug('account_name: %s; aliases: %s' % (account['Name'], aliases))
-        if not aliases:
-            log.info("setting account alias to '%s' for account '%s'" %
-                    (proposed_alias, account['Name']))
-            if args['--exec']:
-                try:
-                    iam_client.create_account_alias(AccountAlias=proposed_alias)
-                except Exception as e:
-                    log.error(e)
-        elif aliases[0] != proposed_alias:
-            log.info("resetting account alias for account '%s' to '%s'; "
-                    "previous alias was '%s'" %
-                    (account['Name'], proposed_alias, aliases[0]))
-            if args['--exec']:
-                iam_client.delete_account_alias(AccountAlias=aliases[0])
-                try:
-                    iam_client.create_account_alias(AccountAlias=proposed_alias)
-                except Exception as e:
-                    log.error(e)
+    if not is_valid_account(account, account_spec):
+        return
+    proposed_alias = lookup(account_spec['accounts'], 'Name', account['Name'], 'Alias')
+    if proposed_alias is None:
+         proposed_alias = account['Name'].lower()
+    credentials = get_assume_role_credentials(
+            account['Id'], args['--org-access-role'])
+    if isinstance(credentials, RuntimeError):
+        log.error(credentials)
+        return
+    else:
+        iam_client = boto3.client('iam', **credentials)
+    aliases = iam_client.list_account_aliases()['AccountAliases']
+    log.debug('account_name: %s; aliases: %s' % (account['Name'], aliases))
+    if not aliases:
+        log.info("setting account alias to '%s' for account '%s'" %
+                (proposed_alias, account['Name']))
+        if args['--exec']:
+            try:
+                iam_client.create_account_alias(AccountAlias=proposed_alias)
+            except Exception as e:
+                log.error(e)
+    elif aliases[0] != proposed_alias:
+        log.info("resetting account alias for account '%s' to '%s'; "
+                "previous alias was '%s'" %
+                (account['Name'], proposed_alias, aliases[0]))
+        if args['--exec']:
+            iam_client.delete_account_alias(AccountAlias=aliases[0])
+            try:
+                iam_client.create_account_alias(AccountAlias=proposed_alias)
+            except Exception as e:
+                log.error(e)
 
 
 def scan_invited_accounts(log, org_client):
@@ -289,9 +337,12 @@ def main():
         if unmanaged:
             log.warn("Unmanaged accounts in Org: %s" % (', '.join(unmanaged)))
 
-    if args['alias']:
+    if args['update']:
         queue_threads(log, deployed_accounts, set_account_alias,
                 f_args=(log, args, account_spec, args['--org-access-role']),
+                thread_count=10)
+        queue_threads(log, deployed_accounts, set_account_tags,
+                f_args=(log, args, account_spec, org_client),
                 thread_count=10)
 
     if args['invite']:
