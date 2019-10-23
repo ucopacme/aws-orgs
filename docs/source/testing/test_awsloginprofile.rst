@@ -18,6 +18,7 @@ AWS awsloginprofile
 Commands used:
 
 - awsauth users --exec
+- awsauth local-users --exec
 - awsloginprofile user --new
 - awsloginprofile user --reset
 - awsloginprofile user --report
@@ -39,7 +40,7 @@ Actions Summary:
 - awsloginprofile user --new
 - awsloginprofile user --reset
 - awsloginprofile user --report
-
+- awsauth local-users --exec
 
 
 Define org_access_role in ~/.awsorgs/config.yaml

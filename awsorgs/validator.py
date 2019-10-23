@@ -15,6 +15,8 @@ from awsorgs.utils import yamlfmt
 # files have only a subset of these.
 #
 SPEC_FILE_SCHEMA = """
+minimum_version:
+  type: string
 master_account_id:
   type: string
 auth_account_id:
@@ -43,12 +45,6 @@ sc_policies:
   schema:
     type: dict
     schema: sc_policy
-teams:
-  required: False
-  type: list
-  schema:
-    type: dict
-    schema: team
 accounts:
   required: False
   type: list
@@ -99,6 +95,9 @@ policy_sets:
 # schema, as that is done during spec_file validation.
 #
 SPEC_SCHEMA = """
+minimum_version:
+  required: True
+  type: string
 master_account_id:
   required: True
   type: string
@@ -127,9 +126,6 @@ organizational_units:
   required: True
   type: list
 sc_policies:
-  required: True
-  type: list
-teams:
   required: True
   type: list
 accounts:
@@ -210,25 +206,6 @@ Ensure:
   - absent
 """
 
-TEAM_SCHEMA = """
-Name:
-  required: True
-  type: string
-Description:
-  required: True
-  type: string
-BusinessContacts:
-  required: True
-  type: list
-  schema:
-    type: string
-TechnicalContacts:
-  required: True
-  type: list
-  schema:
-    type: string
-"""
-
 ACCOUNT_SCHEMA = """
 Name:
   required: True
@@ -236,26 +213,29 @@ Name:
 Email:
   required: False
   type: string
-Team:
-  required: True
-  type: string
 Alias:
   required: False
   type: string
+Tags:
+  required: False
+  nullable: True
+  type: dict
+  allow_unknown:
+    type: string
 """
 
 USER_SCHEMA = """
 Name:
   required: True
   type: string
-Team:
-  required: True
-  type: string
 Email:
   required: True
   type: string
-Path:
-  required: False
+CN:
+  required: True
+  type: string
+RequestId:
+  required: True
   type: string
 Ensure:
   required: False
@@ -272,6 +252,7 @@ Name:
 Path:
   required: False
   type: string
+  nullable: True
 Members:
   required: False
   nullable: True
@@ -306,18 +287,18 @@ LOCAL_USER_SCHEMA = """
 Name:
   required: True
   type: string
+ContactEmail:
+  required: True
+  type: string
+RequestId:
+  required: True
+  type: string
 Description:
   required: False
   type: string
-Team:
+Service:
   required: True
   type: string
-Path:
-  required: False
-  type: string
-#AuthMethod:
-#  required: False
-#  type: string
 Account:
   required: True
   anyof:
@@ -332,9 +313,6 @@ ExcludeAccounts:
   type: list
   schema:
     type: string
-#TrustedGroup:
-#  required: False
-#  type: string
 Policies:
   required: False
   type: list
@@ -391,6 +369,7 @@ PolicySet:
 Path:
   required: False
   type: string
+  nullable: True
 Duration:
   required: False
   type: integer
@@ -441,7 +420,6 @@ Value:
 def file_validator(log):
     schema_registry.add('organizational_unit', yaml.safe_load(ORGANIZATIONAL_UNIT_SCHEMA))
     schema_registry.add('sc_policy', yaml.safe_load(POLICY_SCHEMA))
-    schema_registry.add('team', yaml.safe_load(TEAM_SCHEMA))
     schema_registry.add('account', yaml.safe_load(ACCOUNT_SCHEMA))
     schema_registry.add('user', yaml.safe_load(USER_SCHEMA))
     schema_registry.add('group', yaml.safe_load(GROUP_SCHEMA))

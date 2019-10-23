@@ -5,7 +5,9 @@ import yaml
 import boto3
 from botocore.exceptions import ClientError
 from cerberus import Validator, schema_registry
+from pkg_resources import parse_version
 
+import awsorgs
 from awsorgs.utils import *
 from awsorgs.validator import file_validator, spec_validator
 
@@ -119,22 +121,30 @@ def validate_spec_file(log, spec_file, validator, errors):
         return (None, errors)
 
 
-def validate_teams_in_spec(log, spec_object):
-    log.debug("checking teams in user spec")
-    errors = []
-    for u_spec in spec_object['users']:
-        team = lookup(spec_object['teams'], 'Name', u_spec['Team'])
-        if team is None:
-            errors.append("Team name '{}' is undefined in teams spec "
-                          "for user '{}'".format(u_spec['Team'], u_spec['Name']))
-    for a_spec in spec_object['accounts']:
-        team = lookup(spec_object['teams'], 'Name', a_spec['Team'])
-        if team is None:
-            errors.append("Team name '{}' not found in teams spec "
-                          "for account '{}'".format(a_spec['Team'], a_spec['Name']))
-    if errors:
-        log.critical("spec_object validation failed:\n{}".format('\n'.join(errors)))
+def validate_package_version(log, spec_dir):
+    common_file_name = next(
+        (file for file in os.listdir(spec_dir) if file.startswith('common')),
+        None,
+    )
+    if common_file_name is None:
+        log.critical("cannot locate common spec file in spec_dir '{}'".format(spec_dir))
         sys.exit(1)
+    common_spec_file = os.path.join(spec_dir, common_file_name)
+    log.debug('common spec file: {}'.format(common_spec_file))
+    with open(common_spec_file) as f:
+        try:
+            common_spec = yaml.safe_load(f.read())
+        except Exception as e:
+            log.critical("cant load common spec file '{}': {}".format(common_spec_file, e))
+            sys.exit(1)
+    log.debug('minimum_version: {}'.format(common_spec['minimum_version']))
+    if not parse_version(awsorgs.__version__) >= parse_version(common_spec['minimum_version']):
+        log.critical('Installed aws-orgs package does not meet minimum version requirement. '
+                     'Please update your aws-orgs package to version "{}" or higher.'.format(
+            common_spec['minimum_version']
+        ))
+        sys.exit(1)
+    return
 
 
 def validate_spec(log, args):
@@ -147,6 +157,7 @@ def validate_spec(log, args):
     if not os.path.isdir(spec_dir):
         log.error("spec_dir not found or not a directory: {}".format(spec_dir))
         sys.exit(1)
+    validate_package_version(log, spec_dir)
     validator = file_validator(log)
     spec_object = {}
     errors = 0
@@ -169,6 +180,5 @@ def validate_spec(log, args):
         log.critical("spec_object validation failed:\n{}".format(
                 yamlfmt(validator.errors)))
         sys.exit(1)
-    validate_teams_in_spec(log, spec_object)
     log.debug("spec_object validation succeeded")
     return spec_object

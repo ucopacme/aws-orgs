@@ -117,7 +117,7 @@ option for usage documentation.
 :Author:
     Ashley Gould (agould@ucop.edu)
 
-:Version: 0.3.0
+:Version: 0.3.1
 
 
 

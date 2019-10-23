@@ -1,3 +1,6 @@
+---
+# Policy Set Specification
+#
 # A Policy Set is a list of IAM policies, either AWS managed or customer
 # managed, which taken in composit, define the permissions available to
 # a particular job function, such as "Developer" of "SecurityAuditor".
