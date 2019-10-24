@@ -8,7 +8,9 @@
 #                 the account name and the default_email_domain.
 #   Alias (str):  String to use for the account alias.  Defaults to 'Name' in
 #                 lower case.
-#   Tags (dict):  Tags to apply to the AWS account
+#   Tags (dict):  Tags to apply to the AWS account. The tag value can have
+#                 up to 256 characters.
+#                 Valid characters: a-z, A-Z, 0-9, and . : + = @ _ / - (hyphen)
 
 accounts:
 - Name: master-account

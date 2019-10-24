@@ -114,6 +114,14 @@ def transform_tag_spec_into_list_of_dict(tag_spec):
     return []
 
 
+def sorted_tags(tag_list):
+    sorted_tag_key_names = sorted([tag['Key'] for tag in tag_list])
+    sorted_tags_ = []
+    for tag_key_name in sorted_tag_key_names:
+        sorted_tags_ += [tag for tag in tag_list if tag['Key'] == tag_key_name]
+    return sorted_tags_
+
+
 def update_account_tags(org_client, account, account_tags, tag_spec):
     tagkeys = [tag['Key'] for tag in account_tags]
     org_client.untag_resource(
@@ -140,7 +148,7 @@ def set_account_tags(account, log, args, account_spec, org_client):
         account['Name'],
         yamlfmt(account_tags),
     ))
-    if account_tags != tag_spec:
+    if sorted_tags(account_tags) != sorted_tags(tag_spec):
         log.info('Updating tags for account "{}":\n{}'.format(
             account['Name'],
             string_differ(yamlfmt(account_tags), yamlfmt(tag_spec)),
@@ -343,7 +351,7 @@ def main():
                 thread_count=10)
         queue_threads(log, deployed_accounts, set_account_tags,
                 f_args=(log, args, account_spec, org_client),
-                thread_count=10)
+                thread_count=6)
 
     if args['invite']:
         invite_account(log, args, org_client, deployed_accounts)
