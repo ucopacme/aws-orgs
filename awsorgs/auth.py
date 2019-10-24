@@ -81,9 +81,19 @@ def expire_users(log, args, deployed, auth_spec, credentials):
                     login_profile.delete()
 
 
-def delete_user(user):
+def delete_user(user, iam_client):
     """
-    Strip user attributes and delete user
+    Strip user attributes and delete user.  Attributes include:
+
+        Access keys (DeleteAccessKey)
+        Attached managed policies (DetachUserPolicy)
+        Group memberships (RemoveUserFromGroup)
+        Multi-factor authentication (MFA) device (DeactivateMFADevice, DeleteVirtualMFADevice)
+        Inline policies (DeleteUserPolicy)
+        Signing certificate (DeleteSigningCertificate)
+        Password (DeleteLoginProfile)
+        SSH public key (DeleteSSHPublicKey)
+        Git credentials (DeleteServiceSpecificCredential)
 
     :param: user
     :type:  boto3 iam User resource object
@@ -110,6 +120,24 @@ def delete_user(user):
         profile.delete()
     except profile.meta.client.exceptions.NoSuchEntityException:
         pass
+    response = iam_client.list_ssh_public_keys(
+        UserName=user.name,
+    )
+    if 'SSHPublicKeys' in response and response['SSHPublicKeys']:
+        for key in response['SSHPublicKeys']:
+            iam_client.delete_ssh_public_key(
+                UserName=user.name,
+                SSHPublicKeyId=key['SSHPublicKeyId'],
+            )
+    response = iam_client.list_service_specific_credentials(
+        UserName=user.name,
+    )
+    if 'ServiceSpecificCredentials' in response and response['ServiceSpecificCredentials']:
+        iam_client.delete_service_specific_credential(
+            UserName='string',
+            ServiceSpecificCredentialId=response['ServiceSpecificCredentials']['ServiceSpecificCredentialId'],
+        )
+
     user.delete()
 
 
@@ -166,7 +194,7 @@ def create_users(credentials, args, log, deployed, auth_spec):
             if ensure_absent(u_spec):
                 log.info("Deleting user '%s'" % user.name)
                 if args['--exec']:
-                    delete_user(user)
+                    delete_user(user, iam_client)
             # update user
             elif user.path != path:
                 log.info("Updating path for user '%s'" % u_spec['Name'])
@@ -609,7 +637,7 @@ def manage_local_user_in_accounts(
             log.info("Deleting local user '%s' from account '%s'" %
                     (user.name, account_name))
             if args['--exec']:
-                delete_user(user)
+                delete_user(user, iam_client)
         return
 
     # update user tags
