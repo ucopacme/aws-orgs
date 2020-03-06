@@ -31,7 +31,7 @@ default_path:
   type: string
 default_smtp_server:
   type: string
-org_admin_team:
+org_admin_email:
   type: string
 organizational_units:
   required: False
@@ -119,7 +119,7 @@ default_path:
 default_smtp_server:
   required: True
   type: string
-org_admin_team:
+org_admin_email:
   required: True
   type: string
 organizational_units:
