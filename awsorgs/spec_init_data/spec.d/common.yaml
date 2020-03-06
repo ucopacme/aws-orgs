@@ -1,7 +1,7 @@
 ---
 
 # aws-orgs installation must be greater than or eqaul to this version number.
-minimum_version: '0.3.1'
+minimum_version: '0.3.4'
 
 # AWSORGS configuration parameters common to all operations.
 
@@ -30,9 +30,8 @@ default_path: awsauth
 # Default SMTP email server to use when sending email messages.
 default_smtp_server: smtp.example.com
 
-# The organization administration team.  These contacts are references when
-# generating email messages.
-org_admin_team: administration
+# These contacts are references when generating email messages.
+org_admin_email: awsadmins@example.com
 
 
 

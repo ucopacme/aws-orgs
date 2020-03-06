@@ -284,13 +284,11 @@ def prep_email(log, aliases, deployed_accounts, user, passwd):
 
 
 def build_email_message(user, message_body, spec):
-    org_admin_team = lookup(spec['teams'], 'Name', spec['org_admin_team'])
     msg = EmailMessage()
     msg.set_content(message_body)
     msg['Subject'] = 'login profile'
     msg['To'] = lookup(spec['users'], 'Name', user.name, 'Email')
-    msg['From'] = ', '.join(org_admin_team['TechnicalContacts'])
-    msg['Cc'] = ', '.join(org_admin_team['BusinessContacts'])
+    msg['From'] = spec['org_admin_email']
     return msg
 
 def send_email(msg, smtp_server):
